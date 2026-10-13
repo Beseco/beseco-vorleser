@@ -1,0 +1,4 @@
+# Vorleser wird mit der GNU-Variante von Rust gebaut (keine Visual-Studio-Build-Tools nötig).
+[toolchain]
+channel = "stable-x86_64-pc-windows-gnu"
+profile = "minimal"

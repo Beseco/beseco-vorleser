@@ -1,0 +1,42 @@
+# Baut Installer und portable ZIP. Bei einem Versions-Tag (z. B. v0.2.0) werden beide Dateien
+# an die zugehörige GitHub-Veröffentlichung gehängt; von Hand gestartet entstehen sie nur als Artefakt.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installiert die in rust-toolchain.toml festgelegte Toolchain.
+      - name: Rust
+        run: rustup show
+
+      - name: Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      # Die Tests der Sprachausgabe brauchen ein Audiogerät, das es hier nicht gibt.
+      - name: Tests
+        run: cargo test -- --skip tts::
+
+      - name: Installer und ZIP bauen
+        run: pwsh -File release.ps1 -SkipTests
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vorleser
+          path: dist/*
+
+      - name: An die Veröffentlichung hängen
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

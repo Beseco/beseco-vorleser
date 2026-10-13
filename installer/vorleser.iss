@@ -1,0 +1,103 @@
+; Installer fuer Vorleser (Inno Setup 6). Gebaut wird ueber release.ps1, das Version und
+; Quelldatei uebergibt. Diese Datei bleibt bewusst reines ASCII (keine Umlaute), damit die
+; Zeichenkodierung keine Rolle spielt.
+
+#ifndef AppVersion
+  #define AppVersion "0.0.0"
+#endif
+#ifndef SourceExe
+  #error SourceExe fehlt: Pfad zur fertigen vorleser.exe mit /DSourceExe=... uebergeben
+#endif
+
+[Setup]
+; Die AppId darf sich nie aendern, sonst erkennt ein Update die vorhandene Installation nicht.
+AppId={{8E2B6C4A-5D1F-4B7A-9C3E-2F6A1D0B7E54}
+AppName=Vorleser
+AppVersion={#AppVersion}
+AppVerName=Vorleser {#AppVersion}
+AppPublisher=beseco - Beubl IT Systems
+AppPublisherURL=https://beseco.com
+AppSupportURL=https://beseco.com
+AppContact=info@beseco.com
+VersionInfoVersion={#AppVersion}
+VersionInfoCompany=beseco - Beubl IT Systems
+; Installation nur fuer den angemeldeten Benutzer, ohne Administratorrechte.
+PrivilegesRequired=lowest
+DefaultDirName={autopf}\Vorleser
+DisableProgramGroupPage=yes
+DisableDirPage=auto
+OutputDir=..\dist
+OutputBaseFilename=Vorleser-Setup-{#AppVersion}
+SetupIconFile=..\res\vorleser.ico
+UninstallDisplayIcon={app}\vorleser.exe
+UninstallDisplayName=Vorleser
+Compression=lzma2
+SolidCompression=yes
+WizardStyle=modern
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+; Das laufende Programm wird im Code-Abschnitt sauber beendet.
+CloseApplications=no
+
+[Languages]
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[CustomMessages]
+german.Autostart=Vorleser mit Windows starten
+english.Autostart=Start Vorleser with Windows
+german.StartNow=Vorleser jetzt starten
+english.StartNow=Start Vorleser now
+
+[Tasks]
+Name: "autostart"; Description: "{cm:Autostart}"
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked
+
+[Files]
+Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "vorleser.exe"; Flags: ignoreversion
+Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
+
+[Icons]
+Name: "{autoprograms}\Vorleser"; Filename: "{app}\vorleser.exe"
+Name: "{autodesktop}\Vorleser"; Filename: "{app}\vorleser.exe"; Tasks: desktopicon
+
+[Registry]
+; Derselbe Eintrag, den das Programm ueber "Mit Windows starten" selbst setzt.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Vorleser"; ValueData: """{app}\vorleser.exe"" --tray"; Tasks: autostart
+
+[Run]
+Filename: "{app}\vorleser.exe"; Description: "{cm:StartNow}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// Beendet ein laufendes Vorleser-Programm ueber sein verstecktes Hauptfenster und wartet
+// bis zu fuenf Sekunden, damit die EXE ersetzt oder geloescht werden kann.
+procedure CloseRunning;
+var
+  Tries: Integer;
+begin
+  if FindWindowByClassName('VorleserFenster') = 0 then
+    exit;
+  PostMessage(FindWindowByClassName('VorleserFenster'), $0010, 0, 0);
+  Tries := 0;
+  while (FindWindowByClassName('VorleserFenster') <> 0) and (Tries < 50) do
+  begin
+    Sleep(100);
+    Tries := Tries + 1;
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  CloseRunning;
+  Result := '';
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    CloseRunning;
+    // Der Autostart kann auch im Programm eingeschaltet worden sein, deshalb immer entfernen.
+    RegDeleteValue(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Run', 'Vorleser');
+  end;
+end;

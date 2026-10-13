@@ -1,0 +1,6 @@
+# Fertige Installer und ZIP-Pakete (entstehen über release.ps1)
+/dist/
+# Falls der Build-Ordner doch einmal im Projekt landet
+/target/
+# Persönliche Cargo-Einstellungen, z. B. ein Build-Ordner außerhalb eines synchronisierten Verzeichnisses
+/.cargo/config.toml
