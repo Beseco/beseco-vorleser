@@ -1,4 +1,6 @@
 # Vorleser wird mit der GNU-Variante von Rust gebaut (keine Visual-Studio-Build-Tools nötig).
+# Die Variante ergibt sich aus dem Standard-Host von rustup:
+#   rustup set default-host x86_64-pc-windows-gnu
 [toolchain]
-channel = "stable-x86_64-pc-windows-gnu"
+channel = "stable"
 profile = "minimal"

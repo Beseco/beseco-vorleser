@@ -72,6 +72,7 @@ Vorleser is written in Rust and depends only on the `windows` crate.
 ```powershell
 # Once: Rust, MinGW-w64 (provides dlltool and windres) and, for the installer, Inno Setup
 winget install -e --id Rustlang.Rustup
+rustup set default-host x86_64-pc-windows-gnu
 winget install -e --id BrechtSanders.WinLibs.POSIX.UCRT --scope user
 winget install -e --id JRSoftware.InnoSetup
 

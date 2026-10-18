@@ -14,11 +14,13 @@ jobs:
   build:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      # Installiert die in rust-toolchain.toml festgelegte Toolchain.
+      # GNU-Variante von Rust, passend zu rust-toolchain.toml.
       - name: Rust
-        run: rustup show
+        run: |
+          rustup set default-host x86_64-pc-windows-gnu
+          rustup show
 
       - name: Inno Setup
         run: choco install innosetup --no-progress -y
