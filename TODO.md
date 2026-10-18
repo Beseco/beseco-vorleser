@@ -47,12 +47,12 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [ ] Installer einmal vollständig durchspielen: Installation, Update über eine laufende Version, Deinstallation.
 - [ ] **Code-Signatur.** Ohne sie warnt SmartScreen, und Virenscanner reagieren eher auf Maus-Hook und simulierte Tastendrücke. Zertifikat kostet Geld; Entscheidung offen.
 - [ ] **winget-Paket.**
-- [ ] **Git-Repository** anlegen, Lizenz festlegen (z. B. MIT).
+- [x] **Git-Repository** auf GitHub (Beseco/beseco-vorleser), Lizenz GPL-3.0.
 - [ ] **Webseite/Downloadseite** auf beseco.com mit Kurzanleitung und Screenshots.
-- [ ] **Änderungsprotokoll** und Versionsnummern pflegen (Version steht in `Cargo.toml`, erscheint im Info-Dialog).
+- [x] **Änderungsprotokoll** (CHANGELOG.md) angelegt; bei jeder Version pflegen (Version steht in `Cargo.toml`, erscheint im Info-Dialog).
 - [ ] **Update-Hinweis** im Programm.
-- [ ] **Datenschutzaussage:** keine Telemetrie, Text verlässt den Rechner nicht (Ausnahme: Online- und Cloud-Stimmen).
-- [ ] Automatischer Build (CI), damit jede Version reproduzierbar entsteht.
+- [x] **Datenschutzaussage** in der README: keine Telemetrie, Text verlässt den Rechner nicht (Ausnahme: Online- und Cloud-Stimmen).
+- [x] Automatischer Build (GitHub Actions): Ein Versions-Tag `vX.Y.Z` baut Installer und ZIP und hängt sie an die Veröffentlichung.
 
 ## Offene technische Punkte
 
