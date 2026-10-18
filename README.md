@@ -8,7 +8,7 @@ Vorleser liest markierten Text in jedem Windows-Programm vor: Text markieren, **
 
 ## Herunterladen
 
-Die aktuelle Version steht unter [Releases](https://github.com/GITHUB_OWNER/beseco-vorleser/releases/latest):
+Die aktuelle Version steht unter [Releases](https://github.com/Beseco/beseco-vorleser/releases/latest):
 
 - **Vorleser-Setup-x.y.z.exe**: Installer, braucht keine Administratorrechte
 - **Vorleser-x.y.z-portable.zip**: einzelne EXE zum Entpacken, ohne Installation
@@ -91,4 +91,4 @@ Geplante Erweiterungen stehen in [TODO.md](TODO.md), Änderungen je Version in [
 
 Vorleser ist freie Software unter der [GNU General Public License, Version 3](LICENSE).
 
-Entwickelt von Florian Beubl, [beseco – Beubl IT Systems](https://beseco.com), Freising. Fehler und Wünsche bitte als [Issue](https://github.com/GITHUB_OWNER/beseco-vorleser/issues) melden.
+Entwickelt von Florian Beubl, [beseco – Beubl IT Systems](https://beseco.com), Freising. Fehler und Wünsche bitte als [Issue](https://github.com/Beseco/beseco-vorleser/issues) melden.

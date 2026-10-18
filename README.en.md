@@ -10,7 +10,7 @@ The user interface is currently German only.
 
 ## Download
 
-Get the current version from [Releases](https://github.com/GITHUB_OWNER/beseco-vorleser/releases/latest):
+Get the current version from [Releases](https://github.com/Beseco/beseco-vorleser/releases/latest):
 
 - **Vorleser-Setup-x.y.z.exe**: installer, no administrator rights needed
 - **Vorleser-x.y.z-portable.zip**: a single EXE to unpack, no installation
@@ -91,4 +91,4 @@ Planned work is listed in [TODO.md](TODO.md) (German), changes per version in [C
 
 Vorleser is free software under the [GNU General Public License, version 3](LICENSE).
 
-Developed by Florian Beubl, [beseco – Beubl IT Systems](https://beseco.com), Freising, Germany. Please report bugs and wishes as an [issue](https://github.com/GITHUB_OWNER/beseco-vorleser/issues).
+Developed by Florian Beubl, [beseco – Beubl IT Systems](https://beseco.com), Freising, Germany. Please report bugs and wishes as an [issue](https://github.com/Beseco/beseco-vorleser/issues).

@@ -659,7 +659,8 @@ fn show_about() {
          Veit-Adam 15, 85354 Freising\n\n\
          Telefon: 08161 185150-0\n\
          E-Mail: info@beseco.com\n\
-         Web: https://beseco.com",
+         Web: https://beseco.com\n\
+         Quellcode: https://github.com/Beseco/beseco-vorleser",
         env!("CARGO_PKG_VERSION")
     ));
     unsafe {
