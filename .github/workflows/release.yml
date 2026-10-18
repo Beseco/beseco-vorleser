@@ -25,7 +25,7 @@ jobs:
 
       # Die Tests der Sprachausgabe brauchen ein Audiogerät, das es hier nicht gibt.
       - name: Tests
-        run: cargo test -- --skip tts::
+        run: cargo test -- --skip "tts::"
 
       - name: Installer und ZIP bauen
         run: pwsh -File release.ps1 -SkipTests
