@@ -41,6 +41,7 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 - **Textbereinigung:** fügt umbrochene PDF-Zeilen zusammen, hebt Silbentrennung auf, kürzt Links
 - **Audio-Export:** Text als WAV-Datei speichern
 - **Autostart:** auf Wunsch mit Windows starten
+- **Navigation und Weiterlesen:** Alt+← / Alt+→ springt satzweise, F5 liest ab der Schreibmarke, nach Stopp und nach einem Neustart geht es an derselben Stelle weiter
 - **Menüleiste und Tastenkürzel:** F5 Vorlesen, F6 Pause, F7 Stopp, Strg+O Textdatei öffnen (oder ins Fenster ziehen), Strg+S als WAV speichern
 - **Mehrsprachig:** Deutsch und Englisch eingebaut, weitere Sprachen über einfache Sprachdateien ([Anleitung zum Übersetzen](lang/README.md)); die Oberfläche folgt der Sprache von Windows und lässt sich unter Extras → Sprache umstellen
 
@@ -72,7 +73,11 @@ Vorleser sammelt keine Daten. Ins Internet geht Vorleser nur in zwei Fällen: be
 
 Zum Auslesen der Markierung nutzt Vorleser die Bedienungshilfen-Schnittstelle von Windows. Wo das nicht geht, kopiert es den Text kurz über die Zwischenablage und stellt deren vorherigen Inhalt wieder her.
 
-Einstellungen liegen in `%APPDATA%\Vorleser\settings.ini`.
+Einstellungen liegen in `%APPDATA%\Vorleser\settings.ini`. Damit es später an derselben Stelle weitergeht, merkt sich Vorleser beim Beenden den Text des Fensters in `%APPDATA%\Vorleser\letzter-text.txt`; das lässt sich in den Einstellungen abschalten, die Datei wird dann gelöscht.
+
+### Im Firmennetz
+
+Vorleser nutzt die Proxy-Einstellungen von Windows, auch eine automatische Konfiguration über `wpad.dat`. Verlangt der Proxy eine Anmeldung, meldet sich Vorleser mit dem Windows-Konto an. Greift das nicht, lässt sich unter Extras → Einstellungen → Proxy die Adresse der `wpad.dat` (z. B. `http://wpad/wpad.dat`) oder ein fester Proxy (`proxy.firma.local:8080`) eintragen. Ohne Internet funktioniert alles außer Update-Suche und Download der KI-Stimmen.
 
 ## Bekannte Grenzen
 

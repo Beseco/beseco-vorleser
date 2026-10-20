@@ -40,6 +40,10 @@ pub struct Config {
     pub language: String,
     /// Proxy: leer = wie Windows, sonst Adresse eines Proxy-Skripts (wpad.dat) oder `host:port`.
     pub proxy: String,
+    /// Text und Leseposition beim Beenden merken, um später weiterzulesen.
+    pub remember_text: bool,
+    /// Gemerkte Leseposition im Text (UTF-16-Einheiten).
+    pub resume_pos: u32,
 }
 
 impl Default for Config {
@@ -58,6 +62,8 @@ impl Default for Config {
             last_update_check: 0,
             language: "auto".into(),
             proxy: String::new(),
+            remember_text: true,
+            resume_pos: 0,
         }
     }
 }
@@ -86,6 +92,8 @@ impl Config {
                 "last_update_check" => cfg.last_update_check = value.parse().unwrap_or(0),
                 "language" => cfg.language = value.to_string(),
                 "proxy" => cfg.proxy = value.to_string(),
+                "remember_text" => cfg.remember_text = value != "0",
+                "resume_pos" => cfg.resume_pos = value.parse().unwrap_or(0),
                 _ => {}
             }
         }
@@ -98,7 +106,8 @@ impl Config {
              # mouse_menu: Zusatztaste(n) + Rechtsklick, z. B. Strg+Rechtsklick oder Strg+Shift+Rechtsklick.\r\n\
              voice={}\r\nrate={}\r\nhotkey_read={}\r\nhotkey_pause={}\r\nhotkey_menu={}\r\nmouse_menu={}\r\n\
              volume={}\r\nclean_text={}\r\nalways_on_top={}\r\n\
-             update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n",
+             update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n\
+             remember_text={}\r\nresume_pos={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
@@ -111,7 +120,9 @@ impl Config {
             self.update_check as u8,
             self.last_update_check,
             self.language,
-            self.proxy
+            self.proxy,
+            self.remember_text as u8,
+            self.resume_pos
         )
     }
 
@@ -133,6 +144,15 @@ impl Config {
             let _ = std::fs::write(p, self.serialize());
         }
     }
+}
+
+/// Datei, in der der Text des Fensters zum Weiterlesen gemerkt wird.
+pub fn session_path() -> Option<PathBuf> {
+    path().map(|p| p.with_file_name("letzter-text.txt"))
+}
+
+pub fn is_read_only() -> bool {
+    READ_ONLY.load(Relaxed)
 }
 
 fn path() -> Option<PathBuf> {
@@ -272,6 +292,8 @@ mod tests {
             last_update_check: 1_760_000_000,
             language: "en".into(),
             proxy: "http://wpad.firma.local/wpad.dat".into(),
+            remember_text: false,
+            resume_pos: 42,
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }

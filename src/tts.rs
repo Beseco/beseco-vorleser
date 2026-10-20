@@ -176,7 +176,9 @@ impl Tts {
             self.session = Some(piper::Session::start(voice.key, text, self.rate, self.volume, HWND(hwnd as *mut _), msg));
             return Ok(());
         }
-        self.session = None;
+        // Die alte Ausgabe vollständig beenden, sonst kämen ihre restlichen Ereignisse (bis hin
+        // zum Ende) noch an und würden der neuen zugerechnet.
+        self.stop();
         let text = HSTRING::from(text);
         let flags = (SPF_ASYNC.0 | SPF_PURGEBEFORESPEAK.0 | SPF_IS_NOT_XML.0) as u32;
         let mut stream = 0;
@@ -208,11 +210,14 @@ impl Tts {
         // Das Verwerfen der Sitzung beendet die KI-Ausgabe.
         self.session = None;
         self.stream = 0;
-        let flags = (SPF_ASYNC.0 | SPF_PURGEBEFORESPEAK.0) as u32;
-        unsafe {
-            let _ = self.voice.Speak(PCWSTR::null(), flags, None);
-        }
         self.unpause();
+        // Synchron abbrechen und liegengebliebene Ereignisse verwerfen.
+        unsafe {
+            let _ = self.voice.Speak(PCWSTR::null(), SPF_PURGEBEFORESPEAK.0 as u32, None);
+            let mut event = SPEVENT::default();
+            let mut fetched = 0;
+            while self.voice.GetEvents(1, &mut event, &mut fetched).is_ok() && fetched > 0 {}
+        }
     }
 
     /// Nach der Fensternachricht aufrufen. Ereignisse abgebrochener, älterer Sprachströme

@@ -32,6 +32,7 @@ use windows::Win32::Security::Cryptography::{
 use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
 
 use crate::http;
+use crate::textprep::{split_sentences, Sentence};
 use crate::i18n::t;
 
 /// Piper für Windows, letzte Ausgabe des Projekts (2023, MIT-Lizenz).
@@ -265,52 +266,6 @@ fn sha256_file(path: &Path) -> Option<String> {
 /// SAPI-Geschwindigkeit (-10 bis 10) als Piper-Lautlänge: 10 entspricht etwa dreifachem Tempo.
 fn length_scale(rate: i32) -> f32 {
     3f32.powf(-(rate.clamp(-10, 10) as f32) / 10.0)
-}
-
-/// Ein Satz mit seiner Position im Originaltext (UTF-16-Einheiten, wie im Textfeld).
-#[derive(Debug, PartialEq)]
-struct Sentence {
-    text: String,
-    start: u32,
-    len: u32,
-}
-
-/// Zerlegt Text in Sätze: nach `. ! ? …` vor einem Leerraum, an Zeilenumbrüchen, und sehr lange
-/// Sätze zusätzlich an Kommas, damit der erste Ton schnell kommt.
-fn split_sentences(text: &str) -> Vec<Sentence> {
-    const LONG: usize = 300;
-    let mut sentences = Vec::new();
-    let mut current = String::new();
-    let mut start = 0u32;
-    let mut pos = 0u32;
-    let mut chars = text.chars().peekable();
-    let mut push = |current: &mut String, start: u32| {
-        let leading = current.chars().take_while(|c| c.is_whitespace()).map(char::len_utf16).sum::<usize>() as u32;
-        let trimmed = current.trim();
-        if !trimmed.is_empty() {
-            let len = trimmed.encode_utf16().count() as u32;
-            sentences.push(Sentence { text: trimmed.to_string(), start: start + leading, len });
-        }
-        current.clear();
-    };
-    while let Some(c) = chars.next() {
-        pos += c.len_utf16() as u32;
-        if c == '\r' || c == '\n' {
-            push(&mut current, start);
-            start = pos;
-            continue;
-        }
-        current.push(c);
-        let next_is_space = chars.peek().is_none_or(|n| n.is_whitespace());
-        let end_mark = matches!(c, '.' | '!' | '?' | '…') && next_is_space;
-        let long_break = current.chars().count() > LONG && matches!(c, ',' | ';' | ':') && next_is_space;
-        if end_mark || long_break {
-            push(&mut current, start);
-            start = pos;
-        }
-    }
-    push(&mut current, start);
-    sentences
 }
 
 #[derive(Default)]
@@ -577,36 +532,6 @@ pub fn save_wav(key: &str, rate: i32, text: &str, path: &str) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn texts(text: &str) -> Vec<(String, u32, u32)> {
-        split_sentences(text).into_iter().map(|s| (s.text, s.start, s.len)).collect()
-    }
-
-    #[test]
-    fn splits_sentences_with_positions() {
-        let text = "Erster Satz. Zweiter Satz!\r\nDritte Zeile ohne Punkt";
-        assert_eq!(
-            texts(text),
-            vec![
-                ("Erster Satz.".to_string(), 0, 12),
-                ("Zweiter Satz!".to_string(), 13, 13),
-                ("Dritte Zeile ohne Punkt".to_string(), 28, 23),
-            ]
-        );
-    }
-
-    #[test]
-    fn keeps_abbreviation_like_dots_inside_words() {
-        assert_eq!(texts("Version 1.5 ist da.").len(), 1);
-        assert_eq!(texts("www.beseco.com ist die Seite.").len(), 1);
-    }
-
-    #[test]
-    fn counts_utf16_like_the_text_field() {
-        // "😀" belegt zwei UTF-16-Einheiten.
-        let parts = texts("😀 Hallo. Welt.");
-        assert_eq!(parts[1], ("Welt.".to_string(), 10, 5));
-    }
 
     #[test]
     fn maps_rate_to_length_scale() {

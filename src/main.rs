@@ -54,7 +54,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     RegisterWindowMessageW, TranslateMessage, HMENU, MB_ICONERROR, MB_ICONINFORMATION,
     MB_SETFOREGROUND, MENU_ITEM_FLAGS, MF_BYCOMMAND,
     MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, WINDOW_EX_STYLE, WM_APP,
-    WM_DESTROY, WM_HOTKEY, WM_LBUTTONUP, WM_RBUTTONUP, WNDCLASSW, WS_OVERLAPPED,
+    WM_DESTROY, WM_ENDSESSION, WM_HOTKEY, WM_LBUTTONUP, WM_RBUTTONUP, WNDCLASSW, WS_OVERLAPPED,
 };
 
 use config::Config;
@@ -117,6 +117,8 @@ const CMD_TOPMOST: u32 = 24;
 const CMD_MANUAL: u32 = 25;
 const CMD_CHECK_UPDATE: u32 = 26;
 const CMD_REPORT: u32 = 27;
+const CMD_PREV: u32 = 28;
+const CMD_NEXT: u32 = 29;
 const CMD_RATE: u32 = 100;
 const CMD_VOICE: u32 = 1000;
 /// Sprache der Oberfläche: `CMD_LANGUAGE` = automatisch, danach eine Nummer je Sprache.
@@ -163,6 +165,16 @@ struct Follow {
     base: u32,
     /// Markierung, die nach dem Vorlesen wiederhergestellt wird.
     restore: (u32, u32),
+    /// Zuletzt gemeldetes Wort bzw. Satz, im Textfeld.
+    pos: u32,
+    /// Ende des vorzulesenden Bereichs im Textfeld.
+    end: u32,
+}
+
+impl Follow {
+    fn new(base: u32, end: u32, restore: (u32, u32)) -> Follow {
+        Follow { base, restore, pos: base, end }
+    }
 }
 
 /// Zeilenenden so, wie das Textfeld sie speichert. Der gesprochene Text muss zeichengenau dem
@@ -276,6 +288,7 @@ impl App {
             mouse_menu: self.cfg.mouse_menu.clone(),
             volume: self.cfg.volume,
             clean_text: self.cfg.clean_text,
+            remember_text: self.cfg.remember_text,
             update_check: self.cfg.update_check,
             language: self.cfg.language.clone(),
             proxy: self.cfg.proxy.clone(),
@@ -290,6 +303,7 @@ impl App {
         self.cfg.volume = values.volume;
         self.cfg.clean_text = values.clean_text;
         self.cfg.update_check = values.update_check;
+        self.cfg.remember_text = values.remember_text;
         self.cfg.proxy = values.proxy;
         http::set_proxy(&self.cfg.proxy);
         if values.language != self.cfg.language {
@@ -430,20 +444,28 @@ impl App {
         let text = to_crlf(&self.prepare(text));
         let follow = window::visible().map(|_| {
             window::set_text(&text);
-            Follow { base: 0, restore: (0, 0) }
+            Follow::new(0, text.encode_utf16().count() as u32, (0, 0))
         });
         self.start(text, follow);
     }
 
-    /// Liest den markierten Teil des Textfelds vor, sonst den ganzen Text.
+    /// Liest den markierten Teil des Textfelds vor; ohne Markierung ab dem Satz, in dem die
+    /// Schreibmarke steht, und steht sie am Anfang oder Ende, den ganzen Text.
     fn speak_window(&mut self) {
         // Zuerst die eigene Wortmarkierung zurücknehmen, sonst gälte sie als Auswahl.
         self.end_follow();
         let Some(source) = window::source() else { return };
         let (start, end) = source.selection;
+        let len = source.content.len() as u32;
+        if start == end && start > 0 && start < len {
+            let starts = textprep::sentence_starts(&source.content);
+            let from = textprep::sentence_at(&starts, start).unwrap_or(0);
+            self.speak_range(&source.content, from, len, (from, from));
+            return;
+        }
         let (text, follow) = if start < end {
             let part = String::from_utf16_lossy(&source.content[start as usize..end as usize]);
-            (part, Follow { base: start, restore: (start, end) })
+            (part, Follow::new(start, end, (start, end)))
         } else {
             // Die Bereinigung wird sichtbar ins Textfeld übernommen: gelesen wird, was dort steht.
             let shown = String::from_utf16_lossy(&source.content);
@@ -451,13 +473,82 @@ impl App {
             if text != shown {
                 window::set_text(&text);
             }
-            (text, Follow { base: 0, restore: (0, 0) })
+            let len = text.encode_utf16().count() as u32;
+            (text, Follow::new(0, len, (0, 0)))
         };
         if text.trim().is_empty() {
             tray::balloon(self.hwnd, "Vorleser", t("app.text_field_empty"));
             return;
         }
         self.start(text, Some(follow));
+    }
+
+    /// Liest einen Bereich des Textfelds vor (Weiterlesen, Navigation).
+    fn speak_range(&mut self, content: &[u16], start: u32, end: u32, restore: (u32, u32)) {
+        let end = end.min(content.len() as u32);
+        if start >= end {
+            return;
+        }
+        let text = String::from_utf16_lossy(&content[start as usize..end as usize]);
+        self.start(text, Some(Follow::new(start, end, restore)));
+    }
+
+    /// Springt einen Satz vor oder zurück. Beim Vorlesen geht es dort weiter, sonst wandert
+    /// nur die Schreibmarke (F5 liest dann ab dort).
+    fn navigate(&mut self, forward: bool) {
+        let Some(source) = window::source() else { return };
+        let starts = textprep::sentence_starts(&source.content);
+        match self.follow {
+            Some(follow) => match textprep::neighbor(&starts, follow.pos, forward) {
+                Some(target) if target < follow.end => {
+                    self.tts.stop();
+                    self.speak_range(&source.content, target, follow.end, follow.restore);
+                }
+                // Hinter dem letzten Satz: aufhören, wie am Ende des Textes.
+                _ if forward => self.stop(),
+                _ => {}
+            },
+            None => {
+                if let Some(target) = textprep::neighbor(&starts, source.selection.0, forward) {
+                    window::mark(target, target);
+                }
+            }
+        }
+    }
+
+    /// Merkt sich Text und Leseposition des Fensters, damit es später dort weitergeht.
+    fn save_session(&mut self) {
+        let Some(path) = config::session_path() else { return };
+        if config::is_read_only() {
+            return;
+        }
+        if !self.cfg.remember_text {
+            let _ = std::fs::remove_file(path);
+            return;
+        }
+        let Some(source) = window::source() else { return };
+        let pos = self.follow.map_or(source.selection.0, |f| f.pos);
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if std::fs::write(&path, String::from_utf16_lossy(&source.content)).is_ok() {
+            self.cfg.resume_pos = pos;
+            self.cfg.save();
+        }
+    }
+
+    /// Holt Text und Leseposition vom letzten Mal zurück.
+    fn restore_session(&self) {
+        if !self.cfg.remember_text || config::is_read_only() {
+            return;
+        }
+        let Some(text) = config::session_path().and_then(|p| std::fs::read_to_string(p).ok()) else { return };
+        if text.is_empty() {
+            return;
+        }
+        window::set_text(&text);
+        let pos = self.cfg.resume_pos.min(text.encode_utf16().count() as u32);
+        window::mark(pos, pos);
     }
 
     fn start(&mut self, text: String, follow: Option<Follow>) {
@@ -472,9 +563,10 @@ impl App {
     }
 
     /// Markiert das gerade gesprochene Wort im Fenster.
-    fn on_word(&self, start: u32, len: u32) {
-        if let Some(follow) = self.follow {
-            window::mark(follow.base + start, follow.base + start + len);
+    fn on_word(&mut self, start: u32, len: u32) {
+        if let Some(follow) = &mut self.follow {
+            follow.pos = follow.base + start;
+            window::mark(follow.pos, follow.pos + len);
         }
     }
 
@@ -505,6 +597,7 @@ impl App {
         }
         self.end_follow();
         self.set_state(State::Idle);
+        self.save_session();
     }
 
     fn toggle_pause(&mut self) {
@@ -521,11 +614,18 @@ impl App {
         }
     }
 
+    /// Hält an. Die Schreibmarke bleibt am Anfang des gerade gesprochenen Satzes, damit F5 dort
+    /// weiterliest.
     fn stop(&mut self) {
         self.retry = None;
-        self.end_follow();
         self.tts.stop();
+        if let Some(follow) = self.follow.take() {
+            let starts = window::source().map(|s| textprep::sentence_starts(&s.content)).unwrap_or_default();
+            let at = textprep::sentence_at(&starts, follow.pos).unwrap_or(follow.pos);
+            window::mark(at, at);
+        }
         self.set_state(State::Idle);
+        self.save_session();
     }
 
     /// `selection`: `None` lässt den Eintrag für markierten Text weg (Menü am Symbol),
@@ -620,6 +720,9 @@ impl App {
             let pause = if self.state == State::Paused { t("menu.resume") } else { t("menu.pause") };
             item(playback, base + CMD_PAUSE, pause, active, false);
             item(playback, base + CMD_STOP, t("menu.stop"), active, false);
+            separator(playback);
+            item(playback, base + CMD_PREV, t("menu.prev_sentence"), true, false);
+            item(playback, base + CMD_NEXT, t("menu.next_sentence"), true, false);
             separator(playback);
             item(playback, base + CMD_READ_CLIPBOARD, t("menu.read_clipboard"), true, false);
             separator(playback);
@@ -718,6 +821,8 @@ impl App {
             CMD_OPEN => window::show(),
             CMD_UPDATE => open_url(update::RELEASES_URL),
             CMD_READ_WINDOW => self.speak_window(),
+            CMD_PREV => self.navigate(false),
+            CMD_NEXT => self.navigate(true),
             CMD_SAMPLE => self.speak_sample(),
             CMD_TOPMOST => self.set_topmost(!self.cfg.always_on_top),
             CMD_CLEAN => {
@@ -1121,6 +1226,12 @@ fn on_window_command(id: u32, code: u32) {
             }
         }
         (window::ID_AI_VOICES, window::CLICKED) => open_ai_voices(),
+        (window::ID_PREV, window::CLICKED) => {
+            with_app(|app| app.navigate(false));
+        }
+        (window::ID_NEXT, window::CLICKED) => {
+            with_app(|app| app.navigate(true));
+        }
         (window::ID_RATE, window::SELECTED) => {
             if let Some(index) = window::selected_rate() {
                 with_app(|app| app.select_rate(index));
@@ -1194,7 +1305,12 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 }
             });
         }
+        // Auch beim Abmelden oder Herunterfahren den Text für später merken.
+        WM_ENDSESSION if wparam.0 != 0 => {
+            with_app(App::save_session);
+        }
         WM_DESTROY => {
+            with_app(App::save_session);
             tray::remove(hwnd);
             unsafe { PostQuitMessage(0) };
         }
@@ -1211,7 +1327,8 @@ fn main() {
         // Nur eine Instanz; das Handle bleibt bis zum Prozessende offen.
         let test = std::env::var_os("VORLESER_TEST").is_some();
         TEST_MODE.store(test, Ordering::Relaxed);
-        if test {
+        // Mit VORLESER_TEST_DATA darf ein Testlauf schreiben; APPDATA zeigt dann auf einen Testordner.
+        if test && std::env::var_os("VORLESER_TEST_DATA").is_none() {
             config::set_read_only();
         }
         let name = if test { w!("Local\\Vorleser.Test") } else { w!("Local\\Vorleser.Instanz") };
@@ -1264,6 +1381,7 @@ fn main() {
         // Tastenkürzel des Fensters; Strg+Z, X, C und V erledigt das Textfeld selbst.
         const CONTROL: u8 = 0x08 | 0x01; // FCONTROL | FVIRTKEY
         const KEY: u8 = 0x01; // FVIRTKEY
+        const ALT: u8 = 0x10 | 0x01; // FALT | FVIRTKEY
         window::set_accelerators(&[
             (CONTROL, b'O' as u16, CMD_OPEN_FILE),
             (CONTROL, b'S' as u16, CMD_SAVE_WAV),
@@ -1271,6 +1389,8 @@ fn main() {
             (KEY, 0x74, CMD_READ_WINDOW), // F5
             (KEY, 0x75, CMD_PAUSE),       // F6
             (KEY, 0x76, CMD_STOP),        // F7
+            (ALT, 0x25, CMD_PREV),        // Alt+Links
+            (ALT, 0x27, CMD_NEXT),        // Alt+Rechts
         ]);
 
         match App::new(hwnd) {
@@ -1285,6 +1405,7 @@ fn main() {
             }
         }
 
+        with_app(|app| app.restore_session());
         // Von Hand gestartet öffnet sich das Fenster; der Autostart bleibt still im Infobereich.
         if !std::env::args().any(|arg| arg == ARG_TRAY) {
             window::show();

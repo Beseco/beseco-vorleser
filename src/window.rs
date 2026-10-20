@@ -56,6 +56,8 @@ pub const ID_VOICE: u32 = 105;
 pub const ID_RATE: u32 = 106;
 pub const ID_TOPMOST: u32 = 110;
 pub const ID_AI_VOICES: u32 = 111;
+pub const ID_PREV: u32 = 112;
+pub const ID_NEXT: u32 = 113;
 /// Befehle der Menüleiste und der Tastenkürzel: `MENU_BASE` + Befehlsnummer aus `main.rs`.
 pub const MENU_BASE: u32 = 20_000;
 
@@ -89,10 +91,12 @@ struct Controls {
     read: HWND,
     pause: HWND,
     stop: HWND,
+    prev: HWND,
+    next: HWND,
 }
 
 impl Controls {
-    fn children(&self) -> [HWND; 11] {
+    fn children(&self) -> [HWND; 13] {
         [
             self.voice_label,
             self.voice,
@@ -105,6 +109,8 @@ impl Controls {
             self.read,
             self.pause,
             self.stop,
+            self.prev,
+            self.next,
         ]
     }
 }
@@ -226,6 +232,8 @@ pub fn create(icon: HICON, on_command: fn(u32, u32), on_drop: fn(String)) -> Opt
             read: child(w!("BUTTON"), tab, none, ID_READ),
             pause: child(w!("BUTTON"), tab, none, ID_PAUSE),
             stop: child(w!("BUTTON"), tab, none, ID_STOP),
+            prev: child(w!("BUTTON"), tab, none, ID_PREV),
+            next: child(w!("BUTTON"), tab, none, ID_NEXT),
         };
         CONTROLS.with(|cell| cell.set(Some(c)));
         ON_COMMAND.with(|cell| cell.set(Some(on_command)));
@@ -258,6 +266,8 @@ pub fn relabel() {
         (c.read, t("window.read_aloud")),
         (c.pause, if paused { t("app.resume") } else { t("app.pause") }),
         (c.stop, t("app.stop")),
+        (c.prev, t("window.prev_sentence")),
+        (c.next, t("window.next_sentence")),
     ];
     for (control, text) in texts {
         unsafe {
@@ -564,6 +574,9 @@ unsafe fn layout(c: &Controls) {
     place(c.read, margin, buttons, px(120), button);
     place(c.pause, margin + px(128), buttons, px(110), button);
     place(c.stop, margin + px(246), buttons, px(90), button);
+    // Satzweise springen, rechtsbündig.
+    place(c.next, width - margin - px(110), buttons, px(110), button);
+    place(c.prev, width - margin - px(228), buttons, px(110), button);
 }
 
 unsafe fn dropped_file(drop: HDROP) -> Option<String> {

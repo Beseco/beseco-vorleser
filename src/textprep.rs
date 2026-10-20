@@ -1,4 +1,5 @@
-//! Bereinigt Text vor dem Vorlesen: fügt umbrochene Zeilen (typisch für PDFs) wieder zusammen,
+//! Textaufbereitung: Zerlegung in Sätze (für KI-Stimmen und die Navigation) und Bereinigung
+//! vor dem Vorlesen. Die Bereinigung fügt umbrochene Zeilen (typisch für PDFs) wieder zusammen,
 //! hebt Silbentrennung auf und kürzt Internetadressen auf den Namen der Seite.
 
 /// Ab dieser Länge gilt eine Zeile als umbrochener Fließtext; kürzere Zeilen (Überschriften,
@@ -62,9 +63,105 @@ fn shorten_url(word: &str) -> String {
     format!("{before}{host}{after}")
 }
 
+/// Ein Satz mit seiner Position im Originaltext (UTF-16-Einheiten, wie im Textfeld).
+#[derive(Debug, PartialEq)]
+pub struct Sentence {
+    pub text: String,
+    pub start: u32,
+    pub len: u32,
+}
+
+/// Zerlegt Text in Sätze: nach `. ! ? …` vor einem Leerraum, an Zeilenumbrüchen, und sehr lange
+/// Sätze zusätzlich an Kommas, damit der erste Ton schnell kommt.
+pub fn split_sentences(text: &str) -> Vec<Sentence> {
+    const LONG: usize = 300;
+    let mut sentences = Vec::new();
+    let mut current = String::new();
+    let mut start = 0u32;
+    let mut pos = 0u32;
+    let mut chars = text.chars().peekable();
+    let mut push = |current: &mut String, start: u32| {
+        let leading = current.chars().take_while(|c| c.is_whitespace()).map(char::len_utf16).sum::<usize>() as u32;
+        let trimmed = current.trim();
+        if !trimmed.is_empty() {
+            let len = trimmed.encode_utf16().count() as u32;
+            sentences.push(Sentence { text: trimmed.to_string(), start: start + leading, len });
+        }
+        current.clear();
+    };
+    while let Some(c) = chars.next() {
+        pos += c.len_utf16() as u32;
+        if c == '\r' || c == '\n' {
+            push(&mut current, start);
+            start = pos;
+            continue;
+        }
+        current.push(c);
+        let next_is_space = chars.peek().is_none_or(|n| n.is_whitespace());
+        let end_mark = matches!(c, '.' | '!' | '?' | '…') && next_is_space;
+        let long_break = current.chars().count() > LONG && matches!(c, ',' | ';' | ':') && next_is_space;
+        if end_mark || long_break {
+            push(&mut current, start);
+            start = pos;
+        }
+    }
+    push(&mut current, start);
+    sentences
+}
+
+/// Satzanfänge in einem Text aus UTF-16-Einheiten (wie im Textfeld).
+pub fn sentence_starts(text: &[u16]) -> Vec<u32> {
+    split_sentences(&String::from_utf16_lossy(text)).into_iter().map(|s| s.start).collect()
+}
+
+/// Anfang des Satzes, in dem `pos` liegt (bzw. des ersten Satzes davor).
+pub fn sentence_at(starts: &[u32], pos: u32) -> Option<u32> {
+    starts.iter().rev().find(|&&start| start <= pos).or(starts.first()).copied()
+}
+
+/// Ziel eines Sprungs von `pos` aus: der nächste Satz, oder der Satz vor dem aktuellen.
+pub fn neighbor(starts: &[u32], pos: u32, forward: bool) -> Option<u32> {
+    if forward {
+        return starts.iter().find(|&&start| start > pos).copied();
+    }
+    let current = starts.iter().rposition(|&start| start <= pos)?;
+    Some(starts[current.saturating_sub(1)])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn texts(text: &str) -> Vec<(String, u32, u32)> {
+        split_sentences(text).into_iter().map(|s| (s.text, s.start, s.len)).collect()
+    }
+
+    #[test]
+    fn splits_sentences_with_positions() {
+        let text = "Erster Satz. Zweiter Satz!\r\nDritte Zeile ohne Punkt";
+        assert_eq!(
+            texts(text),
+            vec![
+                ("Erster Satz.".to_string(), 0, 12),
+                ("Zweiter Satz!".to_string(), 13, 13),
+                ("Dritte Zeile ohne Punkt".to_string(), 28, 23),
+            ]
+        );
+    }
+
+    #[test]
+    fn keeps_abbreviation_like_dots_inside_words() {
+        assert_eq!(texts("Version 1.5 ist da.").len(), 1);
+        assert_eq!(texts("www.beseco.com ist die Seite.").len(), 1);
+    }
+
+    #[test]
+    fn counts_utf16_like_the_text_field() {
+        // "😀" belegt zwei UTF-16-Einheiten.
+        let parts = texts("😀 Hallo. Welt.");
+        assert_eq!(parts[1], ("Welt.".to_string(), 10, 5));
+    }
+
 
     #[test]
     fn joins_wrapped_lines_but_keeps_short_ones() {
@@ -90,6 +187,18 @@ mod tests {
         assert_eq!(clean("Siehe https://www.beispiel.de/pfad/seite.html?x=1."), "Siehe beispiel.de.");
         assert_eq!(clean("(www.beseco.com)"), "(beseco.com)");
         assert_eq!(clean("Kein Link: a://"), "Kein Link: a://");
+    }
+
+    #[test]
+    fn finds_neighbor_sentences() {
+        let text: Vec<u16> = "Eins. Zwei. Drei.".encode_utf16().collect();
+        let starts = sentence_starts(&text);
+        assert_eq!(starts, vec![0, 6, 12]);
+        assert_eq!(sentence_at(&starts, 8), Some(6));
+        assert_eq!(neighbor(&starts, 8, true), Some(12));
+        assert_eq!(neighbor(&starts, 8, false), Some(0));
+        assert_eq!(neighbor(&starts, 12, true), None);
+        assert_eq!(neighbor(&starts, 0, false), Some(0));
     }
 
     #[test]

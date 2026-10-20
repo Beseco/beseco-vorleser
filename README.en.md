@@ -43,6 +43,7 @@ Windows does not let a program add an entry to the regular right-click menu of o
 - **Text clean-up:** joins wrapped PDF lines, removes hyphenation, shortens links
 - **Audio export:** save text as a WAV file
 - **Autostart:** optionally start with Windows
+- **Navigation and resume:** Alt+← / Alt+→ jumps by sentence, F5 reads from the cursor, and after stopping or restarting it continues where you left off
 - **Menu bar and shortcuts:** F5 read aloud, F6 pause, F7 stop, Ctrl+O open a text file (or drop it onto the window), Ctrl+S save as WAV
 
 ## Voices
@@ -71,7 +72,11 @@ Vorleser collects no data. It goes online in only two cases: the update check (a
 
 To read the selection, Vorleser uses the Windows accessibility interface. Where that is not available, it briefly copies the text through the clipboard and restores the previous clipboard content.
 
-Settings are stored in `%APPDATA%\Vorleser\settings.ini`.
+Settings are stored in `%APPDATA%\Vorleser\settings.ini`. To continue later where you left off, Vorleser stores the window's text on exit in `%APPDATA%\Vorleser\letzter-text.txt`; this can be turned off in the settings, which deletes the file.
+
+### Corporate networks
+
+Vorleser uses the Windows proxy settings, including automatic configuration via `wpad.dat`. If the proxy requires sign-in, Vorleser uses the Windows account. Otherwise enter the `wpad.dat` address (e.g. `http://wpad/wpad.dat`) or a fixed proxy (`proxy.company.local:8080`) under Tools → Settings → Proxy. Without internet everything works except the update check and AI voice downloads.
 
 ## Known limitations
 

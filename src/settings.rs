@@ -71,6 +71,7 @@ pub struct Values {
     pub clean_text: bool,
     pub update_check: bool,
     pub proxy: String,
+    pub remember_text: bool,
     pub language: String,
 }
 
@@ -83,6 +84,7 @@ struct Controls {
     clean: HWND,
     update: HWND,
     proxy: HWND,
+    remember: HWND,
     language: HWND,
     font: HFONT,
 }
@@ -122,7 +124,7 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
         let dpi = GetDpiForSystem();
         let px = |value: i32| value * dpi as i32 / 96;
         let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
-        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(424) };
+        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(456) };
         let _ = AdjustWindowRectExForDpi(&mut frame, style, false, WS_EX_CONTROLPARENT, dpi);
         let Ok(window) = CreateWindowExW(
             WS_EX_CONTROLPARENT,
@@ -215,10 +217,16 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
             tab | BS_AUTOCHECKBOX as u32,
             0, label_x, 46 + 8 * row, 438, 24,
         );
-        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, 378, 100, 30);
-        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, 378, 98, 30);
+        let remember = child(
+            w!("BUTTON"),
+            t("settings.remember_text"),
+            tab | BS_AUTOCHECKBOX as u32,
+            0, label_x, 42 + 9 * row, 438, 24,
+        );
+        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, 410, 100, 30);
+        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, 410, 98, 30);
 
-        let c = Controls { window, hotkeys, mouse, volume, clean, update, language, proxy, font };
+        let c = Controls { window, hotkeys, mouse, volume, clean, update, language, proxy, remember, font };
         fill(&c, &values);
         CONTROLS.with(|cell| cell.set(Some(c)));
         ORIGINAL.with(|cell| *cell.borrow_mut() = Some(values));
@@ -268,6 +276,7 @@ unsafe fn fill(c: &Controls, values: &Values) {
     SendMessageW(c.volume, TBM_SETPOS, Some(WPARAM(1)), Some(LPARAM(values.volume as isize)));
     SendMessageW(c.clean, BM_SETCHECK, Some(WPARAM(values.clean_text as usize)), None);
     SendMessageW(c.update, BM_SETCHECK, Some(WPARAM(values.update_check as usize)), None);
+    SendMessageW(c.remember, BM_SETCHECK, Some(WPARAM(values.remember_text as usize)), None);
     let mut current = 0;
     for (i, (label, value)) in language_options().iter().enumerate() {
         let label = HSTRING::from(label.as_str());
@@ -325,6 +334,7 @@ unsafe fn save(c: &Controls) {
         volume: (SendMessageW(c.volume, TBM_GETPOS, None, None).0 as u32).min(100),
         clean_text: SendMessageW(c.clean, BM_GETCHECK, None, None).0 == 1,
         update_check: SendMessageW(c.update, BM_GETCHECK, None, None).0 == 1,
+        remember_text: SendMessageW(c.remember, BM_GETCHECK, None, None).0 == 1,
         proxy: {
             let mut buffer = [0u16; 512];
             let len = GetWindowTextW(c.proxy, &mut buffer) as usize;

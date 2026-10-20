@@ -21,7 +21,7 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 
 - [x] **Mitlesen.** Das gesprochene Wort wird im Fenster markiert; Text aus Tastenkombination oder Zwischenablage erscheint dazu im Fenster, wenn es offen ist.
 - [x] **Immer im Vordergrund** als Schalter im Fenster.
-- [ ] **Navigation.** Satzweise vor und zurück, an der letzten Stelle weiterlesen.
+- [x] **Navigation.** Satzweise vor und zurück, an der letzten Stelle weiterlesen (auch nach Neustart).
 - [x] **Textbereinigung.** PDF-Zeilenumbrüche und Silbentrennung zusammenfügen, Links auf den Seitennamen kürzen (abschaltbar).
 - [ ] Fußnotenziffern überspringen (braucht eine sichere Erkennung, sonst gehen echte Zahlen verloren).
 - [ ] **Aussprache-Wörterbuch** für Namen und Abkürzungen.

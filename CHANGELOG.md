@@ -11,6 +11,11 @@ Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic
 - Neu: Textdateien öffnen, auch durch Hineinziehen ins Fenster
 - Neu: Sprachsystem mit Sprachdateien; weitere Sprachen lassen sich ohne Programmierung ergänzen (siehe `lang/README.md`). Die Sprache wechselt sofort, ohne Neustart
 - Nach Updates suchen jetzt auch von Hand (Hilfe → Nach Updates suchen)
+- Neu: satzweise springen mit Alt+← / Alt+→ (auch während des Vorlesens) und den Schaltflächen „◀ Satz“ / „Satz ▶“
+- Neu: F5 liest ab der Schreibmarke; nach Stopp steht sie am Anfang des zuletzt gesprochenen Satzes
+- Neu: Text und Leseposition werden beim Beenden gemerkt, damit es nach einem Neustart weitergeht (abschaltbar)
+- Neu: Proxy fürs Firmennetz: wpad.dat und Anmeldung mit dem Windows-Konto, wahlweise eigene Proxy-Adresse
+- Behoben: Nach einem Neustart des Vorlesens konnten Meldungen des abgebrochenen Durchgangs das neue Vorlesen vorzeitig beenden
 
 ## 0.2.0 – 2026-10-20
 
