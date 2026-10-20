@@ -52,6 +52,7 @@ pub const ID_ABOUT: u32 = 107;
 pub const ID_SAVE_AUDIO: u32 = 108;
 pub const ID_SETTINGS: u32 = 109;
 pub const ID_TOPMOST: u32 = 110;
+pub const ID_AI_VOICES: u32 = 111;
 
 /// Benachrichtigungscode eines Klicks auf eine Schaltfläche.
 pub const CLICKED: u32 = 0;
@@ -64,6 +65,7 @@ struct Controls {
     voice_label: HWND,
     voice: HWND,
     sample: HWND,
+    ai_voices: HWND,
     rate_label: HWND,
     rate: HWND,
     topmost: HWND,
@@ -77,11 +79,12 @@ struct Controls {
 }
 
 impl Controls {
-    fn children(&self) -> [HWND; 13] {
+    fn children(&self) -> [HWND; 14] {
         [
             self.voice_label,
             self.voice,
             self.sample,
+            self.ai_voices,
             self.rate_label,
             self.rate,
             self.topmost,
@@ -202,6 +205,7 @@ pub fn create(icon: HICON, on_command: fn(u32, u32)) -> Option<HWND> {
             voice_label: child(w!("STATIC"), tr("Stimme:", "Voice:"), 0, none, 0),
             voice: child(w!("COMBOBOX"), "", list, none, ID_VOICE),
             sample: child(w!("BUTTON"), tr("Hörprobe", "Sample"), tab, none, ID_SAMPLE),
+            ai_voices: child(w!("BUTTON"), tr("KI-Stimmen …", "AI voices …"), tab, none, ID_AI_VOICES),
             rate_label: child(w!("STATIC"), tr("Geschwindigkeit:", "Speed:"), 0, none, 0),
             rate: child(w!("COMBOBOX"), "", list, none, ID_RATE),
             topmost: child(w!("BUTTON"), tr("Immer im Vordergrund", "Always on top"), tab | BS_AUTOCHECKBOX as u32, none, ID_TOPMOST),
@@ -458,8 +462,10 @@ unsafe fn layout(c: &Controls) {
     let mut y = margin;
     place(c.voice_label, margin, y + px(4), label, row);
     // Bei Auswahllisten bestimmt die Höhe, wie weit die Liste aufklappt.
-    place(c.voice, fields, y, width - fields - margin - gap - sample_width, px(400));
-    place(c.sample, width - margin - sample_width, y - px(1), sample_width, row + px(2));
+    let ai_width = px(110);
+    place(c.voice, fields, y, width - fields - margin - 2 * gap - sample_width - ai_width, px(400));
+    place(c.sample, width - margin - ai_width - gap - sample_width, y - px(1), sample_width, row + px(2));
+    place(c.ai_voices, width - margin - ai_width, y - px(1), ai_width, row + px(2));
     y += row + gap;
     place(c.rate_label, margin, y + px(4), label, row);
     place(c.rate, fields, y, px(200), px(400));

@@ -3,9 +3,12 @@
 
 #![windows_subsystem = "windows"]
 
+mod aivoices;
 mod config;
+mod http;
 mod i18n;
 mod mouse;
+mod piper;
 mod selection;
 mod settings;
 mod textprep;
@@ -91,6 +94,7 @@ const CMD_OPEN: u32 = 7;
 const CMD_ABOUT: u32 = 8;
 const CMD_SETTINGS: u32 = 9;
 const CMD_UPDATE: u32 = 10;
+const CMD_AI_VOICES: u32 = 11;
 const CMD_RATE: u32 = 100;
 const CMD_VOICE: u32 = 1000;
 
@@ -146,7 +150,8 @@ thread_local! {
 static TASKBAR_CREATED: AtomicU32 = AtomicU32::new(0);
 
 /// Testlauf neben einer laufenden Instanz (Umgebungsvariable `VORLESER_TEST`): eigene
-/// Instanzsperre, keine globalen Tastenkombinationen, kein Maus-Auslöser, kein Ton.
+/// Instanzsperre, keine globalen Tastenkombinationen, kein Maus-Auslöser, kein Ton, keine
+/// gespeicherten Einstellungen.
 static TEST_MODE: AtomicBool = AtomicBool::new(false);
 
 thread_local! {
@@ -168,7 +173,7 @@ fn with_app<R>(f: impl FnOnce(&mut App) -> R) -> Option<R> {
 impl App {
     fn new(hwnd: HWND) -> windows::core::Result<App> {
         let cfg = Config::load();
-        let tts = Tts::new()?;
+        let mut tts = Tts::new()?;
         tts.notify_window(hwnd, WM_TTS)?;
         if !cfg.voice.is_empty() {
             tts.set_voice(&cfg.voice);
@@ -520,6 +525,7 @@ impl App {
 
             item(menu, CMD_AUTOSTART, tr("Mit Windows starten", "Start with Windows"), true, autostart_enabled());
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
+            item(menu, CMD_AI_VOICES, tr("KI-Stimmen …", "AI voices …"), true, false);
             item(menu, CMD_SETTINGS, tr("Einstellungen …", "Settings …"), true, false);
             item(menu, CMD_ABOUT, tr("Über Vorleser …", "About Vorleser …"), true, false);
             item(menu, CMD_QUIT, tr("Beenden", "Exit"), true, false);
@@ -594,6 +600,28 @@ fn autostart_enabled() -> bool {
     }
 }
 
+/// Der eingetragene Befehl des Autostarts, falls vorhanden.
+fn autostart_command() -> Option<String> {
+    let mut buffer = [0u16; 1024];
+    let mut size = (buffer.len() * 2) as u32;
+    unsafe {
+        let status = RegGetValueW(
+            HKEY_CURRENT_USER,
+            RUN_KEY,
+            APP_NAME,
+            RRF_RT_REG_SZ,
+            None,
+            Some(buffer.as_mut_ptr() as *mut _),
+            Some(&mut size),
+        );
+        if status != ERROR_SUCCESS {
+            return None;
+        }
+    }
+    let len = buffer.iter().position(|&unit| unit == 0).unwrap_or(buffer.len());
+    Some(String::from_utf16_lossy(&buffer[..len]))
+}
+
 fn set_autostart(enable: bool) {
     unsafe {
         if !enable {
@@ -636,11 +664,37 @@ fn show_menu(hwnd: HWND, selection: Option<Option<String>>) {
     }
     if cmd == CMD_ABOUT {
         show_about();
+    } else if cmd == CMD_AI_VOICES {
+        open_ai_voices();
     } else if cmd == CMD_SETTINGS {
         open_settings();
     } else if cmd != 0 {
         with_app(|app| app.command(cmd, selection.flatten()));
     }
+}
+
+fn open_ai_voices() {
+    aivoices::open(window::visible(), on_ai_voices_changed);
+}
+
+/// Nach Download (`Some` mit der neuen Stimme) oder Entfernen einer KI-Stimme.
+fn on_ai_voices_changed(new_voice: Option<String>) {
+    with_app(|app| {
+        let before = app.tts.current_voice_id();
+        app.tts.reload_voices();
+        app.fill_window();
+        if let Some(index) = new_voice.and_then(|id| app.tts.voices().iter().position(|v| v.id == id)) {
+            app.select_voice(index);
+        } else if app.tts.current_voice_id() != before {
+            // Die eingestellte Stimme wurde entfernt; es gilt wieder die Windows-Stimme.
+            app.stop();
+            if let Some(id) = app.tts.current_voice_id() {
+                app.cfg.voice = id;
+                app.cfg.save();
+            }
+            app.sync_window();
+        }
+    });
 }
 
 fn open_settings() {
@@ -793,6 +847,7 @@ fn on_window_command(id: u32, code: u32) {
         }
         (window::ID_ABOUT, window::CLICKED) => show_about(),
         (window::ID_SETTINGS, window::CLICKED) => open_settings(),
+        (window::ID_AI_VOICES, window::CLICKED) => open_ai_voices(),
         (window::ID_SAVE_AUDIO, window::CLICKED) => {
             if PENDING_WAV.with(|cell| cell.borrow().is_none()) {
                 save_audio();
@@ -887,6 +942,9 @@ fn main() {
         // Nur eine Instanz; das Handle bleibt bis zum Prozessende offen.
         let test = std::env::var_os("VORLESER_TEST").is_some();
         TEST_MODE.store(test, Ordering::Relaxed);
+        if test {
+            config::set_read_only();
+        }
         let name = if test { w!("Local\\Vorleser.Test") } else { w!("Local\\Vorleser.Instanz") };
         let _mutex = CreateMutexW(None, true, name);
         if GetLastError() == ERROR_ALREADY_EXISTS {
@@ -954,15 +1012,20 @@ fn main() {
         if !std::env::args().any(|arg| arg == ARG_TRAY) {
             window::show();
         }
-        // Frischt Pfad und Argument eines vorhandenen Autostart-Eintrags auf.
-        if autostart_enabled() {
-            set_autostart(true);
+        // Ergänzt bei einem Autostart-Eintrag für genau diese Datei das Argument --tray (ältere
+        // Versionen trugen es nicht ein). Einträge für andere Kopien bleiben unangetastet.
+        if let (Some(command), Ok(exe), false) = (autostart_command(), std::env::current_exe(), test) {
+            let own = command.to_lowercase().contains(&exe.display().to_string().to_lowercase());
+            if own && !command.contains(ARG_TRAY) {
+                set_autostart(true);
+            }
         }
 
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             // Tab, Eingabe und Esc im Fenster wie in einem Dialog behandeln.
             let handled = settings::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
+                || aivoices::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || IsDialogMessageW(dialog, &msg).as_bool();
             if !handled {
                 let _ = TranslateMessage(&msg);

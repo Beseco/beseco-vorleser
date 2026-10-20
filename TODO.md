@@ -10,9 +10,10 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 
 ## KI-Stimmen
 
-- [ ] **Lokale KI-Stimmen als optionaler Download** im Programm („Stimme herunterladen“), z. B. Piper mit deutschen Stimmen. EXE bleibt klein, kein Konto, kein Internet beim Vorlesen.
-  - [ ] Lizenzen der einzelnen Stimmmodelle prüfen (nicht einheitlich).
-  - [ ] Laufzeitbibliothek und Stimmdatei getrennt vom Programm ablegen (zusammen etwa 50–100 MB).
+- [x] **Lokale KI-Stimmen als optionaler Download** im Programm („Stimme herunterladen“), z. B. Piper mit deutschen Stimmen. EXE bleibt klein, kein Konto, kein Internet beim Vorlesen.
+  - [x] Lizenzen geprüft: nur CC0 und gemeinfreie Trainingsdaten im Angebot.
+  - [x] Unter `%LOCALAPPDATA%\Vorleser\piper`, per SHA-256 geprüft.
+  - [ ] Wortgenaues Mitlesen mit KI-Stimmen (bisher satzweise).
 - [ ] **Cloud-Stimmen mit eigenem Schlüssel** (Azure, OpenAI, ElevenLabs) als Option. Deutlicher Hinweis, dass der Text dabei den Rechner verlässt.
 - [x] Hinweis in der Anleitung: Die „Online (Natural)“-Stimmen stammen von einem separaten Adapter und werden nicht mitgeliefert.
 

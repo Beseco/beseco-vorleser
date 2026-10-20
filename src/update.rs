@@ -5,19 +5,11 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicU64, Ordering:
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use windows::core::{w, HSTRING, PCWSTR};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
-use windows::Win32::Networking::WinHttp::{
-    WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest, WinHttpQueryHeaders,
-    WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest, WinHttpSetTimeouts,
-    INTERNET_DEFAULT_HTTPS_PORT, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_FLAG_SECURE,
-    WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE,
-};
 use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
 
 pub const RELEASES_URL: &str = "https://github.com/Beseco/beseco-vorleser/releases/latest";
-const HOST: PCWSTR = w!("api.github.com");
-const PATH: PCWSTR = w!("/repos/Beseco/beseco-vorleser/releases/latest");
+const API_URL: &str = "https://api.github.com/repos/Beseco/beseco-vorleser/releases/latest";
 const INTERVAL: u64 = 24 * 60 * 60;
 /// Nach dem Start wird kurz gewartet, damit die Prüfung den Systemstart nicht ausbremst.
 const STARTUP_DELAY: Duration = Duration::from_secs(60);
@@ -105,73 +97,7 @@ fn tag_from_json(json: &str) -> Option<String> {
 }
 
 fn latest_tag() -> Option<String> {
-    let agent = HSTRING::from(format!("Vorleser/{}", env!("CARGO_PKG_VERSION")));
-    unsafe {
-        let session = Handle(WinHttpOpen(&agent, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, PCWSTR::null(), PCWSTR::null(), 0));
-        if session.0.is_null() {
-            return None;
-        }
-        let _ = WinHttpSetTimeouts(session.0, 10_000, 10_000, 10_000, 10_000);
-        let connection = Handle(WinHttpConnect(session.0, HOST, INTERNET_DEFAULT_HTTPS_PORT, 0));
-        if connection.0.is_null() {
-            return None;
-        }
-        let request = Handle(WinHttpOpenRequest(
-            connection.0,
-            w!("GET"),
-            PATH,
-            PCWSTR::null(),
-            PCWSTR::null(),
-            std::ptr::null(),
-            WINHTTP_FLAG_SECURE,
-        ));
-        if request.0.is_null() {
-            return None;
-        }
-        let headers: Vec<u16> = "Accept: application/vnd.github+json".encode_utf16().collect();
-        WinHttpSendRequest(request.0, Some(&headers), None, 0, 0, 0).ok()?;
-        WinHttpReceiveResponse(request.0, std::ptr::null_mut()).ok()?;
-
-        let mut status = 0u32;
-        let mut size = 4u32;
-        WinHttpQueryHeaders(
-            request.0,
-            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-            PCWSTR::null(),
-            Some(&mut status as *mut u32 as *mut _),
-            &mut size,
-            std::ptr::null_mut(),
-        )
-        .ok()?;
-        if status != 200 {
-            return None;
-        }
-
-        let mut body = Vec::new();
-        let mut chunk = [0u8; 8192];
-        loop {
-            let mut read = 0;
-            WinHttpReadData(request.0, chunk.as_mut_ptr() as *mut _, chunk.len() as u32, &mut read).ok()?;
-            if read == 0 || body.len() > 1 << 20 {
-                break;
-            }
-            body.extend_from_slice(&chunk[..read as usize]);
-        }
-        tag_from_json(&String::from_utf8_lossy(&body))
-    }
-}
-
-/// Schließt ein WinHTTP-Handle beim Verlassen des Gültigkeitsbereichs.
-struct Handle(*mut core::ffi::c_void);
-
-impl Drop for Handle {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            unsafe {
-                let _ = WinHttpCloseHandle(self.0);
-            }
-        }
-    }
+    tag_from_json(&crate::http::get_text(API_URL, Some("application/vnd.github+json"))?)
 }
 
 #[cfg(test)]

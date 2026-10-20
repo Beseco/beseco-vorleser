@@ -1,7 +1,8 @@
-//! Sprachausgabe über SAPI 5 (`ISpVoice`).
+//! Sprachausgabe: Windows-Stimmen über SAPI 5 (`ISpVoice`) und KI-Stimmen über Piper.
+//! Für den Rest des Programms sind beide einfach Einträge in [`Tts::voices`].
 
-use windows::core::{w, Result, BSTR, HSTRING, PCWSTR, PWSTR};
-use windows::Win32::Foundation::{HWND, LPARAM, VARIANT_FALSE, WPARAM};
+use windows::core::{w, Error, Result, BSTR, HSTRING, PCWSTR, PWSTR};
+use windows::Win32::Foundation::{E_FAIL, HWND, LPARAM, VARIANT_FALSE, WPARAM};
 use windows::Win32::Globalization::{
     GetLocaleInfoEx, LCIDToLocaleName, LOCALE_SLOCALIZEDDISPLAYNAME,
 };
@@ -12,6 +13,12 @@ use windows::Win32::Media::Speech::{
     SPF_PURGEBEFORESPEAK, SPVOICESTATUS,
 };
 use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_ALL};
+
+use crate::i18n::tr;
+use crate::piper;
+
+/// Kennung der KI-Stimmen: "piper:" und der Dateiname des Modells.
+const PIPER_PREFIX: &str = "piper:";
 
 /// Klassische SAPI-Stimmen und die OneCore-Stimmen (u. a. Katja/Stefan).
 const VOICE_CATEGORIES: [&str; 2] = [
@@ -32,7 +39,8 @@ pub struct Voice {
     pub lang_id: u16,
     /// Anzeigename der Sprache, z. B. "Deutsch (Deutschland)".
     pub language: String,
-    token: ISpObjectToken,
+    /// Nur bei Windows-Stimmen.
+    token: Option<ISpObjectToken>,
 }
 
 /// Was seit dem letzten Aufruf von [`Tts::poll`] passiert ist.
@@ -50,18 +58,55 @@ pub struct Tts {
     /// Nummer des zuletzt gestarteten Sprachstroms; 0 = keiner.
     stream: u32,
     paused: bool,
+    /// Eingestellte KI-Stimme; `None` = Windows-Stimme von `voice`.
+    piper: Option<&'static piper::CatalogVoice>,
+    session: Option<piper::Session>,
+    rate: i32,
+    volume: u32,
+    notify: (isize, u32),
 }
 
 impl Tts {
     /// COM muss auf dem aufrufenden Thread bereits initialisiert sein.
     pub fn new() -> Result<Tts> {
         let voice: ISpVoice = unsafe { CoCreateInstance(&SpVoice, None, CLSCTX_ALL)? };
+        let mut tts = Tts {
+            voice,
+            voices: Vec::new(),
+            stream: 0,
+            paused: false,
+            piper: None,
+            session: None,
+            rate: 0,
+            volume: 100,
+            notify: (0, 0),
+        };
+        tts.reload_voices();
+        Ok(tts)
+    }
+
+    /// Liest die Stimmen neu ein, z. B. nachdem eine KI-Stimme geladen oder gelöscht wurde.
+    pub fn reload_voices(&mut self) {
         let mut voices = Vec::new();
+        for voice in piper::installed() {
+            let suffix = tr("KI-Stimme", "AI voice");
+            voices.push(Voice {
+                id: format!("{PIPER_PREFIX}{}", voice.key),
+                name: format!("{} ({suffix})", voice.name),
+                lang_id: voice.lang_id,
+                language: language_name(voice.lang_id).unwrap_or_else(|| "Andere".to_string()),
+                token: None,
+            });
+        }
         for category in VOICE_CATEGORIES {
             // Fehlt eine Kategorie (z. B. keine OneCore-Stimmen), wird sie übersprungen.
             let _ = enumerate(category, &mut voices);
         }
-        Ok(Tts { voice, voices, stream: 0, paused: false })
+        self.voices = voices;
+        if self.piper.is_some_and(|p| !piper::is_installed(p.key)) {
+            self.stop();
+            self.piper = None;
+        }
     }
 
     pub fn voices(&self) -> &[Voice] {
@@ -69,7 +114,8 @@ impl Tts {
     }
 
     /// Meldet das Ende eines Sprachstroms als Fensternachricht `msg` an `hwnd`.
-    pub fn notify_window(&self, hwnd: HWND, msg: u32) -> Result<()> {
+    pub fn notify_window(&mut self, hwnd: HWND, msg: u32) -> Result<()> {
+        self.notify = (hwnd.0 as isize, msg);
         unsafe {
             self.voice.SetNotifyWindowMessage(hwnd, msg, WPARAM(0), LPARAM(0))?;
             self.voice.SetInterest(INTEREST, INTEREST)
@@ -77,40 +123,59 @@ impl Tts {
     }
 
     /// Gibt `false` zurück, wenn die Stimme nicht (mehr) vorhanden oder nicht nutzbar ist.
-    pub fn set_voice(&self, id: &str) -> bool {
-        match self.voices.iter().find(|v| v.id == id) {
-            Some(v) => unsafe { self.voice.SetVoice(&v.token).is_ok() },
-            None => false,
+    pub fn set_voice(&mut self, id: &str) -> bool {
+        let Some(voice) = self.voices.iter().find(|v| v.id == id) else { return false };
+        match &voice.token {
+            Some(token) => {
+                let ok = unsafe { self.voice.SetVoice(token).is_ok() };
+                if ok {
+                    self.piper = None;
+                }
+                ok
+            }
+            None => {
+                self.piper = id.strip_prefix(PIPER_PREFIX).and_then(piper::find);
+                self.piper.is_some()
+            }
         }
     }
 
     pub fn current_voice_id(&self) -> Option<String> {
+        if let Some(voice) = self.piper {
+            return Some(format!("{PIPER_PREFIX}{}", voice.key));
+        }
         unsafe { self.voice.GetVoice().and_then(|t| t.GetId()).ok().map(take_string) }
     }
 
-    pub fn set_rate(&self, rate: i32) {
+    /// Gilt bei KI-Stimmen ab dem nächsten Vorlesen.
+    pub fn set_rate(&mut self, rate: i32) {
+        self.rate = rate.clamp(-10, 10);
         unsafe {
-            let _ = self.voice.SetRate(rate.clamp(-10, 10));
+            let _ = self.voice.SetRate(self.rate);
         }
     }
 
-    /// Lautstärke in Prozent.
-    pub fn set_volume(&self, volume: u32) {
+    /// Lautstärke in Prozent; gilt bei KI-Stimmen ab dem nächsten Vorlesen.
+    pub fn set_volume(&mut self, volume: u32) {
+        self.volume = volume.min(100);
         unsafe {
-            let _ = self.voice.SetVolume(volume.min(100) as u16);
+            let _ = self.voice.SetVolume(self.volume as u16);
         }
     }
 
     pub fn current_rate(&self) -> i32 {
-        let mut rate = 0;
-        unsafe {
-            let _ = self.voice.GetRate(&mut rate);
-        }
-        rate
+        self.rate
     }
 
     /// Bricht laufende Ausgabe ab und liest `text` vor.
     pub fn speak(&mut self, text: &str) -> Result<()> {
+        if let Some(voice) = self.piper {
+            self.stop();
+            let (hwnd, msg) = self.notify;
+            self.session = Some(piper::Session::start(voice.key, text, self.rate, self.volume, HWND(hwnd as *mut _), msg));
+            return Ok(());
+        }
+        self.session = None;
         let text = HSTRING::from(text);
         let flags = (SPF_ASYNC.0 | SPF_PURGEBEFORESPEAK.0 | SPF_IS_NOT_XML.0) as u32;
         let mut stream = 0;
@@ -121,16 +186,26 @@ impl Tts {
     }
 
     pub fn pause(&mut self) {
+        if let Some(session) = &self.session {
+            session.pause();
+            return;
+        }
         if !self.paused && unsafe { self.voice.Pause().is_ok() } {
             self.paused = true;
         }
     }
 
     pub fn resume(&mut self) {
+        if let Some(session) = &self.session {
+            session.resume();
+            return;
+        }
         self.unpause();
     }
 
     pub fn stop(&mut self) {
+        // Das Verwerfen der Sitzung beendet die KI-Ausgabe.
+        self.session = None;
         self.stream = 0;
         let flags = (SPF_ASYNC.0 | SPF_PURGEBEFORESPEAK.0) as u32;
         unsafe {
@@ -142,6 +217,15 @@ impl Tts {
     /// Nach der Fensternachricht aufrufen. Ereignisse abgebrochener, älterer Sprachströme
     /// zählen nicht.
     pub fn poll(&mut self) -> Progress {
+        if let Some(session) = &self.session {
+            let progress = session.poll();
+            let finished = progress.finished.map(|result| result.map_err(|e| Error::new(E_FAIL, e)));
+            if finished.is_some() {
+                self.session = None;
+            }
+            // Bei KI-Stimmen wird der ganze Satz markiert.
+            return Progress { word: progress.sentence, finished };
+        }
         let mut finished = false;
         let mut word = None;
         loop {
@@ -189,6 +273,9 @@ impl Tts {
 /// Läuft synchron mit einer eigenen Stimme und ist für einen Hintergrund-Thread gedacht, auf dem
 /// COM bereits initialisiert ist; die laufende Ausgabe bleibt davon unberührt.
 pub fn save_wav(voice_id: Option<&str>, rate: i32, text: &str, path: &str) -> Result<()> {
+    if let Some(voice) = voice_id.and_then(|id| id.strip_prefix(PIPER_PREFIX)).and_then(piper::find) {
+        return piper::save_wav(voice.key, rate, text, path).map_err(|e| Error::new(E_FAIL, e));
+    }
     unsafe {
         let file: ISpeechFileStream = CoCreateInstance(&SpFileStream, None, CLSCTX_ALL)?;
         file.Open(&BSTR::from(path), SSFMCreateForWrite, VARIANT_FALSE)?;
@@ -200,8 +287,8 @@ pub fn save_wav(voice_id: Option<&str>, rate: i32, text: &str, path: &str) -> Re
             for category in VOICE_CATEGORIES {
                 let _ = enumerate(category, &mut voices);
             }
-            if let Some(voice) = voices.iter().find(|v| v.id == id) {
-                writer.SetVoice(&voice.token)?;
+            if let Some(token) = voices.iter().find(|v| v.id == id).and_then(|v| v.token.as_ref()) {
+                writer.SetVoice(token)?;
             }
         }
         let _ = writer.SetRate(rate.clamp(-10, 10));
@@ -232,7 +319,7 @@ fn enumerate(category_id: &str, out: &mut Vec<Voice>) -> Result<()> {
             }
             let lang_id = language_id(&token).unwrap_or(0);
             let language = language_name(lang_id).unwrap_or_else(|| "Andere".to_string());
-            out.push(Voice { id, name, lang_id, language, token });
+            out.push(Voice { id, name, lang_id, language, token: Some(token) });
         }
     }
     Ok(())
@@ -287,14 +374,16 @@ mod tests {
         unsafe {
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         }
-        let tts = Tts::new().expect("SAPI nicht verfügbar");
+        let mut tts = Tts::new().expect("SAPI nicht verfügbar");
         assert!(!tts.voices().is_empty(), "keine Stimmen gefunden");
         unsafe { tts.voice.SetVolume(0).unwrap() };
         let mut usable = 0;
-        for v in tts.voices() {
-            let ok = tts.set_voice(&v.id)
+        let voices: Vec<(String, String, String)> =
+            tts.voices().iter().map(|v| (v.id.clone(), v.name.clone(), v.language.clone())).collect();
+        for (id, name, language) in voices {
+            let ok = tts.set_voice(&id)
                 && unsafe { tts.voice.Speak(&HSTRING::from("Test"), SPF_IS_NOT_XML.0 as u32, None).is_ok() };
-            println!("{}  {} | {}  [{}]", if ok { "OK    " } else { "FEHLER" }, v.language, v.name, v.id);
+            println!("{}  {language} | {name}  [{id}]", if ok { "OK    " } else { "FEHLER" });
             usable += ok as usize;
         }
         assert!(usable > 0, "keine Stimme nutzbar");

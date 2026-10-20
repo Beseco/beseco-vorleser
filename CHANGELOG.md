@@ -2,6 +2,12 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.3.0 – unveröffentlicht
+
+- Neu: KI-Stimmen (Piper) mit deutlich natürlicherem Klang: Thorsten, Thorsten HD und Kerstin auf Deutsch, Linda und Kristin auf Englisch. Download mit einem Klick über „KI-Stimmen …“, danach ohne Internet
+- Mitlesen mit KI-Stimmen satzweise, WAV-Export auch mit KI-Stimmen
+- Die Deinstallation entfernt heruntergeladene KI-Stimmen
+
 ## 0.2.0 – 2026-10-20
 
 - Online-Stimmen werden nicht mehr angeboten (unzuverlässig, Text ginge an fremde Dienste)

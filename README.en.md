@@ -46,13 +46,27 @@ Windows does not let a program add an entry to the regular right-click menu of o
 
 ## Voices
 
-Vorleser does not bundle any voices; it uses the ones installed in Windows. More voices can be added in Windows Settings under "Time & language → Speech → Add voices".
+Vorleser uses the voices installed in Windows. More can be added in Windows Settings under "Time & language → Speech → Add voices".
+
+### AI voices
+
+Much more natural are the AI voices you can add with one click via **"AI voices …"** in the Vorleser window. They are based on [Piper](https://github.com/rhasspy/piper) and, after a one-time download, run offline on your own machine only.
+
+| Voice | Language | Download | Training data license |
+|---|---|---|---|
+| Thorsten | German, male | 63 MB | CC0 ([Thorsten-Voice](https://github.com/thorstenMueller/Thorsten-Voice)) |
+| Thorsten HD | German, male, highest quality | 114 MB | CC0 |
+| Kerstin | German, female | 63 MB | CC0 |
+| Linda | English, female, highest quality | 114 MB | public domain (LJ Speech) |
+| Kristin | English, female | 64 MB | public domain (LibriVox) |
+
+The first download also fetches the Piper speech engine once (22 MB). All files are checked against a built-in SHA-256 checksum and stored in `%LOCALAPPDATA%\Vorleser\piper`; uninstalling removes them. While reading along, AI voices highlight the whole sentence instead of single words.
 
 Online voices that some add-ons register in Windows (marked "Online" in their name) are not listed: they depend on a third-party service, fail depending on the network and send the text to their provider.
 
 ## Privacy
 
-Vorleser collects no data. Its only internet connection is the update check: at most one request per day to GitHub, without any text, settings or machine identifier. It can be turned off in the settings. Text is processed only on your own machine.
+Vorleser collects no data. It goes online in only two cases: the update check (at most one request per day to GitHub, without any text, settings or machine identifier; can be turned off in the settings) and when you download an AI voice yourself (from github.com and huggingface.co). Text is processed only on your own machine.
 
 To read the selection, Vorleser uses the Windows accessibility interface. Where that is not available, it briefly copies the text through the clipboard and restores the previous clipboard content.
 

@@ -1,6 +1,14 @@
 //! Einstellungen in `%APPDATA%\Vorleser\settings.ini` (einfache `key=value`-Zeilen).
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+
+/// Im Testlauf werden Einstellungen gelesen, aber nie geschrieben.
+static READ_ONLY: AtomicBool = AtomicBool::new(false);
+
+pub fn set_read_only() {
+    READ_ONLY.store(true, Relaxed);
+}
 
 pub const MOD_ALT: u32 = 0x1;
 pub const MOD_CONTROL: u32 = 0x2;
@@ -110,6 +118,9 @@ impl Config {
     }
 
     pub fn save(&self) {
+        if READ_ONLY.load(Relaxed) {
+            return;
+        }
         if let Some(p) = path() {
             if let Some(dir) = p.parent() {
                 let _ = std::fs::create_dir_all(dir);

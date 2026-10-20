@@ -65,6 +65,10 @@ Name: "{autodesktop}\Vorleser"; Filename: "{app}\vorleser.exe"; Tasks: desktopic
 ; Derselbe Eintrag, den das Programm ueber "Mit Windows starten" selbst setzt.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Vorleser"; ValueData: """{app}\vorleser.exe"" --tray"; Tasks: autostart
 
+[UninstallDelete]
+; Heruntergeladene KI-Stimmen (bis mehrere hundert MB). Die Einstellungen bleiben erhalten.
+Type: filesandordirs; Name: "{localappdata}\Vorleser\piper"
+
 [Run]
 Filename: "{app}\vorleser.exe"; Description: "{cm:StartNow}"; Flags: nowait postinstall skipifsilent
 

@@ -47,13 +47,27 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 
 ## Stimmen
 
-Vorleser bringt keine eigenen Stimmen mit, sondern verwendet die in Windows installierten. Weitere Stimmen lassen sich in den Windows-Einstellungen unter „Zeit und Sprache → Spracherkennung → Stimmen hinzufügen“ nachladen.
+Vorleser verwendet die in Windows installierten Stimmen. Weitere lassen sich in den Windows-Einstellungen unter „Zeit und Sprache → Spracherkennung → Stimmen hinzufügen“ nachladen.
+
+### KI-Stimmen
+
+Deutlich natürlicher klingen die KI-Stimmen, die sich im Vorleser-Fenster über **„KI-Stimmen …“** mit einem Klick laden lassen. Sie beruhen auf [Piper](https://github.com/rhasspy/piper) und laufen nach dem einmaligen Download ohne Internet nur auf dem eigenen Rechner.
+
+| Stimme | Sprache | Download | Lizenz der Trainingsdaten |
+|---|---|---|---|
+| Thorsten | Deutsch, männlich | 63 MB | CC0 ([Thorsten-Voice](https://github.com/thorstenMueller/Thorsten-Voice)) |
+| Thorsten HD | Deutsch, männlich, höchste Qualität | 114 MB | CC0 |
+| Kerstin | Deutsch, weiblich | 63 MB | CC0 |
+| Linda | Englisch, weiblich, höchste Qualität | 114 MB | gemeinfrei (LJ Speech) |
+| Kristin | Englisch, weiblich | 64 MB | gemeinfrei (LibriVox) |
+
+Beim ersten Download kommt einmalig die Sprachausgabe Piper hinzu (22 MB). Alle Dateien werden über eine fest hinterlegte SHA-256-Prüfsumme kontrolliert und unter `%LOCALAPPDATA%\Vorleser\piper` abgelegt; die Deinstallation entfernt sie wieder. Beim Mitlesen markiert Vorleser mit KI-Stimmen den ganzen Satz statt des einzelnen Wortes.
 
 Online-Stimmen, die manche Zusatzprogramme in Windows einbinden (erkennbar am Zusatz „Online“ im Namen), zeigt Vorleser nicht an: Sie hängen von einem fremden Dienst ab, brechen je nach Netz ab und schicken den Text an ihren Anbieter.
 
 ## Datenschutz
 
-Vorleser sammelt keine Daten. Die einzige Verbindung ins Internet ist die Suche nach neuen Versionen: höchstens einmal am Tag eine Anfrage an GitHub, ohne Text, Einstellungen oder Kennung des Rechners. Sie lässt sich in den Einstellungen abschalten. Der Text wird ausschließlich auf dem eigenen Rechner verarbeitet.
+Vorleser sammelt keine Daten. Ins Internet geht Vorleser nur in zwei Fällen: bei der Suche nach neuen Versionen (höchstens einmal am Tag eine Anfrage an GitHub, ohne Text, Einstellungen oder Kennung des Rechners; in den Einstellungen abschaltbar) und wenn du selbst eine KI-Stimme herunterlädst (von github.com und huggingface.co). Der Text wird ausschließlich auf dem eigenen Rechner verarbeitet.
 
 Zum Auslesen der Markierung nutzt Vorleser die Bedienungshilfen-Schnittstelle von Windows. Wo das nicht geht, kopiert es den Text kurz über die Zwischenablage und stellt deren vorherigen Inhalt wieder her.
 
