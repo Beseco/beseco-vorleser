@@ -1,32 +1,38 @@
-//! Das kleine Hauptfenster: Textfeld zum Einfügen, Stimme und Geschwindigkeit, Hörprobe,
-//! Vorlesen/Pause/Stopp. Schließen blendet es nur aus; das Programm läuft im Infobereich weiter.
+//! Das Hauptfenster: Menüleiste, Stimme und Geschwindigkeit, Textfeld, Vorlesen/Pause/Stopp.
+//! Schließen blendet es nur aus; das Programm läuft im Infobereich weiter.
+//!
+//! Die Menüleiste baut `main.rs`, weil sie Stimmen und Zustand kennt; ihre Befehle kommen hier
+//! als `WM_COMMAND` mit [`MENU_BASE`] + Befehlsnummer an und gehen an denselben Rückruf wie die
+//! Schaltflächen.
 
 use std::cell::Cell;
 use std::mem::size_of;
 
 use windows::core::{s, w, HSTRING, PCWSTR};
-
-use crate::i18n::tr;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{CreateFontIndirectW, DeleteObject, HBRUSH, HFONT};
-use windows::Win32::System::ApplicationInstallationAndServicing::{
-    ActivateActCtx, CreateActCtxW, ACTCTXW,
-};
+use windows::Win32::System::ApplicationInstallationAndServicing::{ActivateActCtx, CreateActCtxW, ACTCTXW};
 use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
 use windows::Win32::System::SystemInformation::GetSystemDirectoryW;
 use windows::Win32::UI::HiDpi::{GetDpiForWindow, SystemParametersInfoForDpi};
 use windows::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, SetFocus};
+use windows::Win32::UI::Shell::{DragFinish, DragQueryFileW, HDROP};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, GetClientRect, GetWindowTextLengthW, GetWindowTextW, IsIconic, IsWindowVisible,
-    LoadCursorW, MoveWindow, RegisterClassW, SendMessageW, SetForegroundWindow, SetWindowPos,
-    SetWindowTextW, ShowWindow, BS_AUTOCHECKBOX, CBN_SELCHANGE, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOSIZE, CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL,
-    CB_GETITEMDATA, CB_RESETCONTENT, CB_SETCURSEL, CB_SETITEMDATA, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_NOHIDESEL, ES_WANTRETURN, HICON,
-    HMENU, ICON_BIG, ICON_SMALL, IDC_ARROW, MINMAXINFO, NONCLIENTMETRICSW, SPI_GETNONCLIENTMETRICS,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE,
-    WM_CLOSE, WM_COMMAND, WM_DPICHANGED, WM_GETMINMAXINFO, WM_SETFOCUS, WM_SETFONT, WM_SETICON,
-    WM_SIZE, WNDCLASSW, WS_CHILD, WS_EX_CLIENTEDGE, WS_EX_CONTROLPARENT, WS_OVERLAPPEDWINDOW,
-    WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
+    CreateAcceleratorTableW, CreateWindowExW, DefWindowProcW, DestroyMenu, DrawMenuBar, GetClientRect,
+    GetMenu, GetWindowTextLengthW, GetWindowTextW, IsChild, IsIconic, IsWindowVisible, LoadCursorW,
+    MoveWindow, RegisterClassW, SendMessageW, SetForegroundWindow, SetMenu, SetWindowPos, SetWindowTextW,
+    ShowWindow, TranslateAcceleratorW, ACCEL, ACCEL_VIRT_FLAGS, BS_AUTOCHECKBOX, CBN_SELCHANGE,
+    CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_GETITEMDATA, CB_RESETCONTENT, CB_SETCURSEL,
+    CB_SETITEMDATA, CW_USEDEFAULT, ES_AUTOVSCROLL, ES_MULTILINE, ES_NOHIDESEL, ES_WANTRETURN, HACCEL,
+    HICON, HMENU, HWND_NOTOPMOST, HWND_TOPMOST, ICON_BIG, ICON_SMALL, IDC_ARROW, MINMAXINFO, MSG,
+    NONCLIENTMETRICSW, SPI_GETNONCLIENTMETRICS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+    SW_HIDE, SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLEAR, WM_CLOSE, WM_COMMAND,
+    WM_COPY, WM_CUT, WM_DPICHANGED, WM_DROPFILES, WM_GETMINMAXINFO, WM_PASTE, WM_SETFOCUS, WM_SETFONT,
+    WM_SETICON, WM_SIZE, WM_UNDO, WNDCLASSW, WS_CHILD, WS_EX_ACCEPTFILES, WS_EX_CLIENTEDGE,
+    WS_EX_CONTROLPARENT, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
+
+use crate::i18n::t;
 
 // Im windows-Crate nur über weitere Features erreichbar, daher hier von Hand.
 const ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID: u32 = 0x04;
@@ -48,16 +54,26 @@ pub const ID_STOP: u32 = 103;
 pub const ID_SAMPLE: u32 = 104;
 pub const ID_VOICE: u32 = 105;
 pub const ID_RATE: u32 = 106;
-pub const ID_ABOUT: u32 = 107;
-pub const ID_SAVE_AUDIO: u32 = 108;
-pub const ID_SETTINGS: u32 = 109;
 pub const ID_TOPMOST: u32 = 110;
 pub const ID_AI_VOICES: u32 = 111;
+/// Befehle der Menüleiste und der Tastenkürzel: `MENU_BASE` + Befehlsnummer aus `main.rs`.
+pub const MENU_BASE: u32 = 20_000;
 
 /// Benachrichtigungscode eines Klicks auf eine Schaltfläche.
 pub const CLICKED: u32 = 0;
 /// Benachrichtigungscode einer geänderten Auswahl in einer Liste.
 pub const SELECTED: u32 = CBN_SELCHANGE;
+
+/// Bearbeiten-Befehle für das Textfeld.
+#[derive(Clone, Copy)]
+pub enum Edit {
+    Undo,
+    Cut,
+    Copy,
+    Paste,
+    SelectAll,
+    Clear,
+}
 
 #[derive(Clone, Copy)]
 struct Controls {
@@ -73,13 +89,10 @@ struct Controls {
     read: HWND,
     pause: HWND,
     stop: HWND,
-    save: HWND,
-    settings: HWND,
-    about: HWND,
 }
 
 impl Controls {
-    fn children(&self) -> [HWND; 14] {
+    fn children(&self) -> [HWND; 11] {
         [
             self.voice_label,
             self.voice,
@@ -92,9 +105,6 @@ impl Controls {
             self.read,
             self.pause,
             self.stop,
-            self.save,
-            self.settings,
-            self.about,
         ]
     }
 }
@@ -103,6 +113,9 @@ thread_local! {
     static CONTROLS: Cell<Option<Controls>> = const { Cell::new(None) };
     static FONT: Cell<HFONT> = const { Cell::new(HFONT(std::ptr::null_mut())) };
     static ON_COMMAND: Cell<Option<fn(u32, u32)>> = const { Cell::new(None) };
+    static ON_DROP: Cell<Option<fn(String)>> = const { Cell::new(None) };
+    static ACCELERATORS: Cell<HACCEL> = const { Cell::new(HACCEL(std::ptr::null_mut())) };
+    static PAUSED: Cell<bool> = const { Cell::new(false) };
 }
 
 fn controls() -> Option<Controls> {
@@ -147,9 +160,9 @@ unsafe fn init_common_controls() {
     }
 }
 
-/// Legt das (noch unsichtbare) Fenster an. `on_command` erhält die ID des Steuerelements und
-/// den Benachrichtigungscode.
-pub fn create(icon: HICON, on_command: fn(u32, u32)) -> Option<HWND> {
+/// Legt das (noch unsichtbare) Fenster an. `on_command` erhält die ID des Steuerelements oder
+/// Menübefehls und den Benachrichtigungscode, `on_drop` den Pfad einer hineingezogenen Datei.
+pub fn create(icon: HICON, on_command: fn(u32, u32), on_drop: fn(String)) -> Option<HWND> {
     unsafe {
         let instance = GetModuleHandleW(None).ok()?;
         let class = WNDCLASSW {
@@ -162,7 +175,7 @@ pub fn create(icon: HICON, on_command: fn(u32, u32)) -> Option<HWND> {
         };
         RegisterClassW(&class);
         let window = CreateWindowExW(
-            WS_EX_CONTROLPARENT,
+            WS_EX_CONTROLPARENT | WS_EX_ACCEPTFILES,
             class.lpszClassName,
             w!("Vorleser"),
             WS_OVERLAPPEDWINDOW,
@@ -177,11 +190,11 @@ pub fn create(icon: HICON, on_command: fn(u32, u32)) -> Option<HWND> {
         )
         .ok()?;
 
-        let child = |class: PCWSTR, text: &str, style: u32, ex_style: WINDOW_EX_STYLE, id: u32| {
+        let child = |class: PCWSTR, style: u32, ex_style: WINDOW_EX_STYLE, id: u32| {
             CreateWindowExW(
                 ex_style,
                 class,
-                &HSTRING::from(text),
+                PCWSTR::null(),
                 WS_CHILD | WS_VISIBLE | WINDOW_STYLE(style),
                 0,
                 0,
@@ -202,23 +215,22 @@ pub fn create(icon: HICON, on_command: fn(u32, u32)) -> Option<HWND> {
         // Die Reihenfolge der Erzeugung ist die Tab-Reihenfolge.
         let c = Controls {
             window,
-            voice_label: child(w!("STATIC"), tr("Stimme:", "Voice:"), 0, none, 0),
-            voice: child(w!("COMBOBOX"), "", list, none, ID_VOICE),
-            sample: child(w!("BUTTON"), tr("Hörprobe", "Sample"), tab, none, ID_SAMPLE),
-            ai_voices: child(w!("BUTTON"), tr("KI-Stimmen …", "AI voices …"), tab, none, ID_AI_VOICES),
-            rate_label: child(w!("STATIC"), tr("Geschwindigkeit:", "Speed:"), 0, none, 0),
-            rate: child(w!("COMBOBOX"), "", list, none, ID_RATE),
-            topmost: child(w!("BUTTON"), tr("Immer im Vordergrund", "Always on top"), tab | BS_AUTOCHECKBOX as u32, none, ID_TOPMOST),
-            edit: child(w!("EDIT"), "", edit_style, WS_EX_CLIENTEDGE, 0),
-            read: child(w!("BUTTON"), tr("Vorlesen", "Read aloud"), tab, none, ID_READ),
-            pause: child(w!("BUTTON"), tr("Pause", "Pause"), tab, none, ID_PAUSE),
-            stop: child(w!("BUTTON"), tr("Stopp", "Stop"), tab, none, ID_STOP),
-            save: child(w!("BUTTON"), tr("Als WAV speichern …", "Save as WAV …"), tab, none, ID_SAVE_AUDIO),
-            settings: child(w!("BUTTON"), tr("Einstellungen", "Settings"), tab, none, ID_SETTINGS),
-            about: child(w!("BUTTON"), tr("Info", "About"), tab, none, ID_ABOUT),
+            voice_label: child(w!("STATIC"), 0, none, 0),
+            voice: child(w!("COMBOBOX"), list, none, ID_VOICE),
+            sample: child(w!("BUTTON"), tab, none, ID_SAMPLE),
+            ai_voices: child(w!("BUTTON"), tab, none, ID_AI_VOICES),
+            rate_label: child(w!("STATIC"), 0, none, 0),
+            rate: child(w!("COMBOBOX"), list, none, ID_RATE),
+            topmost: child(w!("BUTTON"), tab | BS_AUTOCHECKBOX as u32, none, ID_TOPMOST),
+            edit: child(w!("EDIT"), edit_style, WS_EX_CLIENTEDGE, 0),
+            read: child(w!("BUTTON"), tab, none, ID_READ),
+            pause: child(w!("BUTTON"), tab, none, ID_PAUSE),
+            stop: child(w!("BUTTON"), tab, none, ID_STOP),
         };
         CONTROLS.with(|cell| cell.set(Some(c)));
         ON_COMMAND.with(|cell| cell.set(Some(on_command)));
+        ON_DROP.with(|cell| cell.set(Some(on_drop)));
+        relabel();
 
         // Ohne Grenze fasst ein Textfeld nur rund 30 000 Zeichen.
         SendMessageW(c.edit, EM_SETLIMITTEXT, Some(WPARAM(0)), Some(LPARAM(0)));
@@ -227,9 +239,67 @@ pub fn create(icon: HICON, on_command: fn(u32, u32)) -> Option<HWND> {
         }
         apply_font(&c);
         let dpi = GetDpiForWindow(window) as i32;
-        let (width, height) = (740 * dpi / 96, 480 * dpi / 96);
+        let (width, height) = (740 * dpi / 96, 500 * dpi / 96);
         let _ = SetWindowPos(window, None, 0, 0, width, height, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE);
         Some(window)
+    }
+}
+
+/// Setzt alle Beschriftungen in der eingestellten Sprache (beim Anlegen und nach einem Wechsel).
+pub fn relabel() {
+    let Some(c) = controls() else { return };
+    let paused = PAUSED.with(|p| p.get());
+    let texts = [
+        (c.voice_label, t("window.voice")),
+        (c.sample, t("window.sample")),
+        (c.ai_voices, t("app.ai_voices")),
+        (c.rate_label, t("window.speed")),
+        (c.topmost, t("window.always_on_top")),
+        (c.read, t("window.read_aloud")),
+        (c.pause, if paused { t("app.resume") } else { t("app.pause") }),
+        (c.stop, t("app.stop")),
+    ];
+    for (control, text) in texts {
+        unsafe {
+            let _ = SetWindowTextW(control, &HSTRING::from(text));
+        }
+    }
+}
+
+/// Ersetzt die Menüleiste; die alte wird freigegeben.
+pub fn set_menu_bar(menu: HMENU) {
+    let Some(c) = controls() else { return };
+    unsafe {
+        let old = GetMenu(c.window);
+        let _ = SetMenu(c.window, Some(menu));
+        if !old.is_invalid() {
+            let _ = DestroyMenu(old);
+        }
+        let _ = DrawMenuBar(c.window);
+    }
+}
+
+/// Tastenkürzel des Fensters: (Zusatztasten wie `FCONTROL | FVIRTKEY`, Taste, Befehlsnummer).
+pub fn set_accelerators(entries: &[(u8, u16, u32)]) {
+    let table: Vec<ACCEL> = entries
+        .iter()
+        .map(|&(flags, key, cmd)| ACCEL { fVirt: ACCEL_VIRT_FLAGS(flags), key, cmd: (MENU_BASE + cmd) as u16 })
+        .collect();
+    if let Ok(handle) = unsafe { CreateAcceleratorTableW(&table) } {
+        ACCELERATORS.with(|cell| cell.set(handle));
+    }
+}
+
+/// In der Nachrichtenschleife vor allem anderen aufrufen; `true`, wenn die Nachricht ein
+/// Tastenkürzel des Fensters war.
+pub fn translate_accelerator(msg: &MSG) -> bool {
+    let (Some(c), accelerators) = (controls(), ACCELERATORS.with(|cell| cell.get())) else { return false };
+    if accelerators.is_invalid() {
+        return false;
+    }
+    unsafe {
+        let ours = msg.hwnd == c.window || IsChild(c.window, msg.hwnd).as_bool();
+        ours && TranslateAcceleratorW(c.window, accelerators, msg) != 0
     }
 }
 
@@ -246,6 +316,23 @@ pub fn show() {
         let _ = ShowWindow(c.window, if IsIconic(c.window).as_bool() { SW_RESTORE } else { SW_SHOW });
         let _ = SetForegroundWindow(c.window);
         let _ = SetFocus(Some(c.edit));
+    }
+}
+
+pub fn hide() {
+    if let Some(c) = controls() {
+        unsafe {
+            let _ = ShowWindow(c.window, SW_HIDE);
+        }
+    }
+}
+
+/// Fenstertitel, z. B. während eine Audiodatei geschrieben wird; `None` = „Vorleser“.
+pub fn set_title(title: Option<&str>) {
+    if let Some(c) = controls() {
+        unsafe {
+            let _ = SetWindowTextW(c.window, &HSTRING::from(title.unwrap_or("Vorleser")));
+        }
     }
 }
 
@@ -311,17 +398,27 @@ pub fn set_text(text: &str) {
         unsafe {
             SendMessageW(c.edit, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(-1)));
             SendMessageW(c.edit, EM_REPLACESEL, Some(WPARAM(1)), Some(LPARAM(text.as_ptr() as isize)));
+            SendMessageW(c.edit, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(0)));
+            SendMessageW(c.edit, EM_SCROLLCARET, None, None);
         }
     }
 }
 
-/// Zeigt, dass gerade eine Audiodatei geschrieben wird.
-pub fn set_saving(saving: bool) {
+pub fn edit(action: Edit) {
     let Some(c) = controls() else { return };
     unsafe {
-        let label = if saving { tr("Speichere …", "Saving …") } else { tr("Als WAV speichern …", "Save as WAV …") };
-        let _ = SetWindowTextW(c.save, &HSTRING::from(label));
-        let _ = EnableWindow(c.save, !saving);
+        match action {
+            Edit::Undo => SendMessageW(c.edit, WM_UNDO, None, None),
+            Edit::Cut => SendMessageW(c.edit, WM_CUT, None, None),
+            Edit::Copy => SendMessageW(c.edit, WM_COPY, None, None),
+            Edit::Paste => SendMessageW(c.edit, WM_PASTE, None, None),
+            Edit::SelectAll => SendMessageW(c.edit, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(-1))),
+            Edit::Clear => {
+                SendMessageW(c.edit, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(-1)));
+                SendMessageW(c.edit, WM_CLEAR, None, None)
+            }
+        };
+        let _ = SetFocus(Some(c.edit));
     }
 }
 
@@ -352,29 +449,19 @@ pub fn topmost_checked() -> bool {
 
 /// Der markierte Teil des Textfelds, sonst der ganze Text; `None`, wenn nichts drinsteht.
 pub fn text() -> Option<String> {
-    let c = controls()?;
-    unsafe {
-        let mut buffer = vec![0u16; GetWindowTextLengthW(c.edit) as usize + 1];
-        let len = GetWindowTextW(c.edit, &mut buffer) as usize;
-        let (mut start, mut end) = (0u32, 0u32);
-        SendMessageW(
-            c.edit,
-            EM_GETSEL,
-            Some(WPARAM(&mut start as *mut u32 as usize)),
-            Some(LPARAM(&mut end as *mut u32 as isize)),
-        );
-        let (start, end) = (start as usize, (end as usize).min(len));
-        let part = if start < end { &buffer[start..end] } else { &buffer[..len] };
-        let text = String::from_utf16_lossy(part);
-        (!text.trim().is_empty()).then_some(text)
-    }
+    let source = source()?;
+    let (start, end) = (source.selection.0 as usize, source.selection.1 as usize);
+    let part = if start < end { &source.content[start..end] } else { &source.content[..] };
+    let text = String::from_utf16_lossy(part);
+    (!text.trim().is_empty()).then_some(text)
 }
 
 /// Passt die Schaltflächen an den Zustand der Sprachausgabe an.
 pub fn set_playback(active: bool, paused: bool) {
     let Some(c) = controls() else { return };
+    PAUSED.with(|p| p.set(paused));
     unsafe {
-        let label = if paused { tr("Fortsetzen", "Resume") } else { tr("Pause", "Pause") };
+        let label = if paused { t("app.resume") } else { t("app.pause") };
         let _ = SetWindowTextW(c.pause, &HSTRING::from(label));
         let _ = EnableWindow(c.pause, active);
         let _ = EnableWindow(c.stop, active);
@@ -459,31 +546,31 @@ unsafe fn layout(c: &Controls) {
 
     let fields = margin + label;
     let sample_width = px(100);
+    let ai_width = px(110);
     let mut y = margin;
     place(c.voice_label, margin, y + px(4), label, row);
     // Bei Auswahllisten bestimmt die Höhe, wie weit die Liste aufklappt.
-    let ai_width = px(110);
     place(c.voice, fields, y, width - fields - margin - 2 * gap - sample_width - ai_width, px(400));
     place(c.sample, width - margin - ai_width - gap - sample_width, y - px(1), sample_width, row + px(2));
     place(c.ai_voices, width - margin - ai_width, y - px(1), ai_width, row + px(2));
     y += row + gap;
     place(c.rate_label, margin, y + px(4), label, row);
     place(c.rate, fields, y, px(200), px(400));
-    place(c.topmost, fields + px(200) + 2 * gap, y, px(200), row);
+    place(c.topmost, fields + px(200) + 2 * gap, y, px(240), row);
     y += row + gap;
 
     let buttons = height - margin - button;
     place(c.edit, margin, y, width - 2 * margin, buttons - gap - y);
-    place(c.read, margin, buttons, px(100), button);
-    place(c.pause, margin + px(108), buttons, px(100), button);
-    place(c.stop, margin + px(216), buttons, px(80), button);
-    // Die übrigen Schaltflächen stehen rechtsbündig.
-    let mut right = width - margin;
-    for (control, control_width) in [(c.about, 60), (c.settings, 110), (c.save, 150)] {
-        right -= px(control_width);
-        place(control, right, buttons, px(control_width), button);
-        right -= gap;
-    }
+    place(c.read, margin, buttons, px(120), button);
+    place(c.pause, margin + px(128), buttons, px(110), button);
+    place(c.stop, margin + px(246), buttons, px(90), button);
+}
+
+unsafe fn dropped_file(drop: HDROP) -> Option<String> {
+    let mut path = [0u16; 1024];
+    let len = DragQueryFileW(drop, 0, Some(&mut path)) as usize;
+    DragFinish(drop);
+    (len > 0).then(|| String::from_utf16_lossy(&path[..len]))
 }
 
 extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -504,15 +591,21 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                     on_command(id, code);
                 }
             }
-            // Schließen blendet nur aus; beendet wird über das Menü im Infobereich.
+            WM_DROPFILES => {
+                let path = dropped_file(HDROP(wparam.0 as *mut _));
+                if let (Some(path), Some(on_drop)) = (path, ON_DROP.with(|cell| cell.get())) {
+                    on_drop(path);
+                }
+            }
+            // Schließen blendet nur aus; beendet wird über Datei → Beenden oder das Infobereich-Menü.
             WM_CLOSE => {
                 let _ = ShowWindow(hwnd, SW_HIDE);
             }
             WM_GETMINMAXINFO => {
                 let dpi = GetDpiForWindow(hwnd) as i32;
                 let info = &mut *(lparam.0 as *mut MINMAXINFO);
-                info.ptMinTrackSize.x = 700 * dpi / 96;
-                info.ptMinTrackSize.y = 280 * dpi / 96;
+                info.ptMinTrackSize.x = 640 * dpi / 96;
+                info.ptMinTrackSize.y = 300 * dpi / 96;
             }
             WM_DPICHANGED => {
                 let r = &*(lparam.0 as *const RECT);

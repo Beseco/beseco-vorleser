@@ -41,7 +41,8 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 - **Textbereinigung:** fügt umbrochene PDF-Zeilen zusammen, hebt Silbentrennung auf, kürzt Links
 - **Audio-Export:** Text als WAV-Datei speichern
 - **Autostart:** auf Wunsch mit Windows starten
-- **Deutsch und Englisch:** die Oberfläche folgt der Sprache von Windows und lässt sich in den Einstellungen umstellen
+- **Menüleiste und Tastenkürzel:** F5 Vorlesen, F6 Pause, F7 Stopp, Strg+O Textdatei öffnen (oder ins Fenster ziehen), Strg+S als WAV speichern
+- **Mehrsprachig:** Deutsch und Englisch eingebaut, weitere Sprachen über einfache Sprachdateien ([Anleitung zum Übersetzen](lang/README.md)); die Oberfläche folgt der Sprache von Windows und lässt sich unter Extras → Sprache umstellen
 
 ![Einstellungsfenster](docs/einstellungen.png)
 

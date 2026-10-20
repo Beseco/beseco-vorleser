@@ -51,6 +51,16 @@ pub fn start(hwnd: HWND, message: u32, enabled: bool, last_check: u64) {
     });
 }
 
+/// Fragt sofort nach (blockiert, für einen eigenen Thread): `None` bei einem Fehler, sonst die
+/// neuere Version oder `Some(None)`, wenn Vorleser aktuell ist.
+pub fn check_now() -> Option<Option<String>> {
+    let tag = latest_tag()?;
+    LAST_CHECK.store(now(), Relaxed);
+    let newer = is_newer(&tag, env!("CARGO_PKG_VERSION")).then(|| clean(&tag));
+    *NEWER.lock().unwrap() = newer.clone();
+    Some(newer)
+}
+
 pub fn set_enabled(enabled: bool) {
     ENABLED.store(enabled, Relaxed);
 }

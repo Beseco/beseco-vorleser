@@ -32,6 +32,7 @@ use windows::Win32::Security::Cryptography::{
 use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
 
 use crate::http;
+use crate::i18n::t;
 
 /// Piper für Windows, letzte Ausgabe des Projekts (2023, MIT-Lizenz).
 const ENGINE_URL: &str = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip";
@@ -50,7 +51,7 @@ pub struct CatalogVoice {
     /// Pfad im Stimmen-Archiv ohne Endung.
     path: &'static str,
     pub name: &'static str,
-    pub description_de: &'static str,
+    /// Englische Beschreibung; übersetzt steht sie in den Sprachdateien unter `ai.desc.<key>`.
     pub description_en: &'static str,
     pub lang_id: u16,
     sha256: &'static str,
@@ -64,7 +65,6 @@ pub const CATALOG: [CatalogVoice; 5] = [
         key: "de_DE-thorsten-medium",
         path: "de/de_DE/thorsten/medium/de_DE-thorsten-medium",
         name: "Thorsten",
-        description_de: "Deutsch, männlich",
         description_en: "German, male",
         lang_id: 0x0407,
         sha256: "7e64762d8e5118bb578f2eea6207e1a35a8e0c30595010b666f983fc87bb7819",
@@ -75,7 +75,6 @@ pub const CATALOG: [CatalogVoice; 5] = [
         key: "de_DE-thorsten-high",
         path: "de/de_DE/thorsten/high/de_DE-thorsten-high",
         name: "Thorsten HD",
-        description_de: "Deutsch, männlich, höchste Qualität",
         description_en: "German, male, highest quality",
         lang_id: 0x0407,
         sha256: "9df1c43c61149ef9b39e618e2b861fbe41e1fcea9390b2dac62e8761573ea4f1",
@@ -86,7 +85,6 @@ pub const CATALOG: [CatalogVoice; 5] = [
         key: "de_DE-kerstin-low",
         path: "de/de_DE/kerstin/low/de_DE-kerstin-low",
         name: "Kerstin",
-        description_de: "Deutsch, weiblich",
         description_en: "German, female",
         lang_id: 0x0407,
         sha256: "d352a7641892cebf2903859af94e9ba81a141110215fe3943bcda7f7da401b7a",
@@ -97,7 +95,6 @@ pub const CATALOG: [CatalogVoice; 5] = [
         key: "en_US-ljspeech-high",
         path: "en/en_US/ljspeech/high/en_US-ljspeech-high",
         name: "Linda",
-        description_de: "Englisch, weiblich, höchste Qualität",
         description_en: "English, female, highest quality",
         lang_id: 0x0409,
         sha256: "5d4f08ba6a2a48c44592eed3ce56bf85e9de3dd4e20df90541ae68a8310c029a",
@@ -108,7 +105,6 @@ pub const CATALOG: [CatalogVoice; 5] = [
         key: "en_US-kristin-medium",
         path: "en/en_US/kristin/medium/en_US-kristin-medium",
         name: "Kristin",
-        description_de: "Englisch, weiblich",
         description_en: "English, female",
         lang_id: 0x0409,
         sha256: "5849957f929cbf720c258f8458692d6103fff2f0e3d3b19c8259474bb06a18d4",
@@ -200,7 +196,7 @@ pub fn install(voice: &CatalogVoice, mut progress: impl FnMut(Stage, u64, u64) -
         let _ = std::fs::remove_file(&zip);
         if !status.success() || !engine_installed() {
             let _ = std::fs::remove_dir_all(&target);
-            return Err("Piper ließ sich nicht entpacken".to_string());
+            return Err(t("err.unpack").to_string());
         }
     }
 
@@ -213,7 +209,7 @@ pub fn install(voice: &CatalogVoice, mut progress: impl FnMut(Stage, u64, u64) -
     }
     let config = http::get_text(&format!("{VOICES_URL}{}.onnx.json", voice.path), None)
         .filter(|json| json.contains("\"sample_rate\""))
-        .ok_or("Modellbeschreibung nicht ladbar")?;
+        .ok_or_else(|| t("err.model_config").to_string())?;
     std::fs::write(config_path(voice.key), config).map_err(|e| e.to_string())?;
     std::fs::rename(&part, model_path(voice.key)).map_err(|e| e.to_string())?;
     Ok(())
@@ -233,7 +229,7 @@ fn verify(path: &Path, expected: &str) -> Result<(), String> {
         Some(hash) if hash == expected => Ok(()),
         _ => {
             let _ = std::fs::remove_file(path);
-            Err("Prüfsumme stimmt nicht; die Datei wurde verworfen".to_string())
+            Err(t("err.checksum").to_string())
         }
     }
 }
@@ -453,8 +449,8 @@ fn play(shared: &Shared, key: &str, sentences: &[Sentence], rate: i32, volume: u
     let output = std::env::temp_dir().join(format!("vorleser-piper-{}", std::process::id()));
     std::fs::create_dir_all(&output).map_err(|e| e.to_string())?;
     let mut engine = start_engine(key, rate, &output).map_err(|e| e.to_string())?;
-    let mut stdin = engine.stdin.take().ok_or("Piper ohne Eingabe")?;
-    let mut stdout = BufReader::new(engine.stdout.take().ok_or("Piper ohne Ausgabe")?);
+    let mut stdin = engine.stdin.take().ok_or_else(|| t("err.piper_failed").to_string())?;
+    let mut stdout = BufReader::new(engine.stdout.take().ok_or_else(|| t("err.piper_failed").to_string())?);
 
     let rate_hz = sample_rate(key);
     let format = WAVEFORMATEX {
@@ -469,7 +465,7 @@ fn play(shared: &Shared, key: &str, sentences: &[Sentence], rate: i32, volume: u
     let mut device = HWAVEOUT::default();
     if unsafe { waveOutOpen(Some(&mut device), WAVE_MAPPER, &format, None, None, CALLBACK_NULL) } != 0 {
         let _ = engine.kill();
-        return Err("Kein Audiogerät verfügbar".to_string());
+        return Err(t("err.no_audio_device").to_string());
     }
     let level = volume.min(100) * 0xFFFF / 100;
     unsafe {
@@ -495,7 +491,7 @@ fn play(shared: &Shared, key: &str, sentences: &[Sentence], rate: i32, volume: u
             if stdin.write_all(line.as_bytes()).and_then(|()| stdin.flush()).is_err()
                 || stdout.read_line(&mut path).unwrap_or(0) == 0
             {
-                result = Err("Piper hat unerwartet beendet".to_string());
+                result = Err(t("err.piper_stopped").to_string());
                 break;
             }
             let path = PathBuf::from(path.trim());
@@ -574,7 +570,7 @@ pub fn save_wav(key: &str, rate: i32, text: &str, path: &str) -> Result<(), Stri
     if status.success() {
         Ok(())
     } else {
-        Err("Piper ist gescheitert".to_string())
+        Err(t("err.piper_failed").to_string())
     }
 }
 

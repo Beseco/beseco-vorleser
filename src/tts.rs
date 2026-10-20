@@ -4,7 +4,8 @@
 use windows::core::{w, Error, Result, BSTR, HSTRING, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{E_FAIL, HWND, LPARAM, VARIANT_FALSE, WPARAM};
 use windows::Win32::Globalization::{
-    GetLocaleInfoEx, LCIDToLocaleName, LOCALE_SLOCALIZEDDISPLAYNAME,
+    GetLocaleInfoEx, LCIDToLocaleName, LOCALE_SENGLISHDISPLAYNAME, LOCALE_SLOCALIZEDDISPLAYNAME,
+    LOCALE_SNATIVEDISPLAYNAME,
 };
 use windows::Win32::Media::Speech::{
     ISpObjectToken, ISpObjectTokenCategory, ISpVoice, ISpeechFileStream, SSFMCreateForWrite,
@@ -14,7 +15,7 @@ use windows::Win32::Media::Speech::{
 };
 use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_ALL};
 
-use crate::i18n::tr;
+use crate::i18n::t;
 use crate::piper;
 
 /// Kennung der KI-Stimmen: "piper:" und der Dateiname des Modells.
@@ -89,12 +90,12 @@ impl Tts {
     pub fn reload_voices(&mut self) {
         let mut voices = Vec::new();
         for voice in piper::installed() {
-            let suffix = tr("KI-Stimme", "AI voice");
+            let suffix = t("voice.ai_voice");
             voices.push(Voice {
                 id: format!("{PIPER_PREFIX}{}", voice.key),
                 name: format!("{} ({suffix})", voice.name),
                 lang_id: voice.lang_id,
-                language: language_name(voice.lang_id).unwrap_or_else(|| "Andere".to_string()),
+                language: language_name(voice.lang_id).unwrap_or_else(|| t("voice.other_language").to_string()),
                 token: None,
             });
         }
@@ -318,7 +319,7 @@ fn enumerate(category_id: &str, out: &mut Vec<Voice>) -> Result<()> {
                 continue;
             }
             let lang_id = language_id(&token).unwrap_or(0);
-            let language = language_name(lang_id).unwrap_or_else(|| "Andere".to_string());
+            let language = language_name(lang_id).unwrap_or_else(|| t("voice.other_language").to_string());
             out.push(Voice { id, name, lang_id, language, token: Some(token) });
         }
     }
@@ -345,7 +346,17 @@ fn language_name(lang_id: u16) -> Option<String> {
         if LCIDToLocaleName(lang_id as u32, Some(&mut locale), 0) == 0 {
             return None;
         }
-        let len = GetLocaleInfoEx(PCWSTR(locale.as_ptr()), LOCALE_SLOCALIZEDDISPLAYNAME, Some(&mut name));
+        // Windows liefert den Namen in seiner eigenen Anzeigesprache; weicht die Sprache von
+        // Vorleser davon ab, passt der englische oder der Name in der Sprache selbst besser.
+        let ui = crate::i18n::current();
+        let kind = if ui == crate::i18n::windows_language() {
+            LOCALE_SLOCALIZEDDISPLAYNAME
+        } else if ui == "en" {
+            LOCALE_SENGLISHDISPLAYNAME
+        } else {
+            LOCALE_SNATIVEDISPLAYNAME
+        };
+        let len = GetLocaleInfoEx(PCWSTR(locale.as_ptr()), kind, Some(&mut name));
         // Die Länge schließt das Nullzeichen ein.
         (len > 1).then(|| String::from_utf16_lossy(&name[..len as usize - 1]))
     }
@@ -398,7 +409,7 @@ mod tests {
         let tts = Tts::new().expect("SAPI nicht verfügbar");
         let mut groups = std::collections::BTreeMap::new();
         for v in tts.voices() {
-            assert!(v.lang_id == 0 || v.language != "Andere", "kein Sprachname für {}", v.name);
+            assert!(v.lang_id == 0 || v.language != crate::i18n::t("voice.other_language"), "kein Sprachname für {}", v.name);
             *groups.entry(v.language.as_str()).or_insert(0) += 1;
         }
         println!("{groups:?}");

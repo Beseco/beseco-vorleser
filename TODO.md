@@ -29,11 +29,16 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [x] **Als Audiodatei speichern** (WAV).
 - [ ] MP3-Export (braucht einen Encoder).
 - [x] WAV-Export im Hintergrund (ohne Fortschrittsanzeige).
-- [ ] **Dateien öffnen** per Drag-and-drop: TXT, DOCX, PDF, EPUB.
+- [x] **Textdateien öffnen** über Datei → Öffnen und per Drag-and-drop.
+- [ ] **Weitere Dateiformate:** DOCX, EPUB, PDF.
 - [ ] **Texterkennung (OCR)** für Bildschirmbereiche, die sich nicht markieren lassen (gescannte PDFs, Bilder).
 - [ ] **Stimmenliste im Fenster nach Sprache gruppieren** (im Menü schon vorhanden) und Online-Stimmen kennzeichnen.
 
 ## Oberfläche und Barrierefreiheit
+
+- [x] Menüleiste mit Tastenkürzeln.
+- [x] Sprachsystem mit Sprachdateien (`lang/`), Sprachwechsel ohne Neustart.
+- [ ] Weitere Sprachen (Übersetzungen von Muttersprachlern).
 
 - [x] Englische Oberfläche (folgt Windows, umschaltbar; das Fenster übernimmt die neue Sprache nach einem Neustart).
 - [ ] Dunkelmodus.

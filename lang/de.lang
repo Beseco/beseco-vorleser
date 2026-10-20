@@ -1,0 +1,159 @@
+# Vorleser – Sprachdatei Deutsch
+# Aufbau: schlüssel = Text. \n ist ein Zeilenumbruch, \t trennt im Menü die Tastenkombination ab,
+# & markiert den Buchstaben für die Alt-Taste, {} wird durch einen Wert ersetzt.
+
+@code = de
+@name = Deutsch
+
+
+ai.ai_voices_sound_much = KI-Stimmen klingen deutlich natürlicher als die Windows-Stimmen. Sie werden einmalig aus dem Internet geladen und laufen danach ohne Internet nur auf diesem Rechner.
+ai.close = Schließen
+ai.connecting = Verbinde …
+ai.desc.de_DE-kerstin-low = Deutsch, weiblich
+ai.desc.de_DE-thorsten-high = Deutsch, männlich, höchste Qualität
+ai.desc.de_DE-thorsten-medium = Deutsch, männlich
+ai.desc.en_US-kristin-medium = Englisch, weiblich
+ai.desc.en_US-ljspeech-high = Englisch, weiblich, höchste Qualität
+ai.done_voice_now_selected = Fertig. Die Stimme ist jetzt eingestellt; im Vorleser-Fenster lässt sie sich mit „Hörprobe“ anhören.
+ai.download = Herunterladen
+ai.download_2 = Download:
+ai.download_failed = Download fehlgeschlagen:
+ai.downloading_piper_speech_engine = Lade Sprachausgabe Piper
+ai.downloading_voice = Lade Stimme
+ai.including_piper_speech_engine =  (einschließlich der Sprachausgabe Piper)
+ai.installed = installiert
+ai.previous_download_still_stopping = Ein vorheriger Download wird noch beendet. Bitte gleich noch einmal versuchen.
+ai.remove = Entfernen
+ai.remove_ai_voice = Diese KI-Stimme entfernen?
+ai.voice_installed_chosen_vorleser = Diese Stimme ist installiert und steht im Vorleser-Fenster und im Menü unter „Stimme“ zur Auswahl.
+ai.voice_license = Lizenz der Stimme
+ai.vorleser_ai_voices = Vorleser – KI-Stimmen
+
+app.about_vorleser = Über Vorleser …
+app.about_vorleser_2 = Über Vorleser
+app.ai_voices = KI-Stimmen …
+app.audio_file_could_not = Die Audiodatei konnte nicht geschrieben werden.
+app.clipboard_contains_no_text = Die Zwischenablage enthält keinen Text.
+app.download_new_version = Neue Version {} herunterladen …
+app.exit = Beenden
+app.file_unreadable = Die Datei lässt sich nicht lesen.
+app.new_version = Neue Version
+app.no_text_selected = Kein Text markiert.
+app.only_text_files = Bisher lassen sich nur Textdateien (.txt) öffnen. Text aus anderen Programmen einfach markieren und Strg+Alt+V drücken.
+app.open_vorleser = Vorleser öffnen
+app.pause = Pause
+app.read_clipboard = Zwischenablage vorlesen
+app.read_selected_text = Markierten Text vorlesen
+app.reads_selected_text_aloud = Liest markierten Text mit den Windows-Stimmen vor.\nFreie Software unter der GNU General Public License, Version 3.\n\nbeseco – Beubl IT Systems\nFlorian Beubl\nVeit-Adam 15, 85354 Freising\n\nTelefon: 08161 185150-0\nE-Mail: info@beseco.com\nWeb: https://beseco.com\nQuellcode: https://github.com/Beseco/beseco-vorleser
+app.resume = Fortsetzen
+app.saved = Gespeichert:
+app.saving_title = Vorleser – speichere Audiodatei …
+app.settings = Einstellungen …
+app.shortcut = Tastenkombination
+app.speech_output_failed = Die Sprachausgabe ist fehlgeschlagen.
+app.speed = Geschwindigkeit
+app.start_windows = Mit Windows starten
+app.stop = Stopp
+app.text_field_empty = Das Textfeld ist leer.
+app.text_files = Textdateien
+app.unavailable_or_invalid = Nicht verfügbar oder ungültig:
+app.up_to_date = Vorleser {} ist aktuell.
+app.update_available = Version {} ist verfügbar. Jetzt die Download-Seite öffnen?
+app.update_check_failed = Die Suche nach Updates ist fehlgeschlagen. Besteht eine Internetverbindung?
+app.version_available_click_here = Version {} ist verfügbar. Zum Herunterladen hier klicken.
+app.voice = Stimme
+app.voice_cannot_used = Diese Stimme lässt sich nicht verwenden.
+app.voice_could_not_speak = Die Stimme konnte nicht sprechen. Online-Stimmen brauchen eine Internetverbindung.
+app.vorleser_paused = Vorleser – pausiert
+app.vorleser_reading = Vorleser – liest vor
+app.vorleser_reads_selected_text = Vorleser – {} liest markierten Text vor
+app.windows_speech_output_sapi = Die Windows-Sprachausgabe (SAPI) konnte nicht gestartet werden.
+
+err.cancelled = abgebrochen
+err.checksum = Prüfsumme stimmt nicht; die Datei wurde verworfen
+err.connection_lost = Verbindung abgebrochen
+err.incomplete = Download unvollständig
+err.model_config = Modellbeschreibung nicht ladbar
+err.no_audio_device = Kein Audiogerät verfügbar
+err.piper_failed = Piper ist gescheitert
+err.piper_stopped = Piper wurde unerwartet beendet
+err.server = Server nicht erreichbar oder Datei nicht gefunden
+err.unpack = Piper ließ sich nicht entpacken
+
+key.ctrl = Strg
+key.rightclick = Rechtsklick
+key.shift = Umschalt
+key.space = Leertaste
+
+menu.about = Ü&ber Vorleser …
+menu.ai_voices = &KI-Stimmen …
+menu.autostart = Mit &Windows starten
+menu.check_update = Nach &Updates suchen
+menu.clean = Text &bereinigen
+menu.clear = Text &leeren
+menu.close_window = Fenster &schließen\tEsc
+menu.copy = &Kopieren\tStrg+C
+menu.cut = &Ausschneiden\tStrg+X
+menu.edit = &Bearbeiten
+menu.exit = &Beenden
+menu.file = &Datei
+menu.help = &Hilfe
+menu.language = S&prache
+menu.language_auto = &Automatisch (wie Windows)
+menu.manual = &Anleitung (online)
+menu.open = &Öffnen …\tStrg+O
+menu.paste = &Einfügen\tStrg+V
+menu.pause = &Pause\tF6
+menu.playback = &Wiedergabe
+menu.read = &Vorlesen\tF5
+menu.read_clipboard = &Zwischenablage vorlesen
+menu.report = &Fehler melden oder Wunsch äußern …
+menu.resume = &Fortsetzen\tF6
+menu.sample = &Hörprobe
+menu.save_wav = Als &WAV speichern …\tStrg+S
+menu.select_all = Alles &markieren\tStrg+A
+menu.settings = &Einstellungen …
+menu.speed = &Geschwindigkeit
+menu.stop = &Stopp\tF7
+menu.tools = E&xtras
+menu.topmost = &Immer im Vordergrund
+menu.undo = &Rückgängig\tStrg+Z
+menu.voice = &Stimme
+
+mouse.ctrl = Strg + Rechtsklick
+mouse.ctrl_alt = Strg + Alt + Rechtsklick
+mouse.ctrl_shift = Strg + Umschalt + Rechtsklick
+mouse.off = Aus
+mouse.shift = Umschalt + Rechtsklick
+
+rate.fast = Schnell
+rate.faster = Schneller
+rate.maximum = Maximal
+rate.normal = Normal
+rate.slightly_faster = Etwas schneller
+rate.slightly_slower = Etwas langsamer
+rate.slow = Langsam
+rate.very_fast = Sehr schnell
+rate.very_slow = Sehr langsam
+
+settings.cancel = Abbrechen
+settings.check_github_for_new = Einmal täglich auf GitHub nach neuen Versionen suchen
+settings.clean_up_text_before = Text vor dem Vorlesen bereinigen (Zeilenumbrüche, Silbentrennung, Links)
+settings.click_field_press_shortcut = Feld anklicken und die gewünschte Kombination drücken. Rücktaste = keine.
+settings.key_not_supported_possible = Diese Taste wird nicht unterstützt.\n\nMöglich sind Buchstaben, Ziffern, F1 bis F24 und die Leertaste, jeweils zusammen mit Strg, Alt oder Umschalt.
+settings.menu_at_mouse_position = Menü an der Mausposition:
+settings.menu_by_mouse = Menü per Maus:
+settings.pause_resume = Pause / Fortsetzen:
+settings.read_selected_text_stop = Markierten Text vorlesen / Stopp:
+settings.save = Speichern
+settings.volume = Lautstärke:
+settings.vorleser_settings = Vorleser – Einstellungen
+
+voice.ai_voice = KI-Stimme
+voice.other_language = Andere
+
+window.always_on_top = Immer im Vordergrund
+window.read_aloud = Vorlesen
+window.sample = Hörprobe
+window.speed = Geschwindigkeit:
+window.voice = Stimme:

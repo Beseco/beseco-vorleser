@@ -4,7 +4,7 @@
 
 Vorleser ("reader" in German) reads selected text aloud in any Windows program: select text, press **Ctrl+Alt+V**, listen. It lives as a small icon in the notification area, uses very little memory and speaks with the voices Windows already ships.
 
-The interface is available in English and German. It follows the Windows display language and can be switched under Settings.
+The interface is available in English and German, and more languages can be added through simple language files ([how to translate](lang/README.md)). It follows the Windows display language and can be switched under Tools → Language.
 
 ![Main window highlighting the word being spoken](docs/fenster.png)
 
@@ -43,6 +43,7 @@ Windows does not let a program add an entry to the regular right-click menu of o
 - **Text clean-up:** joins wrapped PDF lines, removes hyphenation, shortens links
 - **Audio export:** save text as a WAV file
 - **Autostart:** optionally start with Windows
+- **Menu bar and shortcuts:** F5 read aloud, F6 pause, F7 stop, Ctrl+O open a text file (or drop it onto the window), Ctrl+S save as WAV
 
 ## Voices
 

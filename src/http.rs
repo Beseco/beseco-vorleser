@@ -6,6 +6,8 @@ use std::io::Write;
 use std::path::Path;
 
 use windows::core::{w, HSTRING, PCWSTR};
+
+use crate::i18n::t;
 use windows::Win32::Networking::WinHttp::{
     WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest, WinHttpQueryHeaders,
     WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest, WinHttpSetTimeouts,
@@ -117,25 +119,25 @@ pub fn get_text(url: &str, accept: Option<&str>) -> Option<String> {
 /// Lädt `url` nach `target`. `progress` erhält gelesene und erwartete Bytes (0, wenn unbekannt)
 /// und bricht mit `false` ab. Bei einem Fehler bleibt keine halbe Datei liegen.
 pub fn download(url: &str, target: &Path, mut progress: impl FnMut(u64, u64) -> bool) -> Result<(), String> {
-    let response = open(url, None).ok_or("Server nicht erreichbar oder Datei nicht gefunden")?;
+    let response = open(url, None).ok_or_else(|| t("err.server").to_string())?;
     let total = query_number(&response.request, WINHTTP_QUERY_CONTENT_LENGTH).unwrap_or(0);
     let result = (|| {
         let mut file = File::create(target).map_err(|e| e.to_string())?;
         let mut chunk = vec![0u8; 256 * 1024];
         let mut done = 0u64;
         loop {
-            let n = read(&response, &mut chunk).ok_or("Verbindung abgebrochen")?;
+            let n = read(&response, &mut chunk).ok_or_else(|| t("err.connection_lost").to_string())?;
             if n == 0 {
                 break;
             }
             file.write_all(&chunk[..n]).map_err(|e| e.to_string())?;
             done += n as u64;
             if !progress(done, total) {
-                return Err("abgebrochen".to_string());
+                return Err(t("err.cancelled").to_string());
             }
         }
         if total != 0 && done != total {
-            return Err("Download unvollständig".to_string());
+            return Err(t("err.incomplete").to_string());
         }
         Ok(())
     })();

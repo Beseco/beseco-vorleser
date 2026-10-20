@@ -20,7 +20,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_VSCROLL,
 };
 
-use crate::i18n::{is_english, tr};
+use crate::i18n::{self, t};
 use crate::piper::{self, Stage, CATALOG};
 use crate::window::message_font;
 
@@ -99,7 +99,7 @@ pub fn open(owner: Option<HWND>, on_change: fn(Option<String>)) {
         let Ok(window) = CreateWindowExW(
             WS_EX_CONTROLPARENT,
             class.lpszClassName,
-            &HSTRING::from(tr("Vorleser – KI-Stimmen", "Vorleser – AI voices")),
+            &HSTRING::from(t("ai.vorleser_ai_voices")),
             style,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -136,17 +136,14 @@ pub fn open(owner: Option<HWND>, on_change: fn(Option<String>)) {
         let tab = WS_TABSTOP.0;
         child(
             w!("STATIC"),
-            tr(
-                "KI-Stimmen klingen deutlich natürlicher als die Windows-Stimmen. Sie werden einmalig aus dem Internet geladen und laufen danach ohne Internet nur auf diesem Rechner.",
-                "AI voices sound much more natural than the Windows voices. They are downloaded once and then run offline, only on this computer.",
-            ),
+            t("ai.ai_voices_sound_much"),
             0, 0, 16, 12, 508, 44,
         );
         let list = child(w!("LISTBOX"), "", tab | LBS_NOTIFY | WS_VSCROLL.0 | WS_BORDER.0, ID_LIST, 16, 62, 508, 140);
         let status = child(w!("STATIC"), "", 0, 0, 16, 212, 508, 62);
-        let download = child(w!("BUTTON"), tr("Herunterladen", "Download"), tab | BS_DEFPUSHBUTTON as u32, ID_DOWNLOAD, 16, 290, 140, 30);
-        let remove = child(w!("BUTTON"), tr("Entfernen", "Remove"), tab, ID_REMOVE, 164, 290, 120, 30);
-        child(w!("BUTTON"), tr("Schließen", "Close"), tab, ID_CLOSE, 404, 290, 120, 30);
+        let download = child(w!("BUTTON"), t("ai.download"), tab | BS_DEFPUSHBUTTON as u32, ID_DOWNLOAD, 16, 290, 140, 30);
+        let remove = child(w!("BUTTON"), t("ai.remove"), tab, ID_REMOVE, 164, 290, 120, 30);
+        child(w!("BUTTON"), t("ai.close"), tab, ID_CLOSE, 404, 290, 120, 30);
 
         let c = Controls { window, list, status, download, remove, font };
         CONTROLS.with(|cell| cell.set(Some(c)));
@@ -165,9 +162,9 @@ fn megabytes(bytes: u64) -> u64 {
 unsafe fn fill(c: &Controls, select: Option<usize>) {
     SendMessageW(c.list, LB_RESETCONTENT, None, None);
     for voice in &CATALOG {
-        let description = if is_english() { voice.description_en } else { voice.description_de };
+        let description = i18n::lookup(&format!("ai.desc.{}", voice.key)).unwrap_or(voice.description_en);
         let state = if piper::is_installed(voice.key) {
-            tr("installiert", "installed").to_string()
+            t("ai.installed").to_string()
         } else {
             format!("{} MB", megabytes(voice.size))
         };
@@ -208,22 +205,19 @@ fn update(c: &Controls) {
         return;
     };
     let text = if installed {
-        tr(
-            "Diese Stimme ist installiert und steht im Vorleser-Fenster und im Menü unter „Stimme“ zur Auswahl.",
-            "This voice is installed and can be chosen in the Vorleser window and under \"Voice\" in the menu.",
-        )
+        t("ai.voice_installed_chosen_vorleser")
         .to_string()
     } else {
         let mut size = megabytes(voice.size);
         let mut note = String::new();
         if !piper::engine_installed() {
             size += megabytes(piper::ENGINE_SIZE);
-            note = tr(" (einschließlich der Sprachausgabe Piper)", " (including the Piper speech engine)").to_string();
+            note = t("ai.including_piper_speech_engine").to_string();
         }
         format!(
             "{} {size} MB{note}. {}: {}.",
-            tr("Download:", "Download:"),
-            tr("Lizenz der Stimme", "Voice license"),
+            t("ai.download_2"),
+            t("ai.voice_license"),
             voice.license
         )
     };
@@ -233,13 +227,13 @@ fn update(c: &Controls) {
 fn start_download(c: &Controls) {
     let Some(index) = selected(c) else { return };
     if BUSY.swap(true, Relaxed) {
-        set_status(c, tr("Ein vorheriger Download wird noch beendet. Bitte gleich noch einmal versuchen.", "A previous download is still stopping. Please try again in a moment."));
+        set_status(c, t("ai.previous_download_still_stopping"));
         return;
     }
     LOADING.with(|l| l.set(Some(index)));
     CANCEL.store(false, Relaxed);
     update(c);
-    set_status(c, tr("Verbinde …", "Connecting …"));
+    set_status(c, t("ai.connecting"));
     let target = c.window.0 as isize;
     std::thread::spawn(move || {
         let post = |msg: u32, wparam: usize, lparam: isize| unsafe {
@@ -270,10 +264,7 @@ fn on_done(c: &Controls, ok: bool) {
         unsafe { fill(c, index) };
         set_status(
             c,
-            tr(
-                "Fertig. Die Stimme ist jetzt eingestellt; im Vorleser-Fenster lässt sie sich mit „Hörprobe“ anhören.",
-                "Done. The voice is now selected; use \"Sample\" in the Vorleser window to listen to it.",
-            ),
+            t("ai.done_voice_now_selected"),
         );
         if let Some(on_change) = ON_CHANGE.with(|cell| cell.get()) {
             on_change(id);
@@ -282,7 +273,7 @@ fn on_done(c: &Controls, ok: bool) {
         update(c);
         let error = ERROR.lock().unwrap().clone();
         if !CANCEL.load(Relaxed) {
-            let text = format!("{} {error}", tr("Download fehlgeschlagen:", "Download failed:"));
+            let text = format!("{} {error}", t("ai.download_failed"));
             set_status(c, &text);
         }
     }
@@ -291,7 +282,7 @@ fn on_done(c: &Controls, ok: bool) {
 fn remove_selected(c: &Controls) {
     let Some(index) = selected(c) else { return };
     let voice = &CATALOG[index];
-    let question = HSTRING::from(tr("Diese KI-Stimme entfernen?", "Remove this AI voice?"));
+    let question = HSTRING::from(t("ai.remove_ai_voice"));
     unsafe {
         if MessageBoxW(Some(c.window), &question, w!("Vorleser"), MB_YESNO | MB_ICONQUESTION) != IDYES {
             return;
@@ -321,7 +312,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 }
             }
             (WM_PROGRESS, Some(c)) => {
-                let what = if wparam.0 == 0 { tr("Lade Sprachausgabe Piper", "Downloading Piper speech engine") } else { tr("Lade Stimme", "Downloading voice") };
+                let what = if wparam.0 == 0 { t("ai.downloading_piper_speech_engine") } else { t("ai.downloading_voice") };
                 set_status(&c, &format!("{what} … {} %", lparam.0));
             }
             (WM_DONE, Some(c)) => on_done(&c, wparam.0 == 1),
