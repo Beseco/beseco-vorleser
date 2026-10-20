@@ -7,7 +7,7 @@ Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic
 - Neu: KI-Stimmen (Piper) mit deutlich natürlicherem Klang: Thorsten, Thorsten HD und Kerstin auf Deutsch, Linda und Kristin auf Englisch. Download mit einem Klick über „KI-Stimmen …“, danach ohne Internet
 - Mitlesen mit KI-Stimmen satzweise, WAV-Export auch mit KI-Stimmen
 - Die Deinstallation entfernt heruntergeladene KI-Stimmen
-- Neu: Menüleiste (Datei, Bearbeiten, Wiedergabe, Stimme, Extras, Hilfe) mit Tastenkürzeln: F5 Vorlesen, F6 Pause, F7 Stopp, Strg+O Öffnen, Strg+S als WAV speichern
+- Neu: Menüleiste (Datei, Bearbeiten, Wiedergabe, Stimme, Extras, Hilfe) mit Tastenkürzeln: F5 Vorlesen, F6 Pause, F7 Stopp, Strg+O Öffnen, Strg+S als Audiodatei speichern
 - Neu: Textdateien öffnen, auch durch Hineinziehen ins Fenster
 - Neu: Sprachsystem mit Sprachdateien; weitere Sprachen lassen sich ohne Programmierung ergänzen (siehe `lang/README.md`). Die Sprache wechselt sofort, ohne Neustart
 - Nach Updates suchen jetzt auch von Hand (Hilfe → Nach Updates suchen)
