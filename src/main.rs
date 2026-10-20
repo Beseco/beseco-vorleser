@@ -202,6 +202,7 @@ fn with_app<R>(f: impl FnOnce(&mut App) -> R) -> Option<R> {
 impl App {
     fn new(hwnd: HWND) -> windows::core::Result<App> {
         let cfg = Config::load();
+        http::set_proxy(&cfg.proxy);
         let mut tts = Tts::new()?;
         tts.notify_window(hwnd, WM_TTS)?;
         if !cfg.voice.is_empty() {
@@ -277,6 +278,7 @@ impl App {
             clean_text: self.cfg.clean_text,
             update_check: self.cfg.update_check,
             language: self.cfg.language.clone(),
+            proxy: self.cfg.proxy.clone(),
         }
     }
 
@@ -288,6 +290,8 @@ impl App {
         self.cfg.volume = values.volume;
         self.cfg.clean_text = values.clean_text;
         self.cfg.update_check = values.update_check;
+        self.cfg.proxy = values.proxy;
+        http::set_proxy(&self.cfg.proxy);
         if values.language != self.cfg.language {
             self.set_language(&values.language);
         }

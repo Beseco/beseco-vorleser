@@ -212,7 +212,7 @@ fn update(c: &Controls) {
         let mut note = String::new();
         if !piper::engine_installed() {
             size += megabytes(piper::ENGINE_SIZE);
-            note = t("ai.including_piper_speech_engine").to_string();
+            note = format!(" {}", t("ai.including_piper_speech_engine"));
         }
         format!(
             "{} {size} MB{note}. {}: {}.",

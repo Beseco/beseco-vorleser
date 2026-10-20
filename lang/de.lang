@@ -5,7 +5,6 @@
 @code = de
 @name = Deutsch
 
-
 ai.ai_voices_sound_much = KI-Stimmen klingen deutlich natürlicher als die Windows-Stimmen. Sie werden einmalig aus dem Internet geladen und laufen danach ohne Internet nur auf diesem Rechner.
 ai.close = Schließen
 ai.connecting = Verbinde …
@@ -20,7 +19,7 @@ ai.download_2 = Download:
 ai.download_failed = Download fehlgeschlagen:
 ai.downloading_piper_speech_engine = Lade Sprachausgabe Piper
 ai.downloading_voice = Lade Stimme
-ai.including_piper_speech_engine =  (einschließlich der Sprachausgabe Piper)
+ai.including_piper_speech_engine = (einschließlich der Sprachausgabe Piper)
 ai.installed = installiert
 ai.previous_download_still_stopping = Ein vorheriger Download wird noch beendet. Bitte gleich noch einmal versuchen.
 ai.remove = Entfernen
@@ -28,7 +27,6 @@ ai.remove_ai_voice = Diese KI-Stimme entfernen?
 ai.voice_installed_chosen_vorleser = Diese Stimme ist installiert und steht im Vorleser-Fenster und im Menü unter „Stimme“ zur Auswahl.
 ai.voice_license = Lizenz der Stimme
 ai.vorleser_ai_voices = Vorleser – KI-Stimmen
-
 app.about_vorleser = Über Vorleser …
 app.about_vorleser_2 = Über Vorleser
 app.ai_voices = KI-Stimmen …
@@ -68,7 +66,6 @@ app.vorleser_paused = Vorleser – pausiert
 app.vorleser_reading = Vorleser – liest vor
 app.vorleser_reads_selected_text = Vorleser – {} liest markierten Text vor
 app.windows_speech_output_sapi = Die Windows-Sprachausgabe (SAPI) konnte nicht gestartet werden.
-
 err.cancelled = abgebrochen
 err.checksum = Prüfsumme stimmt nicht; die Datei wurde verworfen
 err.connection_lost = Verbindung abgebrochen
@@ -77,14 +74,14 @@ err.model_config = Modellbeschreibung nicht ladbar
 err.no_audio_device = Kein Audiogerät verfügbar
 err.piper_failed = Piper ist gescheitert
 err.piper_stopped = Piper wurde unerwartet beendet
+err.proxy_auth = Der Proxy hat die Anmeldung mit dem Windows-Konto abgelehnt
+err.proxy_script = Das Proxy-Skript (wpad.dat) ließ sich nicht auswerten
 err.server = Server nicht erreichbar oder Datei nicht gefunden
 err.unpack = Piper ließ sich nicht entpacken
-
 key.ctrl = Strg
 key.rightclick = Rechtsklick
 key.shift = Umschalt
 key.space = Leertaste
-
 menu.about = Ü&ber Vorleser …
 menu.ai_voices = &KI-Stimmen …
 menu.autostart = Mit &Windows starten
@@ -119,13 +116,11 @@ menu.tools = E&xtras
 menu.topmost = &Immer im Vordergrund
 menu.undo = &Rückgängig\tStrg+Z
 menu.voice = &Stimme
-
 mouse.ctrl = Strg + Rechtsklick
 mouse.ctrl_alt = Strg + Alt + Rechtsklick
 mouse.ctrl_shift = Strg + Umschalt + Rechtsklick
 mouse.off = Aus
 mouse.shift = Umschalt + Rechtsklick
-
 rate.fast = Schnell
 rate.faster = Schneller
 rate.maximum = Maximal
@@ -135,7 +130,6 @@ rate.slightly_slower = Etwas langsamer
 rate.slow = Langsam
 rate.very_fast = Sehr schnell
 rate.very_slow = Sehr langsam
-
 settings.cancel = Abbrechen
 settings.check_github_for_new = Einmal täglich auf GitHub nach neuen Versionen suchen
 settings.clean_up_text_before = Text vor dem Vorlesen bereinigen (Zeilenumbrüche, Silbentrennung, Links)
@@ -144,14 +138,14 @@ settings.key_not_supported_possible = Diese Taste wird nicht unterstützt.\n\nM�
 settings.menu_at_mouse_position = Menü an der Mausposition:
 settings.menu_by_mouse = Menü per Maus:
 settings.pause_resume = Pause / Fortsetzen:
+settings.proxy = Proxy:
+settings.proxy_example = leer = wie Windows, oder z. B. http://wpad/wpad.dat bzw. proxy:8080
 settings.read_selected_text_stop = Markierten Text vorlesen / Stopp:
 settings.save = Speichern
 settings.volume = Lautstärke:
 settings.vorleser_settings = Vorleser – Einstellungen
-
 voice.ai_voice = KI-Stimme
 voice.other_language = Andere
-
 window.always_on_top = Immer im Vordergrund
 window.read_aloud = Vorlesen
 window.sample = Hörprobe

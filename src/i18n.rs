@@ -187,7 +187,7 @@ mod tests {
             let source = std::fs::read_to_string(entry.path()).unwrap();
             for part in source.split("t(\"").skip(1) {
                 let key = &part[..part.find('"').unwrap()];
-                let looks_like_key = key.contains('.') && !key.contains(' ') && !key.ends_with('.');
+                let looks_like_key = key.contains('.') && !key.contains([' ', '/']) && !key.ends_with('.');
                 if looks_like_key && !english.texts.contains_key(key) {
                     missing.push(key.to_string());
                 }

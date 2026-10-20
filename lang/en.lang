@@ -6,7 +6,6 @@
 @code = en
 @name = English
 
-
 ai.ai_voices_sound_much = AI voices sound much more natural than the Windows voices. They are downloaded once and then run offline, only on this computer.
 ai.close = Close
 ai.connecting = Connecting …
@@ -21,7 +20,7 @@ ai.download_2 = Download:
 ai.download_failed = Download failed:
 ai.downloading_piper_speech_engine = Downloading Piper speech engine
 ai.downloading_voice = Downloading voice
-ai.including_piper_speech_engine =  (including the Piper speech engine)
+ai.including_piper_speech_engine = (including the Piper speech engine)
 ai.installed = installed
 ai.previous_download_still_stopping = A previous download is still stopping. Please try again in a moment.
 ai.remove = Remove
@@ -29,7 +28,6 @@ ai.remove_ai_voice = Remove this AI voice?
 ai.voice_installed_chosen_vorleser = This voice is installed and can be chosen in the Vorleser window and under "Voice" in the menu.
 ai.voice_license = Voice license
 ai.vorleser_ai_voices = Vorleser – AI voices
-
 app.about_vorleser = About Vorleser …
 app.about_vorleser_2 = About Vorleser
 app.ai_voices = AI voices …
@@ -69,7 +67,6 @@ app.vorleser_paused = Vorleser – paused
 app.vorleser_reading = Vorleser – reading
 app.vorleser_reads_selected_text = Vorleser – {} reads selected text
 app.windows_speech_output_sapi = Windows speech output (SAPI) could not be started.
-
 err.cancelled = cancelled
 err.checksum = Checksum mismatch; the file was discarded
 err.connection_lost = Connection lost
@@ -78,14 +75,14 @@ err.model_config = Voice description could not be loaded
 err.no_audio_device = No audio device available
 err.piper_failed = Piper failed
 err.piper_stopped = Piper stopped unexpectedly
+err.proxy_auth = The proxy rejected the sign-in with the Windows account
+err.proxy_script = The proxy script (wpad.dat) could not be evaluated
 err.server = Server unreachable or file not found
 err.unpack = Piper could not be unpacked
-
 key.ctrl = Ctrl
 key.rightclick = Right-click
 key.shift = Shift
 key.space = Space
-
 menu.about = &About Vorleser …
 menu.ai_voices = &AI voices …
 menu.autostart = Start with &Windows
@@ -120,13 +117,11 @@ menu.tools = &Tools
 menu.topmost = Always on &top
 menu.undo = &Undo\tCtrl+Z
 menu.voice = &Voice
-
 mouse.ctrl = Ctrl + right-click
 mouse.ctrl_alt = Ctrl + Alt + right-click
 mouse.ctrl_shift = Ctrl + Shift + right-click
 mouse.off = Off
 mouse.shift = Shift + right-click
-
 rate.fast = Fast
 rate.faster = Faster
 rate.maximum = Maximum
@@ -136,7 +131,6 @@ rate.slightly_slower = Slightly slower
 rate.slow = Slow
 rate.very_fast = Very fast
 rate.very_slow = Very slow
-
 settings.cancel = Cancel
 settings.check_github_for_new = Check GitHub for new versions once a day
 settings.clean_up_text_before = Clean up text before reading (line breaks, hyphenation, links)
@@ -145,14 +139,14 @@ settings.key_not_supported_possible = This key is not supported.\n\nPossible are
 settings.menu_at_mouse_position = Menu at mouse position:
 settings.menu_by_mouse = Menu by mouse:
 settings.pause_resume = Pause / resume:
+settings.proxy = Proxy:
+settings.proxy_example = empty = like Windows, or e.g. http://wpad/wpad.dat or proxy:8080
 settings.read_selected_text_stop = Read selected text / stop:
 settings.save = Save
 settings.volume = Volume:
 settings.vorleser_settings = Vorleser – Settings
-
 voice.ai_voice = AI voice
 voice.other_language = Other
-
 window.always_on_top = Always on top
 window.read_aloud = Read aloud
 window.sample = Sample

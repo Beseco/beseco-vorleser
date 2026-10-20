@@ -9,6 +9,7 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForSystem};
 use windows::Win32::UI::Input::KeyboardAndMouse::SetFocus;
 use windows::Win32::UI::WindowsAndMessaging::{
+    GetWindowTextW, ES_AUTOHSCROLL, WS_EX_CLIENTEDGE,
     CreateWindowExW, DefWindowProcW, DestroyWindow, LoadCursorW, MessageBoxW, RegisterClassW,
     SendMessageW, SetForegroundWindow, ShowWindow, BS_AUTOCHECKBOX, BS_DEFPUSHBUTTON,
     CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT, HMENU, IDC_ARROW,
@@ -42,6 +43,7 @@ const TBS_AUTOTICKS: u32 = 1;
 const BM_GETCHECK: u32 = 0x00F0;
 const BM_SETCHECK: u32 = 0x00F1;
 const COLOR_BTNFACE: usize = 15;
+const EM_SETCUEBANNER: u32 = 0x1501;
 
 /// Schlüssel der Anzeige und zugehöriger Wert für `mouse_menu`.
 const MOUSE_OPTIONS: [(&str, &str); 5] = [
@@ -68,6 +70,7 @@ pub struct Values {
     pub volume: u32,
     pub clean_text: bool,
     pub update_check: bool,
+    pub proxy: String,
     pub language: String,
 }
 
@@ -79,6 +82,7 @@ struct Controls {
     volume: HWND,
     clean: HWND,
     update: HWND,
+    proxy: HWND,
     language: HWND,
     font: HFONT,
 }
@@ -118,7 +122,7 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
         let dpi = GetDpiForSystem();
         let px = |value: i32| value * dpi as i32 / 96;
         let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
-        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(388) };
+        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(424) };
         let _ = AdjustWindowRectExForDpi(&mut frame, style, false, WS_EX_CONTROLPARENT, dpi);
         let Ok(window) = CreateWindowExW(
             WS_EX_CONTROLPARENT,
@@ -173,28 +177,48 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
         label(t("settings.menu_by_mouse"), 3);
         label(t("settings.volume"), 4);
         label("Sprache / Language:", 5);
+        label(t("settings.proxy"), 6);
         // Die Reihenfolge der Erzeugung ist die Tab-Reihenfolge.
         let hotkeys = [hotkey(0), hotkey(1), hotkey(2)];
         let list = tab | WS_VSCROLL.0 | CBS_DROPDOWNLIST as u32;
         let mouse = child(w!("COMBOBOX"), "", list, 0, field_x, 44 + 3 * row, field_width, 300);
         let volume = child(w!("msctls_trackbar32"), "", tab | TBS_AUTOTICKS, 0, field_x - 8, 42 + 4 * row, field_width + 16, 30);
         let language = child(w!("COMBOBOX"), "", list, 0, field_x, 44 + 5 * row, field_width, 300);
+        let proxy = CreateWindowExW(
+            WS_EX_CLIENTEDGE,
+            w!("EDIT"),
+            &HSTRING::from(values.proxy.as_str()),
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(ES_AUTOHSCROLL as u32),
+            px(field_x),
+            px(44 + 6 * row),
+            px(field_width),
+            px(26),
+            Some(window),
+            None,
+            Some(instance.into()),
+            None,
+        )
+        .unwrap_or_default();
+        SendMessageW(proxy, WM_SETFONT, Some(WPARAM(font.0 as usize)), Some(LPARAM(1)));
+        // Grauer Hinweistext im leeren Feld.
+        let example = HSTRING::from(t("settings.proxy_example"));
+        SendMessageW(proxy, EM_SETCUEBANNER, Some(WPARAM(1)), Some(LPARAM(example.as_ptr() as isize)));
         let clean = child(
             w!("BUTTON"),
             t("settings.clean_up_text_before"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, 46 + 6 * row, 438, 24,
+            0, label_x, 46 + 7 * row, 438, 24,
         );
         let update = child(
             w!("BUTTON"),
             t("settings.check_github_for_new"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, 46 + 7 * row, 438, 24,
+            0, label_x, 46 + 8 * row, 438, 24,
         );
-        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, 342, 100, 30);
-        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, 342, 98, 30);
+        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, 378, 100, 30);
+        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, 378, 98, 30);
 
-        let c = Controls { window, hotkeys, mouse, volume, clean, update, language, font };
+        let c = Controls { window, hotkeys, mouse, volume, clean, update, language, proxy, font };
         fill(&c, &values);
         CONTROLS.with(|cell| cell.set(Some(c)));
         ORIGINAL.with(|cell| *cell.borrow_mut() = Some(values));
@@ -301,6 +325,11 @@ unsafe fn save(c: &Controls) {
         volume: (SendMessageW(c.volume, TBM_GETPOS, None, None).0 as u32).min(100),
         clean_text: SendMessageW(c.clean, BM_GETCHECK, None, None).0 == 1,
         update_check: SendMessageW(c.update, BM_GETCHECK, None, None).0 == 1,
+        proxy: {
+            let mut buffer = [0u16; 512];
+            let len = GetWindowTextW(c.proxy, &mut buffer) as usize;
+            String::from_utf16_lossy(&buffer[..len]).trim().to_string()
+        },
         language: {
             let row = SendMessageW(c.language, CB_GETCURSEL, None, None).0;
             language_options().get(row as usize).map_or(original.language.clone(), |(_, value)| value.clone())

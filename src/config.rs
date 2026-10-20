@@ -38,6 +38,8 @@ pub struct Config {
     pub last_update_check: u64,
     /// Sprache der Oberfläche: "auto", "de" oder "en".
     pub language: String,
+    /// Proxy: leer = wie Windows, sonst Adresse eines Proxy-Skripts (wpad.dat) oder `host:port`.
+    pub proxy: String,
 }
 
 impl Default for Config {
@@ -55,6 +57,7 @@ impl Default for Config {
             update_check: true,
             last_update_check: 0,
             language: "auto".into(),
+            proxy: String::new(),
         }
     }
 }
@@ -82,6 +85,7 @@ impl Config {
                 "update_check" => cfg.update_check = value != "0",
                 "last_update_check" => cfg.last_update_check = value.parse().unwrap_or(0),
                 "language" => cfg.language = value.to_string(),
+                "proxy" => cfg.proxy = value.to_string(),
                 _ => {}
             }
         }
@@ -94,7 +98,7 @@ impl Config {
              # mouse_menu: Zusatztaste(n) + Rechtsklick, z. B. Strg+Rechtsklick oder Strg+Shift+Rechtsklick.\r\n\
              voice={}\r\nrate={}\r\nhotkey_read={}\r\nhotkey_pause={}\r\nhotkey_menu={}\r\nmouse_menu={}\r\n\
              volume={}\r\nclean_text={}\r\nalways_on_top={}\r\n\
-             update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\n",
+             update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
@@ -106,7 +110,8 @@ impl Config {
             self.always_on_top as u8,
             self.update_check as u8,
             self.last_update_check,
-            self.language
+            self.language,
+            self.proxy
         )
     }
 
@@ -266,6 +271,7 @@ mod tests {
             update_check: false,
             last_update_check: 1_760_000_000,
             language: "en".into(),
+            proxy: "http://wpad.firma.local/wpad.dat".into(),
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }
