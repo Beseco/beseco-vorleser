@@ -27,7 +27,7 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [ ] **Aussprache-Wörterbuch** für Namen und Abkürzungen.
 - [ ] **Automatische Spracherkennung.** Englischer Text mit englischer Stimme, deutscher mit deutscher.
 - [x] **Als Audiodatei speichern** (WAV).
-- [ ] MP3-Export (braucht einen Encoder).
+- [x] MP3-Export über den MP3-Encoder von Windows (Media Foundation).
 - [x] WAV-Export im Hintergrund (ohne Fortschrittsanzeige).
 - [x] **Textdateien öffnen** über Datei → Öffnen und per Drag-and-drop.
 - [ ] **Weitere Dateiformate:** DOCX, EPUB, PDF.

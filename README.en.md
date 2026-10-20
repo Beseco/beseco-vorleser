@@ -41,7 +41,7 @@ Windows does not let a program add an entry to the regular right-click menu of o
 - **Always on top:** the window can stay above other windows
 - **Voices:** all installed Windows voices, grouped by language
 - **Text clean-up:** joins wrapped PDF lines, removes hyphenation, shortens links
-- **Audio export:** save text as a WAV file
+- **Audio export:** save text as an MP3 or WAV file
 - **Autostart:** optionally start with Windows
 - **Navigation and resume:** Alt+← / Alt+→ jumps by sentence, F5 reads from the cursor, and after stopping or restarting it continues where you left off
 - **Menu bar and shortcuts:** F5 read aloud, F6 pause, F7 stop, Ctrl+O open a text file (or drop it onto the window), Ctrl+S save as WAV

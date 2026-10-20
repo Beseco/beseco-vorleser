@@ -109,7 +109,7 @@ menu.read_clipboard = &Zwischenablage vorlesen
 menu.report = &Fehler melden oder Wunsch äußern …
 menu.resume = &Fortsetzen\tF6
 menu.sample = &Hörprobe
-menu.save_wav = Als &WAV speichern …\tStrg+S
+menu.save_wav = Als &Audiodatei speichern (MP3, WAV) …\tStrg+S
 menu.select_all = Alles &markieren\tStrg+A
 menu.settings = &Einstellungen …
 menu.speed = &Geschwindigkeit
@@ -141,7 +141,7 @@ settings.menu_at_mouse_position = Menü an der Mausposition:
 settings.menu_by_mouse = Menü per Maus:
 settings.pause_resume = Pause / Fortsetzen:
 settings.proxy = Proxy:
-settings.proxy_example = leer = wie Windows, oder z. B. http://wpad/wpad.dat bzw. proxy:8080
+settings.proxy_example = leer = wie Windows
 settings.read_selected_text_stop = Markierten Text vorlesen / Stopp:
 settings.remember_text = Text und Leseposition beim Beenden merken, um später weiterzulesen
 settings.save = Speichern

@@ -14,6 +14,7 @@ Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic
 - Neu: satzweise springen mit Alt+← / Alt+→ (auch während des Vorlesens) und den Schaltflächen „◀ Satz“ / „Satz ▶“
 - Neu: F5 liest ab der Schreibmarke; nach Stopp steht sie am Anfang des zuletzt gesprochenen Satzes
 - Neu: Text und Leseposition werden beim Beenden gemerkt, damit es nach einem Neustart weitergeht (abschaltbar)
+- Neu: Speichern als MP3 (über den MP3-Encoder von Windows), WAV bleibt wählbar
 - Neu: Proxy fürs Firmennetz: wpad.dat und Anmeldung mit dem Windows-Konto, wahlweise eigene Proxy-Adresse
 - Behoben: Nach einem Neustart des Vorlesens konnten Meldungen des abgebrochenen Durchgangs das neue Vorlesen vorzeitig beenden
 

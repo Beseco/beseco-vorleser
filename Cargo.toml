@@ -16,6 +16,7 @@ features = [
     "Win32_Globalization",
     "Win32_Graphics_Gdi",
     "Win32_Media_Audio",
+    "Win32_Media_MediaFoundation",
     "Win32_Media_Speech",
     "Win32_Networking_WinHttp",
     "Win32_Security",

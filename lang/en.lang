@@ -110,7 +110,7 @@ menu.read_clipboard = Read &clipboard
 menu.report = &Report a problem or suggest a feature …
 menu.resume = &Resume\tF6
 menu.sample = &Sample
-menu.save_wav = Save as &WAV …\tCtrl+S
+menu.save_wav = Save as &audio file (MP3, WAV) …\tCtrl+S
 menu.select_all = Select &all\tCtrl+A
 menu.settings = &Settings …
 menu.speed = &Speed
@@ -142,7 +142,7 @@ settings.menu_at_mouse_position = Menu at mouse position:
 settings.menu_by_mouse = Menu by mouse:
 settings.pause_resume = Pause / resume:
 settings.proxy = Proxy:
-settings.proxy_example = empty = like Windows, or e.g. http://wpad/wpad.dat or proxy:8080
+settings.proxy_example = empty = like Windows
 settings.read_selected_text_stop = Read selected text / stop:
 settings.remember_text = Remember text and reading position on exit to continue later
 settings.save = Save

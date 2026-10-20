@@ -8,6 +8,7 @@ mod config;
 mod http;
 mod i18n;
 mod mouse;
+mod mp3;
 mod piper;
 mod selection;
 mod settings;
@@ -1098,7 +1099,7 @@ fn open_settings() {
     }
 }
 
-/// Fragt nach einem Dateinamen und schreibt den Text des Fensters als WAV-Datei.
+/// Fragt nach einem Dateinamen und schreibt den Text des Fensters als MP3- oder WAV-Datei.
 fn save_audio() {
     let owner = window::visible();
     let Some(text) = window::text() else {
@@ -1108,16 +1109,17 @@ fn save_audio() {
         return;
     };
     let mut file = [0u16; 520];
-    for (slot, unit) in file.iter_mut().zip("Vorleser.wav".encode_utf16()) {
+    for (slot, unit) in file.iter_mut().zip("Vorleser.mp3".encode_utf16()) {
         *slot = unit;
     }
     let mut dialog = OPENFILENAMEW {
         lStructSize: std::mem::size_of::<OPENFILENAMEW>() as u32,
         hwndOwner: owner.unwrap_or_default(),
-        lpstrFilter: w!("WAV (*.wav)\0*.wav\0"),
+        lpstrFilter: w!("MP3 (*.mp3)\0*.mp3\0WAV (*.wav)\0*.wav\0"),
         lpstrFile: PWSTR(file.as_mut_ptr()),
         nMaxFile: file.len() as u32,
-        lpstrDefExt: w!("wav"),
+        // Ohne angegebene Endung hängt der Dialog die des gewählten Dateityps an.
+        lpstrDefExt: w!("mp3"),
         Flags: OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST,
         ..Default::default()
     };
@@ -1138,7 +1140,17 @@ fn save_audio() {
     std::thread::spawn(move || {
         let saved = unsafe {
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-            tts::save_wav(voice.as_deref(), rate, &text, &path).is_ok()
+            let mp3 = path.to_lowercase().ends_with(".mp3");
+            if mp3 {
+                // Erst als WAV in den Temp-Ordner, dann umwandeln.
+                let wav = std::env::temp_dir().join(format!("vorleser-export-{}.wav", std::process::id()));
+                let saved = tts::save_wav(voice.as_deref(), rate, &text, &wav.to_string_lossy()).is_ok()
+                    && mp3::wav_to_mp3(&wav, &path).is_ok();
+                let _ = std::fs::remove_file(&wav);
+                saved
+            } else {
+                tts::save_wav(voice.as_deref(), rate, &text, &path).is_ok()
+            }
         };
         unsafe {
             let _ = PostMessageW(Some(HWND(hwnd as *mut _)), WM_WAV_DONE, WPARAM(saved as usize), LPARAM(0));

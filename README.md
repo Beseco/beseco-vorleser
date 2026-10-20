@@ -39,7 +39,7 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 - **Immer im Vordergrund:** das Fenster bleibt auf Wunsch über anderen Fenstern
 - **Stimmen:** alle installierten Windows-Stimmen, nach Sprache gruppiert
 - **Textbereinigung:** fügt umbrochene PDF-Zeilen zusammen, hebt Silbentrennung auf, kürzt Links
-- **Audio-Export:** Text als WAV-Datei speichern
+- **Audio-Export:** Text als MP3- oder WAV-Datei speichern
 - **Autostart:** auf Wunsch mit Windows starten
 - **Navigation und Weiterlesen:** Alt+← / Alt+→ springt satzweise, F5 liest ab der Schreibmarke, nach Stopp und nach einem Neustart geht es an derselben Stelle weiter
 - **Menüleiste und Tastenkürzel:** F5 Vorlesen, F6 Pause, F7 Stopp, Strg+O Textdatei öffnen (oder ins Fenster ziehen), Strg+S als WAV speichern
