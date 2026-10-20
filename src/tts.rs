@@ -225,12 +225,21 @@ fn enumerate(category_id: &str, out: &mut Vec<Voice>) -> Result<()> {
             let Ok(id) = token.GetId().map(take_string) else { continue };
             // Der Standardwert des Tokens ist der Anzeigename.
             let name = token.GetStringValue(PCWSTR::null()).map(take_string).unwrap_or_else(|_| id.clone());
+            // Online-Stimmen (z. B. über den NaturalVoiceSAPIAdapter) brechen je nach Netz und Dienst
+            // ab und schicken den Text an einen fremden Anbieter; Vorleser bietet sie nicht an.
+            if is_online(&name) {
+                continue;
+            }
             let lang_id = language_id(&token).unwrap_or(0);
             let language = language_name(lang_id).unwrap_or_else(|| "Andere".to_string());
             out.push(Voice { id, name, lang_id, language, token });
         }
     }
     Ok(())
+}
+
+fn is_online(name: &str) -> bool {
+    name.contains(" Online")
 }
 
 /// Liest das Attribut "Language" der Stimme, z. B. "407" oder "409;9" (hexadezimal).
@@ -312,7 +321,7 @@ mod tests {
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         }
         let tts = Tts::new().expect("SAPI nicht verfügbar");
-        let local = tts.voices().iter().find(|v| !v.name.contains("Online")).map(|v| v.id.as_str());
+        let local = tts.voices().first().map(|v| v.id.as_str());
         let path = std::env::temp_dir().join("vorleser_test.wav");
         // Wie im Programm auf einem eigenen Thread.
         let id = local.map(str::to_string);
@@ -343,7 +352,7 @@ mod tests {
             tts.voice.SetInterest(INTEREST, INTEREST).unwrap();
         }
         // Eine lokale Stimme, damit der Test nicht vom Netz abhängt.
-        let local = tts.voices().iter().find(|v| !v.name.contains("Online")).map(|v| v.id.clone());
+        let local = tts.voices().first().map(|v| v.id.clone());
         if let Some(id) = local {
             assert!(tts.set_voice(&id));
         }

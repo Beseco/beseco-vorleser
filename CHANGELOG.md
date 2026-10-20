@@ -2,8 +2,9 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## 0.2.0 – unveröffentlicht
+## 0.2.0 – 2026-10-20
 
+- Online-Stimmen werden nicht mehr angeboten (unzuverlässig, Text ginge an fremde Dienste)
 - Neu: englische Oberfläche; die Sprache folgt Windows und lässt sich in den Einstellungen umstellen
 - Neu: Hinweis auf neue Versionen (einmal täglich über GitHub, in den Einstellungen abschaltbar)
 - WAV-Export läuft im Hintergrund; das Fenster bleibt bedienbar

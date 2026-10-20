@@ -49,11 +49,11 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 
 Vorleser bringt keine eigenen Stimmen mit, sondern verwendet die in Windows installierten. Weitere Stimmen lassen sich in den Windows-Einstellungen unter „Zeit und Sprache → Spracherkennung → Stimmen hinzufügen“ nachladen.
 
-Die sehr natürlich klingenden Stimmen der Windows-11-Sprachausgabe stellt Microsoft anderen Programmen nicht direkt bereit. Wer sie nutzen möchte, kann den separaten [NaturalVoiceSAPIAdapter](https://github.com/gexgd0419/NaturalVoiceSAPIAdapter) installieren; Vorleser zeigt diese Stimmen dann automatisch an. Der Adapter ist ein eigenes Projekt und nicht Teil von Vorleser.
+Online-Stimmen, die manche Zusatzprogramme in Windows einbinden (erkennbar am Zusatz „Online“ im Namen), zeigt Vorleser nicht an: Sie hängen von einem fremden Dienst ab, brechen je nach Netz ab und schicken den Text an ihren Anbieter.
 
 ## Datenschutz
 
-Vorleser sammelt keine Daten. Die einzige Verbindung ins Internet ist die Suche nach neuen Versionen: höchstens einmal am Tag eine Anfrage an GitHub, ohne Text, Einstellungen oder Kennung des Rechners. Sie lässt sich in den Einstellungen abschalten. Der Text wird auf dem eigenen Rechner an die Windows-Sprachausgabe übergeben. Eine Ausnahme sind Online-Stimmen, die über Zusatzprogramme wie den oben genannten Adapter eingebunden werden: Diese schicken den Text zur Sprachsynthese an ihren Anbieter.
+Vorleser sammelt keine Daten. Die einzige Verbindung ins Internet ist die Suche nach neuen Versionen: höchstens einmal am Tag eine Anfrage an GitHub, ohne Text, Einstellungen oder Kennung des Rechners. Sie lässt sich in den Einstellungen abschalten. Der Text wird ausschließlich auf dem eigenen Rechner verarbeitet.
 
 Zum Auslesen der Markierung nutzt Vorleser die Bedienungshilfen-Schnittstelle von Windows. Wo das nicht geht, kopiert es den Text kurz über die Zwischenablage und stellt deren vorherigen Inhalt wieder her.
 

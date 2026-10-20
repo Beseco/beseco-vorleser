@@ -48,11 +48,11 @@ Windows does not let a program add an entry to the regular right-click menu of o
 
 Vorleser does not bundle any voices; it uses the ones installed in Windows. More voices can be added in Windows Settings under "Time & language → Speech → Add voices".
 
-Microsoft does not expose the very natural-sounding Windows 11 Narrator voices to other programs directly. To use them, install the separate [NaturalVoiceSAPIAdapter](https://github.com/gexgd0419/NaturalVoiceSAPIAdapter); Vorleser then lists those voices automatically. The adapter is an independent project and not part of Vorleser.
+Online voices that some add-ons register in Windows (marked "Online" in their name) are not listed: they depend on a third-party service, fail depending on the network and send the text to their provider.
 
 ## Privacy
 
-Vorleser collects no data. Its only internet connection is the update check: at most one request per day to GitHub, without any text, settings or machine identifier. It can be turned off in the settings. Text is handed to the Windows speech engine on your own machine. The exception is online voices added through third-party tools such as the adapter above: those send the text to their provider for synthesis.
+Vorleser collects no data. Its only internet connection is the update check: at most one request per day to GitHub, without any text, settings or machine identifier. It can be turned off in the settings. Text is processed only on your own machine.
 
 To read the selection, Vorleser uses the Windows accessibility interface. Where that is not available, it briefly copies the text through the clipboard and restores the previous clipboard content.
 
