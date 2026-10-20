@@ -4,7 +4,7 @@
 
 Vorleser ("reader" in German) reads selected text aloud in any Windows program: select text, press **Ctrl+Alt+V**, listen. It lives as a small icon in the notification area, uses very little memory and speaks with the voices Windows already ships.
 
-The user interface is currently German only.
+The interface is available in English and German. It follows the Windows display language and can be switched under Settings.
 
 ![Main window highlighting the word being spoken](docs/fenster.png)
 
@@ -29,7 +29,7 @@ Requires Windows 10 or 11 (64-bit).
 | Open the window | Left-click the notification area icon |
 | Menu with voice, speed and settings | Right-click the icon |
 
-All shortcuts can be changed under "Einstellungen" (settings).
+All shortcuts can be changed under "Settings".
 
 Windows does not let a program add an entry to the regular right-click menu of other applications. Ctrl+right-click is the substitute: the Vorleser menu appears instead of the application's own menu.
 
@@ -63,7 +63,6 @@ Settings are stored in `%APPDATA%\Vorleser\settings.ini`.
 - Vorleser cannot read the selection in windows running with administrator rights.
 - Copy-protected PDFs and password fields do not hand out text.
 - Text copied while reading the selection may show up in the clipboard history (Win+V).
-- The interface is German only so far.
 
 ## Building
 

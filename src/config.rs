@@ -28,6 +28,8 @@ pub struct Config {
     pub update_check: bool,
     /// Zeitpunkt der letzten erfolgreichen Suche, Sekunden seit 1970.
     pub last_update_check: u64,
+    /// Sprache der Oberfläche: "auto", "de" oder "en".
+    pub language: String,
 }
 
 impl Default for Config {
@@ -44,6 +46,7 @@ impl Default for Config {
             always_on_top: false,
             update_check: true,
             last_update_check: 0,
+            language: "auto".into(),
         }
     }
 }
@@ -70,6 +73,7 @@ impl Config {
                 "always_on_top" => cfg.always_on_top = value == "1",
                 "update_check" => cfg.update_check = value != "0",
                 "last_update_check" => cfg.last_update_check = value.parse().unwrap_or(0),
+                "language" => cfg.language = value.to_string(),
                 _ => {}
             }
         }
@@ -82,7 +86,7 @@ impl Config {
              # mouse_menu: Zusatztaste(n) + Rechtsklick, z. B. Strg+Rechtsklick oder Strg+Shift+Rechtsklick.\r\n\
              voice={}\r\nrate={}\r\nhotkey_read={}\r\nhotkey_pause={}\r\nhotkey_menu={}\r\nmouse_menu={}\r\n\
              volume={}\r\nclean_text={}\r\nalways_on_top={}\r\n\
-             update_check={}\r\nlast_update_check={}\r\n",
+             update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
@@ -93,7 +97,8 @@ impl Config {
             self.clean_text as u8,
             self.always_on_top as u8,
             self.update_check as u8,
-            self.last_update_check
+            self.last_update_check,
+            self.language
         )
     }
 
@@ -249,6 +254,7 @@ mod tests {
             always_on_top: true,
             update_check: false,
             last_update_check: 1_760_000_000,
+            language: "en".into(),
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }

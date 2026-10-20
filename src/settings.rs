@@ -20,6 +20,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use crate::config::{
     format_hotkey, parse_hotkey, parse_mouse_trigger, MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN,
 };
+use crate::i18n::{self, tr};
 use crate::window::message_font;
 
 // IDOK und IDCANCEL: so lösen Eingabe und Esc die beiden Schaltflächen aus.
@@ -42,13 +43,20 @@ const BM_GETCHECK: u32 = 0x00F0;
 const BM_SETCHECK: u32 = 0x00F1;
 const COLOR_BTNFACE: usize = 15;
 
-/// Anzeige und zugehöriger Wert für `mouse_menu`.
-const MOUSE_OPTIONS: [(&str, &str); 5] = [
-    ("Aus", ""),
-    ("Strg + Rechtsklick", "Strg+Rechtsklick"),
-    ("Umschalt + Rechtsklick", "Shift+Rechtsklick"),
-    ("Strg + Umschalt + Rechtsklick", "Strg+Shift+Rechtsklick"),
-    ("Strg + Alt + Rechtsklick", "Strg+Alt+Rechtsklick"),
+/// Anzeige (deutsch, englisch) und zugehöriger Wert für `mouse_menu`.
+const MOUSE_OPTIONS: [(&str, &str, &str); 5] = [
+    ("Aus", "Off", ""),
+    ("Strg + Rechtsklick", "Ctrl + right-click", "Strg+Rechtsklick"),
+    ("Umschalt + Rechtsklick", "Shift + right-click", "Shift+Rechtsklick"),
+    ("Strg + Umschalt + Rechtsklick", "Ctrl + Shift + right-click", "Strg+Shift+Rechtsklick"),
+    ("Strg + Alt + Rechtsklick", "Ctrl + Alt + right-click", "Strg+Alt+Rechtsklick"),
+];
+
+/// Anzeige und Wert für `language`.
+const LANGUAGES: [(&str, &str); 3] = [
+    ("Automatisch / Automatic", i18n::AUTO),
+    ("Deutsch", i18n::GERMAN),
+    ("English", i18n::ENGLISH_CODE),
 ];
 
 #[derive(Clone)]
@@ -60,6 +68,7 @@ pub struct Values {
     pub volume: u32,
     pub clean_text: bool,
     pub update_check: bool,
+    pub language: String,
 }
 
 #[derive(Clone, Copy)]
@@ -70,6 +79,7 @@ struct Controls {
     volume: HWND,
     clean: HWND,
     update: HWND,
+    language: HWND,
     font: HFONT,
 }
 
@@ -108,12 +118,12 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
         let dpi = GetDpiForSystem();
         let px = |value: i32| value * dpi as i32 / 96;
         let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
-        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(352) };
+        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(388) };
         let _ = AdjustWindowRectExForDpi(&mut frame, style, false, WS_EX_CONTROLPARENT, dpi);
         let Ok(window) = CreateWindowExW(
             WS_EX_CONTROLPARENT,
             class.lpszClassName,
-            w!("Vorleser – Einstellungen"),
+            &HSTRING::from(tr("Vorleser – Einstellungen", "Vorleser – Settings")),
             style,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -154,35 +164,40 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
 
         child(
             w!("STATIC"),
-            "Feld anklicken und die gewünschte Kombination drücken. Rücktaste = keine.",
+            tr("Feld anklicken und die gewünschte Kombination drücken. Rücktaste = keine.", "Click a field and press the shortcut you want. Backspace = none."),
             0, 0, label_x, 14, 438, 22,
         );
-        label("Markierten Text vorlesen / Stopp:", 0);
-        label("Pause / Fortsetzen:", 1);
-        label("Menü an der Mausposition:", 2);
-        label("Menü per Maus:", 3);
-        label("Lautstärke:", 4);
+        label(tr("Markierten Text vorlesen / Stopp:", "Read selected text / stop:"), 0);
+        label(tr("Pause / Fortsetzen:", "Pause / resume:"), 1);
+        label(tr("Menü an der Mausposition:", "Menu at mouse position:"), 2);
+        label(tr("Menü per Maus:", "Menu by mouse:"), 3);
+        label(tr("Lautstärke:", "Volume:"), 4);
+        label("Sprache / Language:", 5);
         // Die Reihenfolge der Erzeugung ist die Tab-Reihenfolge.
         let hotkeys = [hotkey(0), hotkey(1), hotkey(2)];
         let list = tab | WS_VSCROLL.0 | CBS_DROPDOWNLIST as u32;
         let mouse = child(w!("COMBOBOX"), "", list, 0, field_x, 44 + 3 * row, field_width, 300);
         let volume = child(w!("msctls_trackbar32"), "", tab | TBS_AUTOTICKS, 0, field_x - 8, 42 + 4 * row, field_width + 16, 30);
+        let language = child(w!("COMBOBOX"), "", list, 0, field_x, 44 + 5 * row, field_width, 300);
         let clean = child(
             w!("BUTTON"),
-            "Text vor dem Vorlesen bereinigen (Zeilenumbrüche, Silbentrennung, Links)",
-            tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, 46 + 5 * row, 438, 24,
-        );
-        let update = child(
-            w!("BUTTON"),
-            "Einmal täglich auf GitHub nach neuen Versionen suchen",
+            tr(
+                "Text vor dem Vorlesen bereinigen (Zeilenumbrüche, Silbentrennung, Links)",
+                "Clean up text before reading (line breaks, hyphenation, links)",
+            ),
             tab | BS_AUTOCHECKBOX as u32,
             0, label_x, 46 + 6 * row, 438, 24,
         );
-        child(w!("BUTTON"), "Speichern", tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, 306, 100, 30);
-        child(w!("BUTTON"), "Abbrechen", tab, ID_CANCEL, 356, 306, 98, 30);
+        let update = child(
+            w!("BUTTON"),
+            tr("Einmal täglich auf GitHub nach neuen Versionen suchen", "Check GitHub for new versions once a day"),
+            tab | BS_AUTOCHECKBOX as u32,
+            0, label_x, 46 + 7 * row, 438, 24,
+        );
+        child(w!("BUTTON"), tr("Speichern", "Save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, 342, 100, 30);
+        child(w!("BUTTON"), tr("Abbrechen", "Cancel"), tab, ID_CANCEL, 356, 342, 98, 30);
 
-        let c = Controls { window, hotkeys, mouse, volume, clean, update, font };
+        let c = Controls { window, hotkeys, mouse, volume, clean, update, language, font };
         fill(&c, &values);
         CONTROLS.with(|cell| cell.set(Some(c)));
         ORIGINAL.with(|cell| *cell.borrow_mut() = Some(values));
@@ -212,8 +227,8 @@ unsafe fn fill(c: &Controls, values: &Values) {
 
     let current = parse_mouse_trigger(&values.mouse_menu);
     let mut selected = None;
-    for (i, (label, value)) in MOUSE_OPTIONS.iter().enumerate() {
-        let label = HSTRING::from(*label);
+    for (i, (german, english, value)) in MOUSE_OPTIONS.iter().enumerate() {
+        let label = HSTRING::from(tr(german, english));
         SendMessageW(c.mouse, CB_ADDSTRING, None, Some(LPARAM(label.as_ptr() as isize)));
         if parse_mouse_trigger(value) == current {
             selected = Some(i);
@@ -232,6 +247,15 @@ unsafe fn fill(c: &Controls, values: &Values) {
     SendMessageW(c.volume, TBM_SETPOS, Some(WPARAM(1)), Some(LPARAM(values.volume as isize)));
     SendMessageW(c.clean, BM_SETCHECK, Some(WPARAM(values.clean_text as usize)), None);
     SendMessageW(c.update, BM_SETCHECK, Some(WPARAM(values.update_check as usize)), None);
+    let mut current = 0;
+    for (i, (label, value)) in LANGUAGES.iter().enumerate() {
+        let label = HSTRING::from(*label);
+        SendMessageW(c.language, CB_ADDSTRING, None, Some(LPARAM(label.as_ptr() as isize)));
+        if *value == values.language {
+            current = i;
+        }
+    }
+    SendMessageW(c.language, CB_SETCURSEL, Some(WPARAM(current)), None);
 }
 
 /// Liest ein Tastenkombinations-Feld; `Err`, wenn die gedrückte Taste nicht unterstützt wird.
@@ -260,8 +284,11 @@ unsafe fn save(c: &Controls) {
         match read_hotkey(*control, original) {
             Ok(text) => hotkeys.push(text),
             Err(()) => {
-                let text = w!("Diese Taste wird nicht unterstützt.\n\nMöglich sind Buchstaben, Ziffern, F1 bis F24 und die Leertaste, jeweils zusammen mit Strg, Alt oder Umschalt.");
-                MessageBoxW(Some(c.window), text, w!("Vorleser"), MB_ICONWARNING);
+                let text = tr(
+                    "Diese Taste wird nicht unterstützt.\n\nMöglich sind Buchstaben, Ziffern, F1 bis F24 und die Leertaste, jeweils zusammen mit Strg, Alt oder Umschalt.",
+                    "This key is not supported.\n\nPossible are letters, digits, F1 to F24 and the space bar, each combined with Ctrl, Alt or Shift.",
+                );
+                MessageBoxW(Some(c.window), &HSTRING::from(text), w!("Vorleser"), MB_ICONWARNING);
                 let _ = SetFocus(Some(*control));
                 return;
             }
@@ -269,7 +296,7 @@ unsafe fn save(c: &Controls) {
     }
     let row = SendMessageW(c.mouse, CB_GETCURSEL, None, None).0;
     let mouse_menu = match MOUSE_OPTIONS.get(row as usize) {
-        Some((_, value)) => value.to_string(),
+        Some((_, _, value)) => value.to_string(),
         None => original.mouse_menu.clone(),
     };
     let values = Values {
@@ -280,6 +307,10 @@ unsafe fn save(c: &Controls) {
         volume: (SendMessageW(c.volume, TBM_GETPOS, None, None).0 as u32).min(100),
         clean_text: SendMessageW(c.clean, BM_GETCHECK, None, None).0 == 1,
         update_check: SendMessageW(c.update, BM_GETCHECK, None, None).0 == 1,
+        language: {
+            let row = SendMessageW(c.language, CB_GETCURSEL, None, None).0;
+            LANGUAGES.get(row as usize).map_or(original.language.clone(), |(_, value)| value.to_string())
+        },
     };
     let on_save = ON_SAVE.with(|cell| cell.get());
     let _ = DestroyWindow(c.window);

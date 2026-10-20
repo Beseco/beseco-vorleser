@@ -4,6 +4,7 @@
 #![windows_subsystem = "windows"]
 
 mod config;
+mod i18n;
 mod mouse;
 mod selection;
 mod settings;
@@ -50,6 +51,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use config::Config;
+use i18n::tr;
 use tts::Tts;
 
 const APP_NAME: PCWSTR = w!("Vorleser");
@@ -92,16 +94,16 @@ const CMD_UPDATE: u32 = 10;
 const CMD_RATE: u32 = 100;
 const CMD_VOICE: u32 = 1000;
 
-const RATES: [(i32, &str); 9] = [
-    (-6, "Sehr langsam"),
-    (-4, "Langsam"),
-    (-2, "Etwas langsamer"),
-    (0, "Normal"),
-    (2, "Etwas schneller"),
-    (4, "Schnell"),
-    (6, "Schneller"),
-    (8, "Sehr schnell"),
-    (10, "Maximal"),
+const RATES: [(i32, &str, &str); 9] = [
+    (-6, "Sehr langsam", "Very slow"),
+    (-4, "Langsam", "Slow"),
+    (-2, "Etwas langsamer", "Slightly slower"),
+    (0, "Normal", "Normal"),
+    (2, "Etwas schneller", "Slightly faster"),
+    (4, "Schnell", "Fast"),
+    (6, "Schneller", "Faster"),
+    (8, "Sehr schnell", "Very fast"),
+    (10, "Maximal", "Maximum"),
 ];
 
 #[derive(Clone, Copy, PartialEq)]
@@ -190,9 +192,10 @@ impl App {
 
     fn tip(&self) -> String {
         match self.state {
-            State::Idle => format!("Vorleser – {} liest markierten Text vor", self.cfg.hotkey_read),
-            State::Speaking => "Vorleser – liest vor".to_string(),
-            State::Paused => "Vorleser – pausiert".to_string(),
+            State::Idle => tr("Vorleser – {} liest markierten Text vor", "Vorleser – {} reads selected text")
+                .replace("{}", &i18n::hotkey(&self.cfg.hotkey_read)),
+            State::Speaking => tr("Vorleser – liest vor", "Vorleser – reading").to_string(),
+            State::Paused => tr("Vorleser – pausiert", "Vorleser – paused").to_string(),
         }
     }
 
@@ -224,8 +227,9 @@ impl App {
             failed.push(self.cfg.mouse_menu.as_str());
         }
         if !failed.is_empty() {
-            let text = format!("Nicht verfügbar oder ungültig: {}", failed.join(", "));
-            tray::balloon(self.hwnd, "Tastenkombination", &text);
+            let failed: Vec<String> = failed.iter().map(|text| i18n::hotkey(text)).collect();
+            let text = format!("{} {}", tr("Nicht verfügbar oder ungültig:", "Unavailable or invalid:"), failed.join(", "));
+            tray::balloon(self.hwnd, tr("Tastenkombination", "Shortcut"), &text);
         }
     }
 
@@ -238,6 +242,7 @@ impl App {
             volume: self.cfg.volume,
             clean_text: self.cfg.clean_text,
             update_check: self.cfg.update_check,
+            language: self.cfg.language.clone(),
         }
     }
 
@@ -249,6 +254,16 @@ impl App {
         self.cfg.volume = values.volume;
         self.cfg.clean_text = values.clean_text;
         self.cfg.update_check = values.update_check;
+        if values.language != self.cfg.language {
+            self.cfg.language = values.language;
+            i18n::init(&self.cfg.language);
+            // Menüs entstehen bei jedem Öffnen neu; das Fenster behält seine Beschriftung bis zum Neustart.
+            let text = tr(
+                "Die neue Sprache gilt im Fenster nach einem Neustart von Vorleser.",
+                "The window switches to the new language after restarting Vorleser.",
+            );
+            tray::balloon(self.hwnd, "Vorleser", text);
+        }
         update::set_enabled(values.update_check);
         self.cfg.save();
         for id in [HOTKEY_READ, HOTKEY_PAUSE, HOTKEY_MENU] {
@@ -306,7 +321,7 @@ impl App {
             .map(|i| (i, voices[i].name.clone()))
             .collect();
         window::set_voices(&items);
-        let labels: Vec<&str> = RATES.iter().map(|(_, label)| *label).collect();
+        let labels: Vec<&str> = RATES.iter().map(|(_, german, english)| tr(german, english)).collect();
         window::set_rates(&labels);
         window::set_topmost(self.cfg.always_on_top);
         self.sync_window();
@@ -315,7 +330,7 @@ impl App {
     /// Gleicht die Auswahl im Fenster mit den Einstellungen ab (z. B. nach Änderung über das Menü).
     fn sync_window(&self) {
         window::select_voice(self.current_voice());
-        window::select_rate(RATES.iter().position(|(rate, _)| *rate == self.cfg.rate));
+        window::select_rate(RATES.iter().position(|(rate, _, _)| *rate == self.cfg.rate));
         window::set_playback(self.state != State::Idle, self.state == State::Paused);
     }
 
@@ -326,14 +341,14 @@ impl App {
                 self.cfg.voice = id;
                 self.cfg.save();
             } else {
-                tray::balloon(self.hwnd, "Vorleser", "Diese Stimme lässt sich nicht verwenden.");
+                tray::balloon(self.hwnd, "Vorleser", tr("Diese Stimme lässt sich nicht verwenden.", "This voice cannot be used."));
             }
         }
         self.sync_window();
     }
 
     fn select_rate(&mut self, index: usize) {
-        if let Some((rate, _)) = RATES.get(index) {
+        if let Some((rate, _, _)) = RATES.get(index) {
             self.tts.set_rate(*rate);
             self.cfg.rate = *rate;
             self.cfg.save();
@@ -390,7 +405,7 @@ impl App {
             (text, Follow { base: 0, restore: (0, 0) })
         };
         if text.trim().is_empty() {
-            tray::balloon(self.hwnd, "Vorleser", "Das Textfeld ist leer.");
+            tray::balloon(self.hwnd, "Vorleser", tr("Das Textfeld ist leer.", "The text field is empty."));
             return;
         }
         self.start(text, Some(follow));
@@ -403,7 +418,7 @@ impl App {
                 self.follow = follow;
                 self.set_state(State::Speaking);
             }
-            Err(_) => tray::balloon(self.hwnd, "Vorleser", "Die Sprachausgabe ist fehlgeschlagen."),
+            Err(_) => tray::balloon(self.hwnd, "Vorleser", tr("Die Sprachausgabe ist fehlgeschlagen.", "Speech output failed.")),
         }
     }
 
@@ -435,7 +450,10 @@ impl App {
             if retry.is_some_and(|text| self.tts.speak(&text).is_ok()) {
                 return;
             }
-            let hint = "Die Stimme konnte nicht sprechen. Online-Stimmen brauchen eine Internetverbindung.";
+            let hint = tr(
+                "Die Stimme konnte nicht sprechen. Online-Stimmen brauchen eine Internetverbindung.",
+                "The voice could not speak. Online voices need an internet connection.",
+            );
             tray::balloon(self.hwnd, "Vorleser", hint);
         }
         self.end_follow();
@@ -470,25 +488,27 @@ impl App {
             let menu = CreatePopupMenu().unwrap_or_default();
             let active = self.state != State::Idle;
             if let Some(version) = update::newer_version() {
-                item(menu, CMD_UPDATE, &format!("Neue Version {version} herunterladen …"), true, false);
+                let label = tr("Neue Version {} herunterladen …", "Download new version {} …").replace("{}", &version);
+                item(menu, CMD_UPDATE, &label, true, false);
                 let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
             }
-            item(menu, CMD_OPEN, "Vorleser öffnen", true, false);
+            item(menu, CMD_OPEN, tr("Vorleser öffnen", "Open Vorleser"), true, false);
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
             if let Some(found) = selection {
-                item(menu, CMD_READ_SELECTION, "Markierten Text vorlesen", found, false);
+                item(menu, CMD_READ_SELECTION, tr("Markierten Text vorlesen", "Read selected text"), found, false);
             }
-            item(menu, CMD_READ_CLIPBOARD, "Zwischenablage vorlesen", true, false);
-            let pause = if self.state == State::Paused { "Fortsetzen" } else { "Pause" };
-            item(menu, CMD_PAUSE, &format!("{pause}\t{}", self.cfg.hotkey_pause), active, false);
-            item(menu, CMD_STOP, "Stopp", active, false);
+            item(menu, CMD_READ_CLIPBOARD, tr("Zwischenablage vorlesen", "Read clipboard"), true, false);
+            let pause = if self.state == State::Paused { tr("Fortsetzen", "Resume") } else { tr("Pause", "Pause") };
+            item(menu, CMD_PAUSE, &format!("{pause}\t{}", i18n::hotkey(&self.cfg.hotkey_pause)), active, false);
+            item(menu, CMD_STOP, tr("Stopp", "Stop"), active, false);
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
 
             let voices = self.build_voice_menu();
-            let _ = AppendMenuW(menu, MF_POPUP, voices.0 as usize, w!("Stimme"));
+            let _ = AppendMenuW(menu, MF_POPUP, voices.0 as usize, &HSTRING::from(tr("Stimme", "Voice")));
 
             let rates = CreatePopupMenu().unwrap_or_default();
-            for (i, (rate, label)) in RATES.iter().enumerate() {
+            for (i, (rate, german, english)) in RATES.iter().enumerate() {
+                let label = tr(german, english);
                 let id = CMD_RATE + i as u32;
                 item(rates, id, label, true, false);
                 if *rate == self.cfg.rate {
@@ -496,13 +516,13 @@ impl App {
                     let _ = CheckMenuRadioItem(rates, CMD_RATE, last, id, MF_BYCOMMAND.0);
                 }
             }
-            let _ = AppendMenuW(menu, MF_POPUP, rates.0 as usize, w!("Geschwindigkeit"));
+            let _ = AppendMenuW(menu, MF_POPUP, rates.0 as usize, &HSTRING::from(tr("Geschwindigkeit", "Speed")));
 
-            item(menu, CMD_AUTOSTART, "Mit Windows starten", true, autostart_enabled());
+            item(menu, CMD_AUTOSTART, tr("Mit Windows starten", "Start with Windows"), true, autostart_enabled());
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
-            item(menu, CMD_SETTINGS, "Einstellungen …", true, false);
-            item(menu, CMD_ABOUT, "Über Vorleser …", true, false);
-            item(menu, CMD_QUIT, "Beenden", true, false);
+            item(menu, CMD_SETTINGS, tr("Einstellungen …", "Settings …"), true, false);
+            item(menu, CMD_ABOUT, tr("Über Vorleser …", "About Vorleser …"), true, false);
+            item(menu, CMD_QUIT, tr("Beenden", "Exit"), true, false);
             menu
         }
     }
@@ -540,9 +560,9 @@ impl App {
 
     fn command(&mut self, cmd: u32, selection: Option<String>) {
         match cmd {
-            CMD_READ_SELECTION => self.speak(selection, "Kein Text markiert."),
+            CMD_READ_SELECTION => self.speak(selection, tr("Kein Text markiert.", "No text selected.")),
             CMD_READ_CLIPBOARD => {
-                self.speak(selection::clipboard_text(), "Die Zwischenablage enthält keinen Text.")
+                self.speak(selection::clipboard_text(), tr("Die Zwischenablage enthält keinen Text.", "The clipboard contains no text."))
             }
             CMD_PAUSE => self.toggle_pause(),
             CMD_STOP => self.stop(),
@@ -636,7 +656,7 @@ fn save_audio() {
     let owner = window::visible();
     let Some(text) = window::text() else {
         unsafe {
-            MessageBoxW(owner, w!("Das Textfeld ist leer."), APP_NAME, MB_ICONINFORMATION);
+            MessageBoxW(owner, &HSTRING::from(tr("Das Textfeld ist leer.", "The text field is empty.")), APP_NAME, MB_ICONINFORMATION);
         }
         return;
     };
@@ -647,7 +667,7 @@ fn save_audio() {
     let mut dialog = OPENFILENAMEW {
         lStructSize: std::mem::size_of::<OPENFILENAMEW>() as u32,
         hwndOwner: owner.unwrap_or_default(),
-        lpstrFilter: w!("WAV-Audio (*.wav)\0*.wav\0"),
+        lpstrFilter: w!("WAV (*.wav)\0*.wav\0"),
         lpstrFile: PWSTR(file.as_mut_ptr()),
         nMaxFile: file.len() as u32,
         lpstrDefExt: w!("wav"),
@@ -682,9 +702,9 @@ fn on_wav_done(saved: bool) {
     window::set_saving(false);
     let path = PENDING_WAV.with(|cell| cell.borrow_mut().take()).unwrap_or_default();
     let (message, icon) = if saved {
-        (format!("Gespeichert:\n{path}"), MB_ICONINFORMATION)
+        (format!("{}\n{path}", tr("Gespeichert:", "Saved:")), MB_ICONINFORMATION)
     } else {
-        ("Die Audiodatei konnte nicht geschrieben werden.".to_string(), MB_ICONERROR)
+        (tr("Die Audiodatei konnte nicht geschrieben werden.", "The audio file could not be written.").to_string(), MB_ICONERROR)
     };
     unsafe {
         MessageBoxW(window::visible(), &HSTRING::from(message), APP_NAME, icon);
@@ -703,16 +723,16 @@ fn on_update_found() {
         app.cfg.save();
     });
     if let (Some(version), Some(hwnd)) = (update::newer_version(), with_app(|app| app.hwnd)) {
-        let text = format!("Version {version} ist verfügbar. Zum Herunterladen hier klicken.");
-        tray::balloon_tagged(hwnd, "Neue Version", &text, BALLOON_UPDATE);
+        let text = tr("Version {} ist verfügbar. Zum Herunterladen hier klicken.", "Version {} is available. Click here to download.")
+            .replace("{}", &version);
+        tray::balloon_tagged(hwnd, tr("Neue Version", "New version"), &text, BALLOON_UPDATE);
     }
 }
 
 /// Version und Hersteller. Läuft als eigenes Meldungsfenster, deshalb außerhalb von `with_app`.
 fn show_about() {
-    let text = HSTRING::from(format!(
-        "Vorleser {}\n\
-         Liest markierten Text mit den Windows-Stimmen vor.\n\
+    let body = tr(
+        "Liest markierten Text mit den Windows-Stimmen vor.\n\
          Freie Software unter der GNU General Public License, Version 3.\n\n\
          beseco – Beubl IT Systems\n\
          Florian Beubl\n\
@@ -721,10 +741,20 @@ fn show_about() {
          E-Mail: info@beseco.com\n\
          Web: https://beseco.com\n\
          Quellcode: https://github.com/Beseco/beseco-vorleser",
-        env!("CARGO_PKG_VERSION")
-    ));
+        "Reads selected text aloud with the Windows voices.\n\
+         Free software under the GNU General Public License, version 3.\n\n\
+         beseco – Beubl IT Systems\n\
+         Florian Beubl\n\
+         Veit-Adam 15, 85354 Freising, Germany\n\n\
+         Phone: +49 8161 185150-0\n\
+         E-mail: info@beseco.com\n\
+         Web: https://beseco.com\n\
+         Source code: https://github.com/Beseco/beseco-vorleser",
+    );
+    let text = HSTRING::from(format!("Vorleser {}\n{body}", env!("CARGO_PKG_VERSION")));
+    let title = HSTRING::from(tr("Über Vorleser", "About Vorleser"));
     unsafe {
-        MessageBoxW(window::visible(), &text, w!("Über Vorleser"), MB_ICONINFORMATION | MB_SETFOREGROUND);
+        MessageBoxW(window::visible(), &text, &title, MB_ICONINFORMATION | MB_SETFOREGROUND);
     }
 }
 
@@ -786,7 +816,7 @@ fn on_hotkey(hwnd: HWND, id: i32) {
                 // Die Markierung wird außerhalb von `with_app` ermittelt, weil das bis zu
                 // einer Sekunde dauern kann und dabei Nachrichten eintreffen können.
                 let text = selection::selected_text();
-                with_app(|app| app.speak(text, "Kein Text markiert."));
+                with_app(|app| app.speak(text, tr("Kein Text markiert.", "No text selected.")));
             }
         }
         HOTKEY_PAUSE => {
@@ -898,6 +928,10 @@ fn main() {
         };
         TASKBAR_CREATED.store(RegisterWindowMessageW(w!("TaskbarCreated")), Ordering::Relaxed);
 
+        // Die Sprache muss feststehen, bevor das Fenster seine Beschriftungen bekommt.
+        // Im Testlauf lässt sich die Sprache über VORLESER_LANG vorgeben (für Screenshots).
+        let language = std::env::var("VORLESER_LANG").ok().filter(|_| test).unwrap_or(Config::load().language);
+        i18n::init(&language);
         window::enable_visual_styles();
         let dialog = window::create(tray::load_icon(), on_window_command).unwrap_or_default();
 
@@ -905,7 +939,11 @@ fn main() {
             Ok(app) => APP.with(|cell| *cell.borrow_mut() = Some(app)),
             Err(e) => {
                 let text = HSTRING::from(format!(
-                    "Die Windows-Sprachausgabe (SAPI) konnte nicht gestartet werden.\n\n{e}"
+                    "{}\n\n{e}",
+                    tr(
+                        "Die Windows-Sprachausgabe (SAPI) konnte nicht gestartet werden.",
+                        "Windows speech output (SAPI) could not be started."
+                    )
                 ));
                 MessageBoxW(None, &text, APP_NAME, MB_ICONERROR);
                 return;

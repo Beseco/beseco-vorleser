@@ -5,6 +5,8 @@ use std::cell::Cell;
 use std::mem::size_of;
 
 use windows::core::{s, w, HSTRING, PCWSTR};
+
+use crate::i18n::tr;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{CreateFontIndirectW, DeleteObject, HBRUSH, HFONT};
 use windows::Win32::System::ApplicationInstallationAndServicing::{
@@ -172,11 +174,11 @@ pub fn create(icon: HICON, on_command: fn(u32, u32)) -> Option<HWND> {
         )
         .ok()?;
 
-        let child = |class: PCWSTR, text: PCWSTR, style: u32, ex_style: WINDOW_EX_STYLE, id: u32| {
+        let child = |class: PCWSTR, text: &str, style: u32, ex_style: WINDOW_EX_STYLE, id: u32| {
             CreateWindowExW(
                 ex_style,
                 class,
-                text,
+                &HSTRING::from(text),
                 WS_CHILD | WS_VISIBLE | WINDOW_STYLE(style),
                 0,
                 0,
@@ -197,19 +199,19 @@ pub fn create(icon: HICON, on_command: fn(u32, u32)) -> Option<HWND> {
         // Die Reihenfolge der Erzeugung ist die Tab-Reihenfolge.
         let c = Controls {
             window,
-            voice_label: child(w!("STATIC"), w!("Stimme:"), 0, none, 0),
-            voice: child(w!("COMBOBOX"), w!(""), list, none, ID_VOICE),
-            sample: child(w!("BUTTON"), w!("Hörprobe"), tab, none, ID_SAMPLE),
-            rate_label: child(w!("STATIC"), w!("Geschwindigkeit:"), 0, none, 0),
-            rate: child(w!("COMBOBOX"), w!(""), list, none, ID_RATE),
-            topmost: child(w!("BUTTON"), w!("Immer im Vordergrund"), tab | BS_AUTOCHECKBOX as u32, none, ID_TOPMOST),
-            edit: child(w!("EDIT"), w!(""), edit_style, WS_EX_CLIENTEDGE, 0),
-            read: child(w!("BUTTON"), w!("Vorlesen"), tab, none, ID_READ),
-            pause: child(w!("BUTTON"), w!("Pause"), tab, none, ID_PAUSE),
-            stop: child(w!("BUTTON"), w!("Stopp"), tab, none, ID_STOP),
-            save: child(w!("BUTTON"), w!("Als WAV speichern …"), tab, none, ID_SAVE_AUDIO),
-            settings: child(w!("BUTTON"), w!("Einstellungen"), tab, none, ID_SETTINGS),
-            about: child(w!("BUTTON"), w!("Info"), tab, none, ID_ABOUT),
+            voice_label: child(w!("STATIC"), tr("Stimme:", "Voice:"), 0, none, 0),
+            voice: child(w!("COMBOBOX"), "", list, none, ID_VOICE),
+            sample: child(w!("BUTTON"), tr("Hörprobe", "Sample"), tab, none, ID_SAMPLE),
+            rate_label: child(w!("STATIC"), tr("Geschwindigkeit:", "Speed:"), 0, none, 0),
+            rate: child(w!("COMBOBOX"), "", list, none, ID_RATE),
+            topmost: child(w!("BUTTON"), tr("Immer im Vordergrund", "Always on top"), tab | BS_AUTOCHECKBOX as u32, none, ID_TOPMOST),
+            edit: child(w!("EDIT"), "", edit_style, WS_EX_CLIENTEDGE, 0),
+            read: child(w!("BUTTON"), tr("Vorlesen", "Read aloud"), tab, none, ID_READ),
+            pause: child(w!("BUTTON"), tr("Pause", "Pause"), tab, none, ID_PAUSE),
+            stop: child(w!("BUTTON"), tr("Stopp", "Stop"), tab, none, ID_STOP),
+            save: child(w!("BUTTON"), tr("Als WAV speichern …", "Save as WAV …"), tab, none, ID_SAVE_AUDIO),
+            settings: child(w!("BUTTON"), tr("Einstellungen", "Settings"), tab, none, ID_SETTINGS),
+            about: child(w!("BUTTON"), tr("Info", "About"), tab, none, ID_ABOUT),
         };
         CONTROLS.with(|cell| cell.set(Some(c)));
         ON_COMMAND.with(|cell| cell.set(Some(on_command)));
@@ -313,8 +315,8 @@ pub fn set_text(text: &str) {
 pub fn set_saving(saving: bool) {
     let Some(c) = controls() else { return };
     unsafe {
-        let label = if saving { w!("Speichere …") } else { w!("Als WAV speichern …") };
-        let _ = SetWindowTextW(c.save, label);
+        let label = if saving { tr("Speichere …", "Saving …") } else { tr("Als WAV speichern …", "Save as WAV …") };
+        let _ = SetWindowTextW(c.save, &HSTRING::from(label));
         let _ = EnableWindow(c.save, !saving);
     }
 }
@@ -368,7 +370,8 @@ pub fn text() -> Option<String> {
 pub fn set_playback(active: bool, paused: bool) {
     let Some(c) = controls() else { return };
     unsafe {
-        let _ = SetWindowTextW(c.pause, if paused { w!("Fortsetzen") } else { w!("Pause") });
+        let label = if paused { tr("Fortsetzen", "Resume") } else { tr("Pause", "Pause") };
+        let _ = SetWindowTextW(c.pause, &HSTRING::from(label));
         let _ = EnableWindow(c.pause, active);
         let _ = EnableWindow(c.stop, active);
     }

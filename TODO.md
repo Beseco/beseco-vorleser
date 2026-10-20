@@ -34,7 +34,7 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 
 ## Oberfläche und Barrierefreiheit
 
-- [ ] Englische Oberfläche (Sprachumschaltung).
+- [x] Englische Oberfläche (folgt Windows, umschaltbar; das Fenster übernimmt die neue Sprache nach einem Neustart).
 - [ ] Dunkelmodus.
 - [x] Lautstärke einstellbar.
 - [ ] Ausgabegerät wählbar.

@@ -41,6 +41,7 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 - **Textbereinigung:** fügt umbrochene PDF-Zeilen zusammen, hebt Silbentrennung auf, kürzt Links
 - **Audio-Export:** Text als WAV-Datei speichern
 - **Autostart:** auf Wunsch mit Windows starten
+- **Deutsch und Englisch:** die Oberfläche folgt der Sprache von Windows und lässt sich in den Einstellungen umstellen
 
 ![Einstellungsfenster](docs/einstellungen.png)
 
@@ -63,7 +64,6 @@ Einstellungen liegen in `%APPDATA%\Vorleser\settings.ini`.
 - In Fenstern, die mit Administratorrechten laufen, kann Vorleser die Markierung nicht auslesen.
 - Kopiergeschützte PDFs und Passwortfelder geben keinen Text heraus.
 - Der beim Auslesen kopierte Text kann im Zwischenablageverlauf (Win+V) erscheinen.
-- Die Oberfläche gibt es bisher nur auf Deutsch.
 
 ## Selbst bauen
 

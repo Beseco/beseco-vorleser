@@ -4,6 +4,7 @@ Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic
 
 ## 0.2.0 – unveröffentlicht
 
+- Neu: englische Oberfläche; die Sprache folgt Windows und lässt sich in den Einstellungen umstellen
 - Neu: Hinweis auf neue Versionen (einmal täglich über GitHub, in den Einstellungen abschaltbar)
 - WAV-Export läuft im Hintergrund; das Fenster bleibt bedienbar
 - Wird Text aus einem anderen Programm ins Fenster übernommen, holt Strg+Z den vorherigen Inhalt zurück
