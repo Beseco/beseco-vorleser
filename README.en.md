@@ -52,7 +52,7 @@ Microsoft does not expose the very natural-sounding Windows 11 Narrator voices t
 
 ## Privacy
 
-Vorleser collects no data and does not connect to the internet on its own. Text is handed to the Windows speech engine on your own machine. The exception is online voices added through third-party tools such as the adapter above: those send the text to their provider for synthesis.
+Vorleser collects no data. Its only internet connection is the update check: at most one request per day to GitHub, without any text, settings or machine identifier. It can be turned off in the settings. Text is handed to the Windows speech engine on your own machine. The exception is online voices added through third-party tools such as the adapter above: those send the text to their provider for synthesis.
 
 To read the selection, Vorleser uses the Windows accessibility interface. Where that is not available, it briefly copies the text through the clipboard and restores the previous clipboard content.
 

@@ -101,26 +101,12 @@ impl Tts {
         }
     }
 
-    /// Schreibt `text` mit der eingestellten Stimme und Geschwindigkeit als WAV-Datei.
-    /// Läuft synchron und über eine eigene Stimme, damit die laufende Ausgabe ungestört bleibt.
-    pub fn save_wav(&self, text: &str, path: &str) -> Result<()> {
+    pub fn current_rate(&self) -> i32 {
+        let mut rate = 0;
         unsafe {
-            let file: ISpeechFileStream = CoCreateInstance(&SpFileStream, None, CLSCTX_ALL)?;
-            file.Open(&BSTR::from(path), SSFMCreateForWrite, VARIANT_FALSE)?;
-            let writer: ISpVoice = CoCreateInstance(&SpVoice, None, CLSCTX_ALL)?;
-            writer.SetOutput(&file, true)?;
-            if let Ok(token) = self.voice.GetVoice() {
-                writer.SetVoice(&token)?;
-            }
-            let mut rate = 0;
-            if self.voice.GetRate(&mut rate).is_ok() {
-                let _ = writer.SetRate(rate);
-            }
-            let spoken = writer.Speak(&HSTRING::from(text), SPF_IS_NOT_XML.0 as u32, None);
-            drop(writer);
-            file.Close()?;
-            spoken
+            let _ = self.voice.GetRate(&mut rate);
         }
+        rate
     }
 
     /// Bricht laufende Ausgabe ab und liest `text` vor.
@@ -196,6 +182,33 @@ impl Tts {
             }
             self.paused = false;
         }
+    }
+}
+
+/// Schreibt `text` mit der Stimme `voice_id` (sonst der Standardstimme) als WAV-Datei.
+/// Läuft synchron mit einer eigenen Stimme und ist für einen Hintergrund-Thread gedacht, auf dem
+/// COM bereits initialisiert ist; die laufende Ausgabe bleibt davon unberührt.
+pub fn save_wav(voice_id: Option<&str>, rate: i32, text: &str, path: &str) -> Result<()> {
+    unsafe {
+        let file: ISpeechFileStream = CoCreateInstance(&SpFileStream, None, CLSCTX_ALL)?;
+        file.Open(&BSTR::from(path), SSFMCreateForWrite, VARIANT_FALSE)?;
+        let writer: ISpVoice = CoCreateInstance(&SpVoice, None, CLSCTX_ALL)?;
+        writer.SetOutput(&file, true)?;
+        if let Some(id) = voice_id {
+            // COM-Objekte gehören zu ihrem Thread, deshalb die Stimme hier neu suchen.
+            let mut voices = Vec::new();
+            for category in VOICE_CATEGORIES {
+                let _ = enumerate(category, &mut voices);
+            }
+            if let Some(voice) = voices.iter().find(|v| v.id == id) {
+                writer.SetVoice(&voice.token)?;
+            }
+        }
+        let _ = writer.SetRate(rate.clamp(-10, 10));
+        let spoken = writer.Speak(&HSTRING::from(text), SPF_IS_NOT_XML.0 as u32, None);
+        drop(writer);
+        file.Close()?;
+        spoken
     }
 }
 
@@ -299,11 +312,19 @@ mod tests {
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         }
         let tts = Tts::new().expect("SAPI nicht verfügbar");
-        if let Some(local) = tts.voices().iter().find(|v| !v.name.contains("Online")) {
-            assert!(tts.set_voice(&local.id));
-        }
+        let local = tts.voices().iter().find(|v| !v.name.contains("Online")).map(|v| v.id.as_str());
         let path = std::env::temp_dir().join("vorleser_test.wav");
-        tts.save_wav("Dies ist ein Test.", path.to_str().unwrap()).unwrap();
+        // Wie im Programm auf einem eigenen Thread.
+        let id = local.map(str::to_string);
+        let target = path.clone();
+        std::thread::spawn(move || {
+            unsafe {
+                let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            }
+            save_wav(id.as_deref(), 2, "Dies ist ein Test.", target.to_str().unwrap()).unwrap();
+        })
+        .join()
+        .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         let _ = std::fs::remove_file(&path);
         assert_eq!(&bytes[..4], b"RIFF");

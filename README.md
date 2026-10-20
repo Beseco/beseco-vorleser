@@ -52,7 +52,7 @@ Die sehr natürlich klingenden Stimmen der Windows-11-Sprachausgabe stellt Micro
 
 ## Datenschutz
 
-Vorleser sammelt keine Daten und nimmt von sich aus keine Verbindung ins Internet auf. Der Text wird auf dem eigenen Rechner an die Windows-Sprachausgabe übergeben. Eine Ausnahme sind Online-Stimmen, die über Zusatzprogramme wie den oben genannten Adapter eingebunden werden: Diese schicken den Text zur Sprachsynthese an ihren Anbieter.
+Vorleser sammelt keine Daten. Die einzige Verbindung ins Internet ist die Suche nach neuen Versionen: höchstens einmal am Tag eine Anfrage an GitHub, ohne Text, Einstellungen oder Kennung des Rechners. Sie lässt sich in den Einstellungen abschalten. Der Text wird auf dem eigenen Rechner an die Windows-Sprachausgabe übergeben. Eine Ausnahme sind Online-Stimmen, die über Zusatzprogramme wie den oben genannten Adapter eingebunden werden: Diese schicken den Text zur Sprachsynthese an ihren Anbieter.
 
 Zum Auslesen der Markierung nutzt Vorleser die Bedienungshilfen-Schnittstelle von Windows. Wo das nicht geht, kopiert es den Text kurz über die Zwischenablage und stellt deren vorherigen Inhalt wieder her.
 

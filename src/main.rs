@@ -10,6 +10,7 @@ mod settings;
 mod textprep;
 mod tray;
 mod tts;
+mod update;
 mod window;
 
 use std::cell::RefCell;
@@ -30,6 +31,7 @@ use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::HiDpi::{
     SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
+use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::Controls::Dialogs::{
     GetSaveFileNameW, OFN_OVERWRITEPROMPT, OFN_PATHMUSTEXIST, OPENFILENAMEW,
 };
@@ -38,8 +40,8 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AllowSetForegroundWindow, AppendMenuW, CheckMenuRadioItem, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu,
-    DestroyWindow, DispatchMessageW, FindWindowW, GetMessageW, IsDialogMessageW, LoadCursorW,
-    MessageBoxW, SetCursor, IDC_WAIT,
+    DestroyWindow, DispatchMessageW, FindWindowW, GetMessageW, IsDialogMessageW,
+    MessageBoxW, SW_SHOWNORMAL,
     PostMessageW, PostQuitMessage, RegisterClassW,
     RegisterWindowMessageW, TranslateMessage, HMENU, MB_ICONERROR, MB_ICONINFORMATION,
     MB_SETFOREGROUND, MENU_ITEM_FLAGS, MF_BYCOMMAND,
@@ -58,6 +60,14 @@ const WM_TTS: u32 = WM_APP + 2;
 const WM_MOUSE_MENU: u32 = WM_APP + 3;
 /// Von einer zweiten Instanz gesendet: Fenster zeigen.
 const WM_SHOW_WINDOW: u32 = WM_APP + 4;
+/// Die Suche nach Updates ist fertig; `wparam` = 1, wenn es eine neuere Version gibt.
+const WM_UPDATE: u32 = WM_APP + 5;
+/// Die Audiodatei ist geschrieben; `wparam` = 1 bei Erfolg.
+const WM_WAV_DONE: u32 = WM_APP + 6;
+/// Kennung der Update-Meldung im Infobereich.
+const BALLOON_UPDATE: u32 = 1;
+/// Klick auf eine Meldung im Infobereich (NIN_BALLOONUSERCLICK).
+const BALLOON_CLICKED: u32 = 0x0405;
 
 const MAIN_CLASS: PCWSTR = w!("VorleserFenster");
 /// Mit diesem Argument (Autostart) bleibt das Fenster beim Start zu.
@@ -78,6 +88,7 @@ const CMD_QUIT: u32 = 6;
 const CMD_OPEN: u32 = 7;
 const CMD_ABOUT: u32 = 8;
 const CMD_SETTINGS: u32 = 9;
+const CMD_UPDATE: u32 = 10;
 const CMD_RATE: u32 = 100;
 const CMD_VOICE: u32 = 1000;
 
@@ -136,6 +147,11 @@ static TASKBAR_CREATED: AtomicU32 = AtomicU32::new(0);
 /// Instanzsperre, keine globalen Tastenkombinationen, kein Maus-Auslöser, kein Ton.
 static TEST_MODE: AtomicBool = AtomicBool::new(false);
 
+thread_local! {
+    /// Ziel der gerade geschriebenen Audiodatei.
+    static PENDING_WAV: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
 /// Solange ein Menü offen ist, wird kein zweites geöffnet.
 static MENU_OPEN: AtomicBool = AtomicBool::new(false);
 
@@ -162,6 +178,9 @@ impl App {
         app.add_icon();
         app.register_hotkeys();
         app.fill_window();
+        if !TEST_MODE.load(Ordering::Relaxed) {
+            update::start(hwnd, WM_UPDATE, app.cfg.update_check, app.cfg.last_update_check);
+        }
         Ok(app)
     }
 
@@ -218,6 +237,7 @@ impl App {
             mouse_menu: self.cfg.mouse_menu.clone(),
             volume: self.cfg.volume,
             clean_text: self.cfg.clean_text,
+            update_check: self.cfg.update_check,
         }
     }
 
@@ -228,6 +248,8 @@ impl App {
         self.cfg.mouse_menu = values.mouse_menu;
         self.cfg.volume = values.volume;
         self.cfg.clean_text = values.clean_text;
+        self.cfg.update_check = values.update_check;
+        update::set_enabled(values.update_check);
         self.cfg.save();
         for id in [HOTKEY_READ, HOTKEY_PAUSE, HOTKEY_MENU] {
             unsafe {
@@ -447,6 +469,10 @@ impl App {
         unsafe {
             let menu = CreatePopupMenu().unwrap_or_default();
             let active = self.state != State::Idle;
+            if let Some(version) = update::newer_version() {
+                item(menu, CMD_UPDATE, &format!("Neue Version {version} herunterladen …"), true, false);
+                let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
+            }
             item(menu, CMD_OPEN, "Vorleser öffnen", true, false);
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
             if let Some(found) = selection {
@@ -522,6 +548,7 @@ impl App {
             CMD_STOP => self.stop(),
             CMD_AUTOSTART => set_autostart(!autostart_enabled()),
             CMD_OPEN => window::show(),
+            CMD_UPDATE => open_url(update::RELEASES_URL),
             _ if cmd >= CMD_VOICE => self.select_voice((cmd - CMD_VOICE) as usize),
             _ if cmd >= CMD_RATE => self.select_rate((cmd - CMD_RATE) as usize),
             _ => {}
@@ -632,19 +659,52 @@ fn save_audio() {
     }
     let len = file.iter().position(|&unit| unit == 0).unwrap_or(file.len());
     let path = String::from_utf16_lossy(&file[..len]);
-    // Die Sprachsynthese läuft synchron; die Sanduhr zeigt, dass gearbeitet wird.
-    let saved = unsafe {
-        let previous = SetCursor(LoadCursorW(None, IDC_WAIT).ok());
-        let saved = with_app(|app| app.tts.save_wav(&app.prepare(text), &path));
-        SetCursor(Some(previous));
-        saved
+    let Some((hwnd, voice, rate, text)) = with_app(|app| {
+        (app.hwnd.0 as isize, app.tts.current_voice_id(), app.tts.current_rate(), app.prepare(text))
+    }) else {
+        return;
     };
-    let (message, icon) = match saved {
-        Some(Ok(())) => (format!("Gespeichert:\n{path}"), MB_ICONINFORMATION),
-        _ => ("Die Audiodatei konnte nicht geschrieben werden.".to_string(), MB_ICONERROR),
+    // Die Synthese läuft auf einem eigenen Thread, damit das Fenster bedienbar bleibt.
+    PENDING_WAV.with(|cell| *cell.borrow_mut() = Some(path.clone()));
+    window::set_saving(true);
+    std::thread::spawn(move || {
+        let saved = unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            tts::save_wav(voice.as_deref(), rate, &text, &path).is_ok()
+        };
+        unsafe {
+            let _ = PostMessageW(Some(HWND(hwnd as *mut _)), WM_WAV_DONE, WPARAM(saved as usize), LPARAM(0));
+        }
+    });
+}
+
+fn on_wav_done(saved: bool) {
+    window::set_saving(false);
+    let path = PENDING_WAV.with(|cell| cell.borrow_mut().take()).unwrap_or_default();
+    let (message, icon) = if saved {
+        (format!("Gespeichert:\n{path}"), MB_ICONINFORMATION)
+    } else {
+        ("Die Audiodatei konnte nicht geschrieben werden.".to_string(), MB_ICONERROR)
     };
     unsafe {
-        MessageBoxW(owner, &HSTRING::from(message), APP_NAME, icon);
+        MessageBoxW(window::visible(), &HSTRING::from(message), APP_NAME, icon);
+    }
+}
+
+fn open_url(url: &str) {
+    unsafe {
+        ShellExecuteW(None, w!("open"), &HSTRING::from(url), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
+    }
+}
+
+fn on_update_found() {
+    with_app(|app| {
+        app.cfg.last_update_check = update::last_check();
+        app.cfg.save();
+    });
+    if let (Some(version), Some(hwnd)) = (update::newer_version(), with_app(|app| app.hwnd)) {
+        let text = format!("Version {version} ist verfügbar. Zum Herunterladen hier klicken.");
+        tray::balloon_tagged(hwnd, "Neue Version", &text, BALLOON_UPDATE);
     }
 }
 
@@ -703,7 +763,11 @@ fn on_window_command(id: u32, code: u32) {
         }
         (window::ID_ABOUT, window::CLICKED) => show_about(),
         (window::ID_SETTINGS, window::CLICKED) => open_settings(),
-        (window::ID_SAVE_AUDIO, window::CLICKED) => save_audio(),
+        (window::ID_SAVE_AUDIO, window::CLICKED) => {
+            if PENDING_WAV.with(|cell| cell.borrow().is_none()) {
+                save_audio();
+            }
+        }
         (window::ID_RATE, window::SELECTED) => {
             if let Some(index) = window::selected_rate() {
                 with_app(|app| app.select_rate(index));
@@ -738,6 +802,11 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         WM_HOTKEY => on_hotkey(hwnd, wparam.0 as i32),
         WM_TRAY => match lparam.0 as u32 {
             WM_RBUTTONUP => show_menu(hwnd, None),
+            BALLOON_CLICKED => {
+                if tray::take_balloon_tag() == BALLOON_UPDATE {
+                    open_url(update::RELEASES_URL);
+                }
+            }
             WM_LBUTTONUP => {
                 if with_app(|app| app.state != State::Idle) == Some(true) {
                     with_app(App::toggle_pause);
@@ -749,6 +818,17 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         },
         WM_MOUSE_MENU => show_selection_menu(hwnd),
         WM_SHOW_WINDOW => window::show(),
+        WM_UPDATE => {
+            if wparam.0 == 1 {
+                on_update_found();
+            } else {
+                with_app(|app| {
+                    app.cfg.last_update_check = update::last_check();
+                    app.cfg.save();
+                });
+            }
+        }
+        WM_WAV_DONE => on_wav_done(wparam.0 == 1),
         WM_TTS => {
             with_app(|app| {
                 let progress = app.tts.poll();

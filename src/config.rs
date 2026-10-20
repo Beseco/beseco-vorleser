@@ -24,6 +24,10 @@ pub struct Config {
     pub clean_text: bool,
     /// Das Fenster bleibt über anderen Fenstern.
     pub always_on_top: bool,
+    /// Einmal am Tag auf GitHub nach einer neueren Version suchen.
+    pub update_check: bool,
+    /// Zeitpunkt der letzten erfolgreichen Suche, Sekunden seit 1970.
+    pub last_update_check: u64,
 }
 
 impl Default for Config {
@@ -38,6 +42,8 @@ impl Default for Config {
             volume: 100,
             clean_text: true,
             always_on_top: false,
+            update_check: true,
+            last_update_check: 0,
         }
     }
 }
@@ -62,6 +68,8 @@ impl Config {
                 "volume" => cfg.volume = value.parse().unwrap_or(100).min(100),
                 "clean_text" => cfg.clean_text = value != "0",
                 "always_on_top" => cfg.always_on_top = value == "1",
+                "update_check" => cfg.update_check = value != "0",
+                "last_update_check" => cfg.last_update_check = value.parse().unwrap_or(0),
                 _ => {}
             }
         }
@@ -73,7 +81,8 @@ impl Config {
             "# Vorleser-Einstellungen. Tastenkombinationen z. B. Strg+Alt+V, Ctrl+Shift+F9, Win+Alt+R; leer = aus.\r\n\
              # mouse_menu: Zusatztaste(n) + Rechtsklick, z. B. Strg+Rechtsklick oder Strg+Shift+Rechtsklick.\r\n\
              voice={}\r\nrate={}\r\nhotkey_read={}\r\nhotkey_pause={}\r\nhotkey_menu={}\r\nmouse_menu={}\r\n\
-             volume={}\r\nclean_text={}\r\nalways_on_top={}\r\n",
+             volume={}\r\nclean_text={}\r\nalways_on_top={}\r\n\
+             update_check={}\r\nlast_update_check={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
@@ -82,7 +91,9 @@ impl Config {
             self.mouse_menu,
             self.volume,
             self.clean_text as u8,
-            self.always_on_top as u8
+            self.always_on_top as u8,
+            self.update_check as u8,
+            self.last_update_check
         )
     }
 
@@ -236,6 +247,8 @@ mod tests {
             volume: 70,
             clean_text: false,
             always_on_top: true,
+            update_check: false,
+            last_update_check: 1_760_000_000,
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }

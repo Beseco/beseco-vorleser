@@ -2,6 +2,14 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.2.0 – unveröffentlicht
+
+- Neu: Hinweis auf neue Versionen (einmal täglich über GitHub, in den Einstellungen abschaltbar)
+- WAV-Export läuft im Hintergrund; das Fenster bleibt bedienbar
+- Wird Text aus einem anderen Programm ins Fenster übernommen, holt Strg+Z den vorherigen Inhalt zurück
+- Vorlagen für Fehlermeldungen und Wünsche auf GitHub
+- Versionshinweise auf GitHub entstehen automatisch aus diesem Änderungsprotokoll
+
 ## 0.1.0 – 2026-10-13
 
 Erste öffentliche Version.

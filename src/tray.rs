@@ -65,7 +65,22 @@ pub fn set_tip(hwnd: HWND, tip: &str) {
     notify(NIM_MODIFY, &nid);
 }
 
+/// Kennung der zuletzt gezeigten Meldung, damit ein Klick darauf zugeordnet werden kann.
+static BALLOON_TAG: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// Wie [`balloon`], merkt sich aber `tag` für [`take_balloon_tag`].
+pub fn balloon_tagged(hwnd: HWND, title: &str, text: &str, tag: u32) {
+    balloon(hwnd, title, text);
+    BALLOON_TAG.store(tag, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Kennung der zuletzt gezeigten Meldung (0 = ohne) und setzt sie zurück.
+pub fn take_balloon_tag() -> u32 {
+    BALLOON_TAG.swap(0, std::sync::atomic::Ordering::Relaxed)
+}
+
 pub fn balloon(hwnd: HWND, title: &str, text: &str) {
+    BALLOON_TAG.store(0, std::sync::atomic::Ordering::Relaxed);
     let mut nid = data(hwnd, NIF_INFO);
     copy_to(&mut nid.szInfoTitle, title);
     copy_to(&mut nid.szInfo, text);

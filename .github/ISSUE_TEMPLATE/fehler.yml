@@ -1,0 +1,38 @@
+name: Fehler melden / Bug report
+description: Etwas funktioniert nicht wie erwartet. / Something does not work as expected.
+labels: ["Fehler"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Was ist passiert? / What happened?
+      description: Was hast du getan, was hast du erwartet, was ist stattdessen passiert?
+    validations:
+      required: true
+  - type: input
+    id: program
+    attributes:
+      label: In welchem Programm war der Text? / Which program contained the text?
+      placeholder: z. B. Edge, Word, Adobe Reader
+  - type: input
+    id: voice
+    attributes:
+      label: Stimme / Voice
+      placeholder: z. B. Microsoft Katja
+  - type: input
+    id: version
+    attributes:
+      label: Vorleser-Version
+      description: Steht unter „Info“ im Fenster.
+      placeholder: z. B. 0.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows
+      options:
+        - Windows 11
+        - Windows 10
+    validations:
+      required: true

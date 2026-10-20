@@ -59,6 +59,7 @@ pub struct Values {
     pub mouse_menu: String,
     pub volume: u32,
     pub clean_text: bool,
+    pub update_check: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -68,6 +69,7 @@ struct Controls {
     mouse: HWND,
     volume: HWND,
     clean: HWND,
+    update: HWND,
     font: HFONT,
 }
 
@@ -106,7 +108,7 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
         let dpi = GetDpiForSystem();
         let px = |value: i32| value * dpi as i32 / 96;
         let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
-        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(316) };
+        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(352) };
         let _ = AdjustWindowRectExForDpi(&mut frame, style, false, WS_EX_CONTROLPARENT, dpi);
         let Ok(window) = CreateWindowExW(
             WS_EX_CONTROLPARENT,
@@ -171,10 +173,16 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
             tab | BS_AUTOCHECKBOX as u32,
             0, label_x, 46 + 5 * row, 438, 24,
         );
-        child(w!("BUTTON"), "Speichern", tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, 270, 100, 30);
-        child(w!("BUTTON"), "Abbrechen", tab, ID_CANCEL, 356, 270, 98, 30);
+        let update = child(
+            w!("BUTTON"),
+            "Einmal täglich auf GitHub nach neuen Versionen suchen",
+            tab | BS_AUTOCHECKBOX as u32,
+            0, label_x, 46 + 6 * row, 438, 24,
+        );
+        child(w!("BUTTON"), "Speichern", tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, 306, 100, 30);
+        child(w!("BUTTON"), "Abbrechen", tab, ID_CANCEL, 356, 306, 98, 30);
 
-        let c = Controls { window, hotkeys, mouse, volume, clean, font };
+        let c = Controls { window, hotkeys, mouse, volume, clean, update, font };
         fill(&c, &values);
         CONTROLS.with(|cell| cell.set(Some(c)));
         ORIGINAL.with(|cell| *cell.borrow_mut() = Some(values));
@@ -223,6 +231,7 @@ unsafe fn fill(c: &Controls, values: &Values) {
     SendMessageW(c.volume, TBM_SETTICFREQ, Some(WPARAM(10)), None);
     SendMessageW(c.volume, TBM_SETPOS, Some(WPARAM(1)), Some(LPARAM(values.volume as isize)));
     SendMessageW(c.clean, BM_SETCHECK, Some(WPARAM(values.clean_text as usize)), None);
+    SendMessageW(c.update, BM_SETCHECK, Some(WPARAM(values.update_check as usize)), None);
 }
 
 /// Liest ein Tastenkombinations-Feld; `Err`, wenn die gedrückte Taste nicht unterstützt wird.
@@ -270,6 +279,7 @@ unsafe fn save(c: &Controls) {
         mouse_menu,
         volume: (SendMessageW(c.volume, TBM_GETPOS, None, None).0 as u32).min(100),
         clean_text: SendMessageW(c.clean, BM_GETCHECK, None, None).0 == 1,
+        update_check: SendMessageW(c.update, BM_GETCHECK, None, None).0 == 1,
     };
     let on_save = ON_SAVE.with(|cell| cell.get());
     let _ = DestroyWindow(c.window);

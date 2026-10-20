@@ -14,7 +14,7 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
   - [ ] Lizenzen der einzelnen Stimmmodelle prüfen (nicht einheitlich).
   - [ ] Laufzeitbibliothek und Stimmdatei getrennt vom Programm ablegen (zusammen etwa 50–100 MB).
 - [ ] **Cloud-Stimmen mit eigenem Schlüssel** (Azure, OpenAI, ElevenLabs) als Option. Deutlicher Hinweis, dass der Text dabei den Rechner verlässt.
-- [ ] Hinweis in der Anleitung: Die „Online (Natural)“-Stimmen stammen von einem separaten Adapter und werden nicht mitgeliefert.
+- [x] Hinweis in der Anleitung: Die „Online (Natural)“-Stimmen stammen von einem separaten Adapter und werden nicht mitgeliefert.
 
 ## Funktionen
 
@@ -27,7 +27,7 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [ ] **Automatische Spracherkennung.** Englischer Text mit englischer Stimme, deutscher mit deutscher.
 - [x] **Als Audiodatei speichern** (WAV).
 - [ ] MP3-Export (braucht einen Encoder).
-- [ ] WAV-Export im Hintergrund mit Fortschritt; bisher blockiert er das Fenster, bis die Datei fertig ist.
+- [x] WAV-Export im Hintergrund (ohne Fortschrittsanzeige).
 - [ ] **Dateien öffnen** per Drag-and-drop: TXT, DOCX, PDF, EPUB.
 - [ ] **Texterkennung (OCR)** für Bildschirmbereiche, die sich nicht markieren lassen (gescannte PDFs, Bilder).
 - [ ] **Stimmenliste im Fenster nach Sprache gruppieren** (im Menü schon vorhanden) und Online-Stimmen kennzeichnen.
@@ -47,17 +47,19 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [ ] Installer einmal vollständig durchspielen: Installation, Update über eine laufende Version, Deinstallation.
 - [ ] **Code-Signatur.** Ohne sie warnt SmartScreen, und Virenscanner reagieren eher auf Maus-Hook und simulierte Tastendrücke. Zertifikat kostet Geld; Entscheidung offen.
 - [ ] **winget-Paket.**
+- [ ] **Kostenlose Code-Signatur** über SignPath Foundation beantragen (Bedingungen prüfen).
+- [ ] Setup-Datei bei VirusTotal prüfen, Fehlalarme an Microsoft melden.
 - [x] **Git-Repository** auf GitHub (Beseco/beseco-vorleser), Lizenz GPL-3.0.
 - [ ] **Webseite/Downloadseite** auf beseco.com mit Kurzanleitung und Screenshots.
 - [x] **Änderungsprotokoll** (CHANGELOG.md) angelegt; bei jeder Version pflegen (Version steht in `Cargo.toml`, erscheint im Info-Dialog).
-- [ ] **Update-Hinweis** im Programm.
+- [x] **Update-Hinweis** im Programm (einmal täglich über die GitHub-Schnittstelle, abschaltbar).
 - [x] **Datenschutzaussage** in der README: keine Telemetrie, Text verlässt den Rechner nicht (Ausnahme: Online- und Cloud-Stimmen).
 - [x] Automatischer Build (GitHub Actions): Ein Versions-Tag `vX.Y.Z` baut Installer und ZIP und hängt sie an die Veröffentlichung.
 
 ## Offene technische Punkte
 
 - [ ] Fehlerfall der Online-Stimmen (neuer Versuch, Hinweis) unter echten Ausfallbedingungen prüfen; bisher nicht gezielt auslösbar.
-- [ ] Hotkeys, Strg+Rechtsklick-Menü und Markierungserkennung in der Testmatrix durchgehen: Editor, Edge/Chrome, Firefox, Word, Outlook, PDF-Reader, VS Code, Terminal.
+- [ ] Hotkeys, Strg+Rechtsklick-Menü und Markierungserkennung nach `docs/testplan.md` durchgehen: Editor, Edge/Chrome, Firefox, Word, Outlook, PDF-Reader, VS Code, Terminal.
 - [ ] Verhalten in Fenstern mit Administratorrechten: verständlicher Hinweis statt stiller Fehlfunktion.
 
 ## Erledigt

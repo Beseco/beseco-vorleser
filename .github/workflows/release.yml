@@ -1,5 +1,6 @@
-# Baut Installer und portable ZIP. Bei einem Versions-Tag (z. B. v0.2.0) werden beide Dateien
-# an die zugehörige GitHub-Veröffentlichung gehängt; von Hand gestartet entstehen sie nur als Artefakt.
+# Baut Installer und portable ZIP. Bei einem Versions-Tag (z. B. v0.2.0) entsteht daraus die
+# GitHub-Veröffentlichung; die Beschreibung kommt aus dem passenden Abschnitt in CHANGELOG.md.
+# Von Hand gestartet entstehen die Dateien nur als Artefakt.
 name: Release
 
 on:
@@ -14,7 +15,7 @@ jobs:
   build:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # GNU-Variante von Rust, passend zu rust-toolchain.toml.
       - name: Rust
@@ -32,13 +33,28 @@ jobs:
       - name: Installer und ZIP bauen
         run: pwsh -File release.ps1 -SkipTests
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vorleser
           path: dist/*
 
-      - name: An die Veröffentlichung hängen
+      - name: Veröffentlichung anlegen
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $version = $tag.TrimStart('v')
+          $log = Get-Content CHANGELOG.md -Raw
+          $section = [regex]::Match($log, "(?ms)^## $([regex]::Escape($version))\b[^\n]*\n(.*?)(?=^## |\z)").Groups[1].Value.Trim()
+          if (-not $section) { $section = "Vorleser $version" }
+          $notes = "$section`n`nDer Installer ist nicht signiert; Windows SmartScreen fragt deshalb einmal nach (Weitere Informationen, dann Trotzdem ausführen)."
+          Set-Content notes.md $notes -Encoding utf8
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag (Get-ChildItem dist/*).FullName --clobber
+            gh release edit $tag --notes-file notes.md
+          } else {
+            gh release create $tag (Get-ChildItem dist/*).FullName --title "Vorleser $version" --notes-file notes.md
+          }

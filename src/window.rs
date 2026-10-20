@@ -32,6 +32,7 @@ const ACTCTX_FLAG_RESOURCE_NAME_VALID: u32 = 0x08;
 const COLOR_BTNFACE: usize = 15;
 const EM_GETSEL: u32 = 0x00B0;
 const EM_SETSEL: u32 = 0x00B1;
+const EM_REPLACESEL: u32 = 0x00C2;
 const EM_SCROLLCARET: u32 = 0x00B7;
 const BM_GETCHECK: u32 = 0x00F0;
 const BM_SETCHECK: u32 = 0x00F1;
@@ -296,12 +297,25 @@ pub fn source() -> Option<Source> {
     }
 }
 
-/// Ersetzt den Inhalt des Textfelds.
+/// Ersetzt den Inhalt des Textfelds. Anders als `SetWindowTextW` lässt sich das mit Strg+Z
+/// rückgängig machen, sodass ein vorher eingefügter Text nicht verloren ist.
 pub fn set_text(text: &str) {
     if let Some(c) = controls() {
+        let text = HSTRING::from(text);
         unsafe {
-            let _ = SetWindowTextW(c.edit, &HSTRING::from(text));
+            SendMessageW(c.edit, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(-1)));
+            SendMessageW(c.edit, EM_REPLACESEL, Some(WPARAM(1)), Some(LPARAM(text.as_ptr() as isize)));
         }
+    }
+}
+
+/// Zeigt, dass gerade eine Audiodatei geschrieben wird.
+pub fn set_saving(saving: bool) {
+    let Some(c) = controls() else { return };
+    unsafe {
+        let label = if saving { w!("Speichere …") } else { w!("Als WAV speichern …") };
+        let _ = SetWindowTextW(c.save, label);
+        let _ = EnableWindow(c.save, !saving);
     }
 }
 
