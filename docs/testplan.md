@@ -89,6 +89,9 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 - [ ] Während des Diktats in ein anderes Programm wechseln: dort wird nichts getippt, die Pille zeigt „Text wartet“; zurückwechseln: der Text kommt
 - [ ] „Korrigieren“ in der Pille ersetzt den diktierten Text im Programm
 - [ ] Markierten Text in Edge vorlesen, Fenster geschlossen: Mini-Player erscheint, Satz vor/zurück, Pause, Geschwindigkeit, Fenster öffnen, Stopp
+- [ ] Fenster schließen: unten erscheint die Mini-Pille; Maus darauf: Mikrofon und Kopf; Kopf liest markierten Text vor (Player erscheint, Pille verschwindet, danach wieder da); Mikrofon diktiert ins Programm vorn; Rechtsklick: öffnen bzw. ausblenden
+- [ ] Extras → Mini-Pille aus: beim Schließen nur noch das Symbol im Infobereich
+- [ ] Diktier-Pille: ✕ beendet, ✓ beendet und korrigiert (mit KI); Hinweis darüber unter der Maus
 - [ ] Windows auf „Dunkel“ umstellen: Fenster, Menüleiste, Menüs und Player wechseln mit
 - [ ] Nur mit der Tastatur: Tab erreicht alle Knöpfe, der Fokus ist sichtbar; ein Bildschirmleser liest die Knöpfe vor
 

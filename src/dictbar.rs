@@ -1,6 +1,8 @@
-//! Diktier-Pille: eine kleine schwebende Leiste unten am Bildschirm, solange diktiert wird.
-//! Sie zeigt den Pegel des Mikrofons, was gerade passiert und wohin der Text geht, und nimmt
-//! beim Anklicken nicht den Fokus, damit der Text weiter im Zielprogramm landet.
+//! Diktier-Pille: eine kleine schwebende Leiste unten am Bildschirm, solange diktiert wird:
+//! ✕ (beenden), der Pegel des Mikrofons und ✓ (fertig, mit KI auch korrigieren). Was gerade
+//! passiert und wohin der Text geht, steht in einem Hinweis darüber, sobald die Maus auf der
+//! Pille ist (und immer, wenn etwas nicht stimmt). Sie nimmt beim Anklicken nicht den Fokus,
+//! damit der Text weiter im Zielprogramm landet.
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -10,15 +12,15 @@ use std::time::{Duration, Instant};
 
 use windows::core::w;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
-use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, ScreenToClient, MONITORINFO, MONITOR_DEFAULTTOPRIMARY};
+use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTOPRIMARY};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::Input::KeyboardAndMouse::{TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetForegroundWindow, GetWindowRect, KillTimer, LoadCursorW,
-    RegisterClassW, SetTimer, SetWindowPos, ShowWindow, HTCAPTION, HTCLIENT, HWND_TOPMOST, IDC_ARROW, MA_NOACTIVATE,
-    SWP_NOACTIVATE, SWP_NOSIZE, SW_SHOWNOACTIVATE, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_NCHITTEST,
-    WM_TIMER, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    RegisterClassW, SetTimer, SetWindowPos, ShowWindow, HWND_TOPMOST, IDC_ARROW, MA_NOACTIVATE, SWP_NOACTIVATE,
+    SWP_NOSIZE, SW_SHOWNOACTIVATE, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_TIMER, WNDCLASSW,
+    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 use crate::i18n::t;
@@ -53,9 +55,9 @@ pub enum Action {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Hit {
-    Record,
-    Correct,
     Close,
+    Done,
+    Body,
 }
 
 struct Bar {
@@ -68,63 +70,44 @@ struct Bar {
     hover: Option<Hit>,
     on_action: fn(Action),
     hide_at: Option<Instant>,
+    tick: u32,
 }
 
 thread_local! {
     static BAR: RefCell<Option<Bar>> = const { RefCell::new(None) };
 }
 
-/// Rand für den Schatten rund um die Pille.
-const MARGIN: f32 = 16.0;
-const HEIGHT: f32 = 60.0;
+/// Fenstergröße (geräteunabhängige Pixel): oben Platz für den Hinweis, unten die Pille.
+const WIDTH: f32 = 340.0;
+const HEIGHT: f32 = 124.0;
+const PILL_W: f32 = 156.0;
+const PILL_H: f32 = 40.0;
 const BARS: usize = 9;
 
-/// Lage der Bedienelemente (geräteunabhängige Pixel, inklusive Rand).
-struct Layout {
-    width: f32,
-    record: (f32, f32, f32),
-    wave_x: f32,
-    text_x: f32,
-    text_w: f32,
-    correct: Option<(f32, f32, f32, f32)>,
-    close: (f32, f32, f32),
+fn pill() -> (f32, f32) {
+    ((WIDTH - PILL_W) / 2.0, HEIGHT - 12.0 - PILL_H)
 }
 
-fn layout(can_correct: bool) -> Layout {
-    let cy = MARGIN + HEIGHT / 2.0;
-    let record = (MARGIN + 31.0, cy, 21.0);
-    let wave_x = MARGIN + 64.0;
-    let text_x = wave_x + 84.0;
-    let text_w = 196.0;
-    let mut x = text_x + text_w + 8.0;
-    let correct_w = paint::measure(t("dictbar.correct"), 13.0, false) + 44.0;
-    let correct = can_correct.then(|| {
-        let rect = (x, cy - 18.0, correct_w, 36.0);
-        x += correct_w + 8.0;
-        rect
-    });
-    let close = (x + 18.0, cy, 18.0);
-    Layout { width: x + 36.0 + 10.0 + MARGIN, record, wave_x, text_x, text_w, correct, close }
+fn close_button() -> (f32, f32, f32) {
+    let (x, y) = pill();
+    (x + 21.0, y + PILL_H / 2.0, 15.0)
 }
 
-fn hit(layout: &Layout, x: f32, y: f32) -> Option<Hit> {
-    let in_circle = |(cx, cy, r): (f32, f32, f32)| (x - cx).powi(2) + (y - cy).powi(2) <= r * r;
-    if in_circle(layout.record) {
-        return Some(Hit::Record);
-    }
-    if in_circle(layout.close) {
+fn done_button() -> (f32, f32, f32) {
+    let (x, y) = pill();
+    (x + PILL_W - 21.0, y + PILL_H / 2.0, 15.0)
+}
+
+fn hit(x: f32, y: f32) -> Option<Hit> {
+    let inside = |(cx, cy, r): (f32, f32, f32)| (x - cx).powi(2) + (y - cy).powi(2) <= r * r;
+    if inside(close_button()) {
         return Some(Hit::Close);
     }
-    if let Some((rx, ry, rw, rh)) = layout.correct {
-        if x >= rx && x <= rx + rw && y >= ry && y <= ry + rh {
-            return Some(Hit::Correct);
-        }
+    if inside(done_button()) {
+        return Some(Hit::Done);
     }
-    None
-}
-
-fn running(state: State) -> bool {
-    !matches!(state, State::Finished)
+    let (px, py) = pill();
+    (x >= px && x <= px + PILL_W && y >= py && y <= py + PILL_H).then_some(Hit::Body)
 }
 
 /// Zeigt die Pille (oder aktualisiert sie). `target` ist der Name des Programms, in das
@@ -138,10 +121,8 @@ pub fn show(target: &str, can_correct: bool, level: Option<Arc<AtomicU32>>, on_a
             None => return,
         },
     };
-    let fresh = existing.is_none();
     BAR.with(|b| {
-        let mut b = b.borrow_mut();
-        *b = Some(Bar {
+        *b.borrow_mut() = Some(Bar {
             hwnd,
             state: State::Preparing,
             level,
@@ -151,10 +132,11 @@ pub fn show(target: &str, can_correct: bool, level: Option<Arc<AtomicU32>>, on_a
             hover: None,
             on_action,
             hide_at: None,
+            tick: 0,
         });
     });
-    if fresh {
-        place(hwnd, can_correct);
+    if existing.is_none() {
+        place(hwnd);
     }
     unsafe {
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
@@ -170,7 +152,7 @@ pub fn set_state(state: State) {
         bar.state = state;
         if state == State::Finished {
             bar.level = None;
-            bar.hide_at = Some(Instant::now() + Duration::from_secs(8));
+            bar.hide_at = Some(Instant::now() + Duration::from_millis(1200));
         } else {
             bar.hide_at = None;
         }
@@ -188,6 +170,10 @@ pub fn hide() {
             let _ = DestroyWindow(hwnd);
         }
     }
+}
+
+pub fn visible() -> bool {
+    BAR.with(|b| b.borrow().is_some())
 }
 
 fn create() -> Option<HWND> {
@@ -219,21 +205,27 @@ fn create() -> Option<HWND> {
     }
 }
 
-/// Unten mittig auf dem Bildschirm mit dem Programm im Vordergrund.
-fn place(hwnd: HWND, can_correct: bool) {
+/// Unten mittig auf dem Bildschirm mit dem Programm im Vordergrund, knapp über der Taskleiste.
+pub(crate) fn bottom_center(hwnd: HWND, width: f32, height: f32) -> Option<(i32, i32)> {
     unsafe {
         let monitor = MonitorFromWindow(GetForegroundWindow(), MONITOR_DEFAULTTOPRIMARY);
         let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
         if !GetMonitorInfoW(monitor, &mut info).as_bool() {
-            return;
+            return None;
         }
         let scale = GetDpiForWindow(hwnd).max(96) as f32 / 96.0;
         let work = info.rcWork;
-        let width = (layout(can_correct).width * scale) as i32;
-        let height = ((HEIGHT + 2.0 * MARGIN) * scale) as i32;
-        let x = (work.left + work.right - width) / 2;
-        let y = work.bottom - height - (12.0 * scale) as i32;
-        let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
+        let x = (work.left + work.right - (width * scale) as i32) / 2;
+        let y = work.bottom - (height * scale) as i32;
+        Some((x, y))
+    }
+}
+
+fn place(hwnd: HWND) {
+    if let Some((x, y)) = bottom_center(hwnd, WIDTH, HEIGHT) {
+        unsafe {
+            let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
+        }
     }
 }
 
@@ -258,105 +250,94 @@ fn repaint() {
             let _ = GetWindowRect(bar.hwnd, &mut rect);
         }
         let dpi = unsafe { GetDpiForWindow(bar.hwnd) }.max(96);
-        let l = layout(bar.can_correct);
-        paint::draw_layered(bar.hwnd, rect.left, rect.top, l.width, HEIGHT + 2.0 * MARGIN, dpi, |c| draw(c, bar, &l));
+        paint::draw_layered(bar.hwnd, rect.left, rect.top, WIDTH, HEIGHT, dpi, |c| draw(c, bar));
     });
 }
 
-fn draw(c: &Canvas, bar: &Bar, l: &Layout) {
+fn draw(c: &Canvas, bar: &Bar) {
     let p = theme::glass();
-    let body_w = l.width - 2.0 * MARGIN;
-    c.shadow(MARGIN, MARGIN, body_w, HEIGHT, HEIGHT / 2.0, 10.0, 0.35);
-    c.fill_round(MARGIN, MARGIN, body_w, HEIGHT, HEIGHT / 2.0, p.ground);
-    c.stroke_round(MARGIN, MARGIN, body_w, HEIGHT, HEIGHT / 2.0, p.border.alpha(0.6), 1.0);
+    let (px, py) = pill();
+    let cy = py + PILL_H / 2.0;
 
-    // Aufnahmeknopf: läuft das Diktat, beendet er es (unter der Maus als Stopp-Symbol).
-    let (cx, cy, r) = l.record;
-    let hover = bar.hover == Some(Hit::Record);
-    if running(bar.state) {
-        let color = if hover { p.record.mix(paint::rgb(0xFFFFFF), 0.15) } else { p.record };
-        c.circle(cx, cy, r, color);
-        c.icon(if hover { Icon::Stop } else { Icon::Mic }, cx, cy, 20.0, paint::rgb(0xFFFFFF));
-    } else {
-        c.circle(cx, cy, r, if hover { p.raised } else { p.surface });
-        c.icon(Icon::Mic, cx, cy, 20.0, p.text);
+    // Hinweis über der Pille: unter der Maus, und immer, wenn etwas zu tun ist.
+    let important = matches!(bar.state, State::Silent | State::Waiting | State::Preparing);
+    if bar.hover.is_some() || important {
+        let sub = match bar.state {
+            State::Silent => t("dictbar.silent_hint").to_string(),
+            State::Waiting => t("dictbar.waiting_hint").replace("{}", &bar.target),
+            _ if bar.hover == Some(Hit::Close) => t("dictbar.close_hint").to_string(),
+            _ if bar.hover == Some(Hit::Done) && bar.can_correct => t("dictbar.done_correct_hint").to_string(),
+            _ if bar.hover == Some(Hit::Done) => t("dictbar.done_hint").to_string(),
+            _ => t("dictbar.target").replace("{}", &bar.target),
+        };
+        let heading = title(bar.state);
+        let w = (paint::measure(heading, 13.0, true).max(paint::measure(&sub, 11.5, false)) + 32.0).min(WIDTH - 16.0);
+        let (bx, by, bh) = ((WIDTH - w) / 2.0, py - 10.0 - 48.0, 48.0);
+        c.shadow(bx, by, w, bh, 12.0, 6.0, 0.25);
+        c.fill_round(bx, by, w, bh, 12.0, p.ground);
+        c.stroke_round(bx, by, w, bh, 12.0, p.border.alpha(0.6), 1.0);
+        let color = if bar.state == State::Silent { p.warn } else { p.text };
+        c.text(heading, bx + 16.0, by + 6.0, w - 32.0, 20.0, 13.0, true, color, Align::Center);
+        c.text(&sub, bx + 16.0, by + 25.0, w - 32.0, 17.0, 11.5, false, p.muted, Align::Center);
     }
 
-    // Pegel, bei stummem Mikrofon ein Warnzeichen.
-    let wave_y = MARGIN + HEIGHT / 2.0;
-    if bar.state == State::Silent {
-        c.circle(l.wave_x + 37.0, wave_y, 17.0, p.warn.alpha(0.18));
-        c.icon(Icon::Warning, l.wave_x + 37.0, wave_y, 18.0, p.warn);
-    } else {
-        for (i, level) in bar.history.iter().enumerate() {
-            let height = 4.0 + 20.0 * level;
-            let x = l.wave_x + i as f32 * 8.0;
-            let color = if bar.state == State::Listening { p.accent } else { p.muted.alpha(0.6) };
-            c.fill_round(x, wave_y - height / 2.0, 4.0, height, 2.0, color);
+    c.shadow(px, py, PILL_W, PILL_H, PILL_H / 2.0, 8.0, 0.35);
+    c.fill_round(px, py, PILL_W, PILL_H, PILL_H / 2.0, p.ground);
+    c.stroke_round(px, py, PILL_W, PILL_H, PILL_H / 2.0, p.border.alpha(0.7), 1.0);
+
+    // ✕ links: beenden.
+    let (x, y, r) = close_button();
+    c.circle(x, y, r, if bar.hover == Some(Hit::Close) { p.raised } else { p.surface });
+    c.icon(Icon::Close, x, y, 13.0, p.text);
+    // ✓ rechts: fertig (mit KI: und korrigieren).
+    let (x, y, r) = done_button();
+    let done = if bar.hover == Some(Hit::Done) { p.accent.mix(paint::rgb(0xFFFFFF), 0.2) } else { p.accent };
+    c.circle(x, y, r, done);
+    c.icon(Icon::Check, x, y, 15.0, p.on_accent);
+
+    // Mitte: Pegel, bei stummem Mikrofon ein Warnzeichen, beim Schreiben laufende Punkte.
+    let middle = px + PILL_W / 2.0;
+    match bar.state {
+        State::Silent => c.icon(Icon::Warning, middle, cy, 17.0, p.warn),
+        State::Listening => {
+            for (i, level) in bar.history.iter().enumerate() {
+                let height = 3.0 + 18.0 * level;
+                let x = middle - (BARS as f32 * 7.0) / 2.0 + i as f32 * 7.0;
+                c.fill_round(x, cy - height / 2.0, 3.0, height, 1.5, p.text);
+            }
         }
-    }
-
-    c.text(title(bar.state), l.text_x, MARGIN + 11.0, l.text_w, 20.0, 14.0, true, p.text, Align::Left);
-    let sub = if bar.state == State::Silent {
-        t("dictbar.silent_hint").to_string()
-    } else if bar.state == State::Waiting {
-        t("dictbar.waiting_hint").replace("{}", &bar.target)
-    } else {
-        t("dictbar.target").replace("{}", &bar.target)
-    };
-    c.text(&sub, l.text_x, MARGIN + 31.0, l.text_w, 17.0, 11.5, false, p.muted, Align::Left);
-
-    if let Some((x, y, w, h)) = l.correct {
-        let enabled = matches!(bar.state, State::Listening | State::Silent | State::Writing | State::Finished);
-        if bar.hover == Some(Hit::Correct) && enabled {
-            c.fill_round(x, y, w, h, h / 2.0, p.raised);
+        _ => {
+            for i in 0..BARS {
+                let x = middle - (BARS as f32 * 7.0) / 2.0 + i as f32 * 7.0 + 1.5;
+                let lit = matches!(bar.state, State::Writing | State::Correcting | State::Preparing) && (bar.tick as usize / 3) % BARS == i;
+                c.circle(x, cy, if lit { 2.4 } else { 1.6 }, if lit { p.accent } else { p.muted });
+            }
         }
-        c.stroke_round(x, y, w, h, h / 2.0, p.border, 1.0);
-        let color = if enabled { p.text } else { p.muted.alpha(0.6) };
-        c.icon(Icon::Check, x + 20.0, y + h / 2.0, 15.0, color);
-        c.text(t("dictbar.correct"), x + 32.0, y, w - 36.0, h, 13.0, false, color, Align::Left);
-    }
-
-    let (cx, cy, r) = l.close;
-    if bar.hover == Some(Hit::Close) {
-        c.circle(cx, cy, r, p.raised);
-    }
-    c.icon(Icon::Close, cx, cy, 14.0, p.muted.mix(paint::rgb(0xFFFFFF), 0.4));
-}
-
-/// Mauspunkt in geräteunabhängigen Pixeln relativ zur Pille.
-fn local_point(hwnd: HWND, lparam: LPARAM, screen: bool) -> (f32, f32) {
-    let mut pt = POINT { x: (lparam.0 & 0xffff) as i16 as i32, y: ((lparam.0 >> 16) & 0xffff) as i16 as i32 };
-    unsafe {
-        if screen {
-            let _ = ScreenToClient(hwnd, &mut pt);
-        }
-        let scale = GetDpiForWindow(hwnd).max(96) as f32 / 96.0;
-        (pt.x as f32 / scale, pt.y as f32 / scale)
     }
 }
 
-fn hit_at(hwnd: HWND, lparam: LPARAM, screen: bool) -> Option<Hit> {
-    let (x, y) = local_point(hwnd, lparam, screen);
-    let can_correct = BAR.with(|b| b.borrow().as_ref().is_some_and(|bar| bar.can_correct));
-    hit(&layout(can_correct), x, y)
+fn local_point(hwnd: HWND, lparam: LPARAM) -> (f32, f32) {
+    let pt = POINT { x: (lparam.0 & 0xffff) as i16 as i32, y: ((lparam.0 >> 16) & 0xffff) as i16 as i32 };
+    let scale = unsafe { GetDpiForWindow(hwnd) }.max(96) as f32 / 96.0;
+    (pt.x as f32 / scale, pt.y as f32 / scale)
 }
 
 fn on_timer() {
-    let mut close = false;
+    let mut close = None;
     let mut poll = None;
     BAR.with(|b| {
         let mut b = b.borrow_mut();
         let Some(bar) = b.as_mut() else { return };
+        bar.tick = bar.tick.wrapping_add(1);
         if let Some(level) = &bar.level {
             // Wurzel, damit auch leise Sprache sichtbar ausschlägt.
             let value = (level.load(Ordering::Relaxed) as f32 / 2500.0).sqrt().min(1.0);
             bar.history.pop_front();
             bar.history.push_back(value);
-        } else if bar.history.iter().any(|v| *v > 0.0) {
-            bar.history.iter_mut().for_each(|v| *v *= 0.6);
         }
-        close = bar.hide_at.is_some_and(|at| Instant::now() >= at) && bar.hover.is_none();
+        if bar.hide_at.is_some_and(|at| Instant::now() >= at) && bar.hover.is_none() {
+            close = Some(bar.on_action);
+        }
         if bar.state == State::Waiting {
             poll = Some(bar.on_action);
         }
@@ -364,8 +345,8 @@ fn on_timer() {
     if let Some(on_action) = poll {
         on_action(Action::Poll);
     }
-    if close {
-        hide();
+    if let Some(on_action) = close {
+        on_action(Action::Close);
     } else {
         repaint();
     }
@@ -374,14 +355,10 @@ fn on_timer() {
 extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
-        // Außerhalb der Knöpfe lässt sich die Pille verschieben.
-        WM_NCHITTEST => LRESULT(if hit_at(hwnd, lparam, true).is_some() { HTCLIENT } else { HTCAPTION } as isize),
         WM_MOUSEMOVE => {
-            let hover = hit_at(hwnd, lparam, false);
-            let changed = BAR.with(|b| {
-                let mut b = b.borrow_mut();
-                b.as_mut().is_some_and(|bar| std::mem::replace(&mut bar.hover, hover) != hover)
-            });
+            let (x, y) = local_point(hwnd, lparam);
+            let hover = hit(x, y);
+            let changed = BAR.with(|b| b.borrow_mut().as_mut().is_some_and(|bar| std::mem::replace(&mut bar.hover, hover) != hover));
             unsafe {
                 let mut track = TRACKMOUSEEVENT { cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32, dwFlags: TME_LEAVE, hwndTrack: hwnd, dwHoverTime: 0 };
                 let _ = TrackMouseEvent(&mut track);
@@ -401,14 +378,19 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             LRESULT(0)
         }
         WM_LBUTTONUP => {
-            let action = hit_at(hwnd, lparam, false).map(|hit| match hit {
-                Hit::Record => Action::Toggle,
-                Hit::Correct => Action::Correct,
-                Hit::Close => Action::Close,
-            });
-            let on_action = BAR.with(|b| b.borrow().as_ref().map(|bar| bar.on_action));
-            if let (Some(action), Some(on_action)) = (action, on_action) {
-                on_action(action);
+            let (x, y) = local_point(hwnd, lparam);
+            let info = BAR.with(|b| b.borrow().as_ref().map(|bar| (bar.on_action, bar.can_correct, bar.state)));
+            if let Some((on_action, can_correct, state)) = info {
+                let action = match hit(x, y) {
+                    Some(Hit::Close) => Some(Action::Close),
+                    // Fertig: mit KI wird das Diktat gleich korrigiert, sonst nur beendet.
+                    Some(Hit::Done) if can_correct && state != State::Correcting => Some(Action::Correct),
+                    Some(Hit::Done) if state != State::Finished => Some(Action::Toggle),
+                    _ => None,
+                };
+                if let Some(action) = action {
+                    on_action(action);
+                }
             }
             LRESULT(0)
         }

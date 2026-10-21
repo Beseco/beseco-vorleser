@@ -90,6 +90,8 @@ pub enum Icon {
     Chevron,
     Speaker,
     Gear,
+    /// Kopf im Profil mit offenem Mund und Schallwellen: „vorlesen“.
+    Speak,
 }
 
 struct Factories {
@@ -268,6 +270,16 @@ impl Canvas<'_> {
             Icon::Speaker => {
                 self.path(&[p(4.0, 9.0), p(8.0, 9.0), p(13.0, 5.0), p(13.0, 19.0), p(8.0, 15.0), p(4.0, 15.0)], false, true, color, stroke);
                 self.arc(p(16.5, 8.5), p(16.5, 15.5), 5.0 * s, true, color, stroke);
+            }
+            Icon::Speak => {
+                let head = [
+                    p(7.0, 21.0), p(7.0, 17.0), p(4.5, 13.5), p(4.0, 9.0), p(6.0, 5.0), p(10.0, 3.0), p(13.5, 4.0),
+                    p(15.5, 8.0), p(17.0, 11.0), p(15.5, 11.5), p(16.5, 12.5), p(14.0, 13.5), p(16.0, 14.5),
+                    p(15.0, 17.0), p(11.5, 17.5), p(11.5, 21.0),
+                ];
+                self.path(&head, false, false, color, stroke);
+                self.arc(p(19.0, 9.5), p(19.0, 15.5), 3.5 * s, true, color, stroke);
+                self.arc(p(21.0, 7.0), p(21.0, 18.0), 6.0 * s, true, color, stroke);
             }
             Icon::Gear => {
                 let (x, y) = p(12.0, 12.0);

@@ -16,6 +16,7 @@ mod documents;
 mod http;
 mod i18n;
 mod json;
+mod minipill;
 mod mouse;
 mod mp3;
 mod ocr;
@@ -169,6 +170,7 @@ const CMD_DICTATE: u32 = 37;
 const CMD_CORRECT: u32 = 38;
 const CMD_DICT_SETUP: u32 = 39;
 const CMD_AI_SETUP: u32 = 40;
+const CMD_PILL: u32 = 41;
 /// Korrekturstufe: `CMD_CORRECTION_MODE` + Nummer.
 const CMD_CORRECTION_MODE: u32 = 3600;
 /// Mikrofon: `CMD_MICROPHONE` (Windows-Standard) bzw. + 1 + Geräte-Nummer.
@@ -410,6 +412,7 @@ impl App {
             update_check: self.cfg.update_check,
             language: self.cfg.language.clone(),
             proxy: self.cfg.proxy.clone(),
+            close_to_pill: self.cfg.close_to_pill,
         }
     }
 
@@ -424,6 +427,7 @@ impl App {
         self.cfg.clean_text = values.clean_text;
         self.cfg.update_check = values.update_check;
         self.cfg.remember_text = values.remember_text;
+        self.cfg.close_to_pill = values.close_to_pill;
         self.cfg.proxy = values.proxy;
         http::set_proxy(&self.cfg.proxy);
         if values.language != self.cfg.language {
@@ -439,6 +443,21 @@ impl App {
         self.register_hotkeys();
         self.tts.set_volume(self.cfg.volume);
         tray::set_tip(self.hwnd, &self.tip());
+        self.update_pill();
+        self.refresh_menu_bar();
+    }
+
+    /// Mini-Pille am Bildschirmrand: sichtbar, solange das Fenster zu ist und weder Diktat noch
+    /// Mini-Player laufen (wenn so eingestellt).
+    fn update_pill(&self) {
+        let show = self.cfg.close_to_pill && window::visible().is_none() && !dictbar::visible() && !player::visible();
+        if !show {
+            minipill::hide();
+            return;
+        }
+        let key = |value: &str| if value.trim().is_empty() { t("help.off").to_string() } else { i18n::hotkey(value) };
+        let hint = t("pill.hint").replacen("{}", &key(&self.cfg.hotkey_dictate), 1).replacen("{}", &key(&self.cfg.hotkey_read), 1);
+        minipill::show(&hint, on_pill_action);
     }
 
     /// Der Installer kann den Officeassistenten vorab einschalten (einmalig). `true`, wenn er
@@ -569,6 +588,7 @@ impl App {
             DictTarget::Program(hwnd) => typing::program_name(HWND(hwnd as *mut _)),
         };
         dictbar::show(&program, self.provider().is_ready(), Some(recorder.level_meter()), on_dictbar_action);
+        minipill::hide();
         self.dictation = Some(recorder);
         self.dict_target = target;
         self.dict_typed.clear();
@@ -882,6 +902,7 @@ impl App {
         if self.state == State::Idle || window::visible().is_some() {
             self.player_on = false;
             player::hide();
+            self.update_pill();
             return;
         }
         let voice = self.current_voice().map_or(String::new(), |i| short_voice_name(&self.tts.voices()[i].name));
@@ -898,6 +919,7 @@ impl App {
             rate: self.rate_index(),
         };
         player::show(info, on_player_action);
+        minipill::hide();
     }
 
     /// Index der gerade eingestellten Stimme in `tts.voices()`.
@@ -1401,6 +1423,7 @@ impl App {
 
             let tools = CreatePopupMenu().unwrap_or_default();
             item(tools, base + CMD_TOPMOST, t("menu.topmost"), true, self.cfg.always_on_top);
+            item(tools, base + CMD_PILL, t("menu.pill"), true, self.cfg.close_to_pill);
             item(tools, base + CMD_AUTOSTART, t("menu.autostart"), true, autostart_enabled());
             item(tools, base + CMD_ASSISTANT, t("menu.assistant_toggle"), true, self.cfg.assistant);
             separator(tools);
@@ -1648,6 +1671,14 @@ fn run(cmd: u32, selection: Option<String>) {
         CMD_SCREEN_OCR => screen_ocr(),
         CMD_AI_SETTINGS => open_ai_settings(),
         CMD_AI_SETUP => open_ai_setup(),
+        CMD_PILL => {
+            with_app(|app| {
+                app.cfg.close_to_pill = !app.cfg.close_to_pill;
+                app.cfg.save();
+                app.update_pill();
+                app.refresh_menu_bar();
+            });
+        }
         CMD_ASSISTANT => {
             if with_app(|app| app.set_assistant(!app.cfg.assistant)) == Some(true) {
                 open_ai_setup();
@@ -1900,6 +1931,7 @@ fn on_dictbar_action(action: dictbar::Action) {
             }
             app.dict_waiting.clear();
             dictbar::hide();
+            app.update_pill();
             false
         }
         dictbar::Action::Poll => {
@@ -1977,6 +2009,36 @@ fn choose_from_bar(id: u32) {
     };
     if cmd != 0 {
         run(cmd, None);
+    }
+}
+
+/// Markierten Text vorlesen (Strg+Alt+V, sprechender Kopf der Mini-Pille); während des
+/// Vorlesens hört es auf.
+fn read_selection() {
+    if with_app(|app| app.state != State::Idle) == Some(true) {
+        with_app(App::stop);
+    } else {
+        // Die Markierung wird außerhalb von `with_app` ermittelt, weil das bis zu
+        // einer Sekunde dauern kann und dabei Nachrichten eintreffen können.
+        let text = selection::selected_text();
+        with_app(|app| app.speak(text, t("app.no_text_selected")));
+    }
+}
+
+/// Klick in der Mini-Pille.
+fn on_pill_action(action: minipill::Action) {
+    match action {
+        minipill::Action::Dictate => dictate_anywhere(),
+        minipill::Action::Read => read_selection(),
+        minipill::Action::OpenWindow => window::show(),
+        minipill::Action::Hide => {
+            with_app(|app| {
+                app.cfg.close_to_pill = false;
+                app.cfg.save();
+                app.update_pill();
+                app.refresh_menu_bar();
+            });
+        }
     }
 }
 
@@ -2161,6 +2223,12 @@ fn on_window_command(id: u32, code: u32) {
             with_app(App::stop);
         }
         (window::ID_SETUP_AI, window::CLICKED) => open_ai_setup(),
+        (window::ID_VISIBILITY, _) => {
+            with_app(|app| {
+                app.update_pill();
+                app.update_player();
+            });
+        }
         (window::ID_VOICE, window::CLICKED) => choose_from_bar(window::ID_VOICE),
         (window::ID_SPEED, window::CLICKED) => choose_from_bar(window::ID_SPEED),
         (window::ID_SUMMARIZE, window::CLICKED) => run(CMD_SUMMARIZE, None),
@@ -2189,16 +2257,7 @@ fn on_window_command(id: u32, code: u32) {
 
 fn on_hotkey(hwnd: HWND, id: i32) {
     match id {
-        HOTKEY_READ => {
-            if with_app(|app| app.state != State::Idle) == Some(true) {
-                with_app(App::stop);
-            } else {
-                // Die Markierung wird außerhalb von `with_app` ermittelt, weil das bis zu
-                // einer Sekunde dauern kann und dabei Nachrichten eintreffen können.
-                let text = selection::selected_text();
-                with_app(|app| app.speak(text, t("app.no_text_selected")));
-            }
-        }
+        HOTKEY_READ => read_selection(),
         HOTKEY_PAUSE => {
             with_app(App::toggle_pause);
         }
@@ -2418,6 +2477,8 @@ fn main() {
         // Von Hand gestartet öffnet sich das Fenster; der Autostart bleibt still im Infobereich.
         if !std::env::args().any(|arg| arg == ARG_TRAY) {
             window::show();
+        } else {
+            with_app(|app| app.update_pill());
         }
         // „Öffnen mit Vorleser“ bzw. vorleser.exe <Datei>
         if let Some(path) = file_argument() {

@@ -40,7 +40,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLEAR, WM_CLOSE, WM_COMMAND,
     WM_COPY, WM_CTLCOLOREDIT, WM_CTLCOLORSTATIC, WM_CUT, WM_DPICHANGED, WM_DRAWITEM, WM_DROPFILES, WM_ERASEBKGND,
     WM_GETMINMAXINFO, WM_NCACTIVATE, WM_NCPAINT, WM_PAINT, WM_PASTE, WM_SETFOCUS, WM_SETFONT, WM_SETICON,
-    WM_SETTINGCHANGE, WM_SIZE, WM_UNDO, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_EX_ACCEPTFILES,
+    WM_SETTINGCHANGE, WM_SHOWWINDOW, WM_SIZE, WM_UNDO, PostMessageW, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_EX_ACCEPTFILES,
     WS_EX_CONTROLPARENT, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
 
@@ -85,6 +85,10 @@ const ID_TABS: [u32; 3] = [124, 125, 126];
 const ID_CHIPS: [u32; 4] = [130, 131, 132, 133];
 const ID_COPY: u32 = 134;
 const ID_APPLY: u32 = 135;
+/// Das Fenster wurde gezeigt oder ausgeblendet (Benachrichtigung an `main.rs`).
+pub const ID_VISIBILITY: u32 = 140;
+/// Meldet die Sichtbarkeit verzögert, damit `main.rs` nicht mitten in eigenem Code gerufen wird.
+const WM_VISIBILITY: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 50;
 /// Befehle der Menüleiste und der Tastenkürzel: `MENU_BASE` + Befehlsnummer aus `main.rs`.
 pub const MENU_BASE: u32 = 20_000;
 
@@ -1475,6 +1479,15 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 let _ = InvalidateRect(Some(hwnd), None, true);
             }
             WM_ERASEBKGND => return LRESULT(1),
+            WM_SHOWWINDOW => {
+                let _ = PostMessageW(Some(hwnd), WM_VISIBILITY, WPARAM(0), LPARAM(0));
+                return DefWindowProcW(hwnd, msg, wparam, lparam);
+            }
+            WM_VISIBILITY => {
+                if let Some(on_command) = ON_COMMAND.with(|cell| cell.get()) {
+                    on_command(ID_VISIBILITY, CLICKED);
+                }
+            }
             WM_PAINT => {
                 let mut ps = PAINTSTRUCT::default();
                 let hdc = BeginPaint(hwnd, &mut ps);

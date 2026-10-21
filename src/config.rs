@@ -68,6 +68,9 @@ pub struct Config {
     pub dict_auto_correct: bool,
     /// Mikrofon fürs Diktieren (Name wie in Windows); leer = Windows-Standard.
     pub microphone: String,
+    /// Beim Schließen des Fensters bleibt eine Mini-Pille am Bildschirmrand (sonst nur das
+    /// Symbol im Infobereich).
+    pub close_to_pill: bool,
 }
 
 impl Default for Config {
@@ -101,6 +104,7 @@ impl Default for Config {
             correction_custom: String::new(),
             dict_auto_correct: true,
             microphone: String::new(),
+            close_to_pill: true,
         }
     }
 }
@@ -144,6 +148,7 @@ impl Config {
                 "correction_custom" => cfg.correction_custom = value.to_string(),
                 "dict_auto_correct" => cfg.dict_auto_correct = value != "0",
                 "microphone" => cfg.microphone = value.to_string(),
+                "close_to_pill" => cfg.close_to_pill = value != "0",
                 _ => {}
             }
         }
@@ -159,7 +164,7 @@ impl Config {
              update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n\
              remember_text={}\r\nresume_pos={}\r\nguide_shown={}\r\n\
              assistant={}\r\nai_kind={}\r\nai_url={}\r\nai_key={}\r\nai_model={}\r\nsummary_mode={}\r\n\
-             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\nmicrophone={}\r\n",
+             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\nmicrophone={}\r\nclose_to_pill={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
@@ -187,7 +192,8 @@ impl Config {
             self.correction_mode,
             self.correction_custom,
             self.dict_auto_correct as u8,
-            self.microphone
+            self.microphone,
+            self.close_to_pill as u8
         )
     }
 
@@ -372,6 +378,7 @@ mod tests {
             correction_custom: "als freundliche E-Mail".into(),
             dict_auto_correct: false,
             microphone: "Mikrofon (USB Audio)".into(),
+            close_to_pill: false,
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }
