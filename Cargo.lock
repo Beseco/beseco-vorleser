@@ -58,6 +58,7 @@ version = "0.5.0"
 dependencies = [
  "miniz_oxide",
  "windows",
+ "windows-numerics",
 ]
 
 [[package]]

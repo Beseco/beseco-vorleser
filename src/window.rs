@@ -440,7 +440,7 @@ pub fn insert_text(text: &str) {
 
 /// Fügt einen erkannten Abschnitt an `before` an: mit Leerzeichen dazwischen und großem Anfang
 /// nach einem Satzende (die Erkennung arbeitet abschnittsweise und weiß das nicht).
-fn dictated_text(before: &str, text: &str) -> String {
+pub fn dictated_text(before: &str, text: &str) -> String {
     let last = before.chars().last();
     let space = if last.is_some_and(|ch| !ch.is_whitespace()) { " " } else { "" };
     let sentence_start = before.trim_end().chars().last().is_none_or(|ch| matches!(ch, '.' | '!' | '?' | ':'));

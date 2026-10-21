@@ -12,14 +12,14 @@ use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering::Relaxed};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use windows::Win32::Media::Audio::{
-    waveInAddBuffer, waveInClose, waveInGetNumDevs, waveInOpen, waveInPrepareHeader, waveInReset,
-    waveInStart, waveInStop, waveInUnprepareHeader, CALLBACK_NULL, HWAVEIN, WAVEFORMATEX, WAVEHDR,
+    waveInAddBuffer, waveInClose, waveInGetDevCapsW, waveInGetNumDevs, waveInOpen, waveInPrepareHeader, waveInReset,
+    waveInStart, waveInStop, waveInUnprepareHeader, CALLBACK_NULL, HWAVEIN, WAVEFORMATEX, WAVEHDR, WAVEINCAPSW,
     WAVE_FORMAT_PCM, WAVE_MAPPER, WHDR_DONE,
 };
 
@@ -320,28 +320,67 @@ impl Splitter {
 pub struct Recorder {
     stop: Arc<AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
+    level: Arc<AtomicU32>,
+}
+
+/// Namen der Aufnahmegeräte (Mikrofone), wie Windows sie nennt. Der Index ist die Geräte-ID.
+pub fn microphones() -> Vec<String> {
+    let count = unsafe { waveInGetNumDevs() };
+    (0..count)
+        .filter_map(|id| unsafe {
+            let mut caps = WAVEINCAPSW::default();
+            (waveInGetDevCapsW(id as usize, &mut caps, std::mem::size_of::<WAVEINCAPSW>() as u32) == 0).then(|| {
+                let name = caps.szPname;
+                let len = name.iter().position(|&c| c == 0).unwrap_or(name.len());
+                String::from_utf16_lossy(&name[..len])
+            })
+        })
+        .collect()
+}
+
+/// Geräte-ID des Mikrofons `name`; unbekannt oder leer: das Standardgerät von Windows.
+fn device_id(name: &str) -> u32 {
+    if name.is_empty() {
+        return WAVE_MAPPER;
+    }
+    microphones().iter().position(|m| m == name).map_or(WAVE_MAPPER, |i| i as u32)
 }
 
 impl Recorder {
-    pub fn start(segments: mpsc::Sender<Vec<i16>>) -> Result<Recorder, String> {
+    /// Startet die Aufnahme mit dem Mikrofon `microphone` (leer: Windows-Standard).
+    pub fn start(segments: mpsc::Sender<Vec<i16>>, microphone: &str) -> Result<Recorder, String> {
         if unsafe { waveInGetNumDevs() } == 0 {
             return Err(t("err.no_microphone").to_string());
         }
         let stop = Arc::new(AtomicBool::new(false));
+        let level = Arc::new(AtomicU32::new(0));
         let (ready_tx, ready_rx) = mpsc::channel();
-        let flag = stop.clone();
+        let (flag, meter) = (stop.clone(), level.clone());
+        let device = device_id(microphone);
         // Im Testmodus kann eine WAV-Datei das Mikrofon ersetzen.
         let replay = std::env::var_os("VORLESER_TEST").and(std::env::var_os("VORLESER_DICT_WAV"));
         let thread = match replay {
-            Some(path) => std::thread::spawn(move || replay_wav(path.into(), flag, segments, ready_tx)),
-            None => std::thread::spawn(move || record(flag, segments, ready_tx)),
+            Some(path) => std::thread::spawn(move || replay_wav(path.into(), flag, segments, ready_tx, meter)),
+            None => std::thread::spawn(move || record(flag, segments, ready_tx, device, meter)),
         };
         match ready_rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(Ok(())) => Ok(Recorder { stop, thread: Some(thread) }),
+            Ok(Ok(())) => Ok(Recorder { stop, thread: Some(thread), level }),
             Ok(Err(e)) => Err(e),
             Err(_) => Err(t("err.no_microphone").to_string()),
         }
     }
+
+    /// Lautstärke der letzten 100 ms (Effektivwert, 0 bis 32767), für die Pegelanzeige.
+    pub fn level_meter(&self) -> Arc<AtomicU32> {
+        self.level.clone()
+    }
+}
+
+fn rms(samples: &[i16]) -> u32 {
+    if samples.is_empty() {
+        return 0;
+    }
+    ((samples.iter().map(|&s| (s as f64) * (s as f64)).sum::<f64>() / samples.len() as f64).sqrt()) as u32
 }
 
 impl Drop for Recorder {
@@ -355,7 +394,7 @@ impl Drop for Recorder {
 }
 
 /// Spielt eine 16-kHz-Mono-WAV in Echtzeit ein, als käme sie vom Mikrofon (nur für Tests).
-fn replay_wav(path: PathBuf, stop: Arc<AtomicBool>, segments: mpsc::Sender<Vec<i16>>, ready: mpsc::Sender<Result<(), String>>) {
+fn replay_wav(path: PathBuf, stop: Arc<AtomicBool>, segments: mpsc::Sender<Vec<i16>>, ready: mpsc::Sender<Result<(), String>>, level: Arc<AtomicU32>) {
     let Ok(wav) = std::fs::read(path) else {
         let _ = ready.send(Err(t("err.no_microphone").to_string()));
         return;
@@ -367,7 +406,9 @@ fn replay_wav(path: PathBuf, stop: Arc<AtomicBool>, segments: mpsc::Sender<Vec<i
     let mut splitter = Splitter::default();
     let mut chunks = samples.chunks(chunk);
     while !stop.load(Relaxed) {
-        for segment in splitter.push(chunks.next().unwrap_or(&silence)) {
+        let chunk = chunks.next().unwrap_or(&silence);
+        level.store(rms(chunk), Relaxed);
+        for segment in splitter.push(chunk) {
             let _ = segments.send(segment);
         }
         std::thread::sleep(Duration::from_millis(100));
@@ -381,7 +422,7 @@ fn read_wav(wav: &[u8]) -> Vec<i16> {
     wav.get(44..).unwrap_or_default().chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
 }
 
-fn record(stop: Arc<AtomicBool>, segments: mpsc::Sender<Vec<i16>>, ready: mpsc::Sender<Result<(), String>>) {
+fn record(stop: Arc<AtomicBool>, segments: mpsc::Sender<Vec<i16>>, ready: mpsc::Sender<Result<(), String>>, id: u32, level: Arc<AtomicU32>) {
     let format = WAVEFORMATEX {
         wFormatTag: WAVE_FORMAT_PCM as u16,
         nChannels: 1,
@@ -392,7 +433,7 @@ fn record(stop: Arc<AtomicBool>, segments: mpsc::Sender<Vec<i16>>, ready: mpsc::
         cbSize: 0,
     };
     let mut device = HWAVEIN::default();
-    if unsafe { waveInOpen(Some(&mut device), WAVE_MAPPER, &format, None, None, CALLBACK_NULL) } != 0 {
+    if unsafe { waveInOpen(Some(&mut device), id, &format, None, None, CALLBACK_NULL) } != 0 {
         let _ = ready.send(Err(t("err.no_microphone").to_string()));
         return;
     }
@@ -423,6 +464,7 @@ fn record(stop: Arc<AtomicBool>, segments: mpsc::Sender<Vec<i16>>, ready: mpsc::
             continue;
         }
         let recorded = header.dwBytesRecorded as usize / 2;
+        level.store(rms(&data[..recorded]), Relaxed);
         if heard < RATE as usize * 3 {
             loudest = data[..recorded].iter().map(|s| s.unsigned_abs()).max().unwrap_or(0).max(loudest);
             heard += recorded;
@@ -475,8 +517,15 @@ mod tests {
     #[ignore]
     fn records_microphone() {
         let (tx, rx) = mpsc::channel();
-        let recorder = Recorder::start(tx).unwrap();
-        std::thread::sleep(Duration::from_secs(5));
+        println!("Mikrofone: {:?}", microphones());
+        let recorder = Recorder::start(tx, &std::env::var("VORLESER_MIC").unwrap_or_default()).unwrap();
+        let meter = recorder.level_meter();
+        let mut peak = 0;
+        for _ in 0..30 {
+            std::thread::sleep(Duration::from_millis(100));
+            peak = peak.max(meter.load(Relaxed));
+        }
+        println!("höchster Pegel: {peak}");
         drop(recorder);
         for segment in rx {
             let peak = segment.iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);

@@ -10,6 +10,7 @@ mod aisetup;
 mod aivoices;
 mod config;
 mod dictation;
+mod dictbar;
 mod dictsetup;
 mod documents;
 mod http;
@@ -19,13 +20,16 @@ mod mouse;
 mod mp3;
 mod ocr;
 mod ollama;
+mod paint;
 mod piper;
 mod selection;
 mod settings;
 mod snip;
 mod textprep;
+mod theme;
 mod tray;
 mod tts;
+mod typing;
 mod update;
 mod window;
 mod zip;
@@ -122,6 +126,7 @@ const HOTKEY_READ: i32 = 1;
 const HOTKEY_PAUSE: i32 = 2;
 const HOTKEY_MENU: i32 = 3;
 const HOTKEY_OCR: i32 = 4;
+const HOTKEY_DICTATE: i32 = 5;
 
 const CMD_READ_SELECTION: u32 = 1;
 const CMD_READ_CLIPBOARD: u32 = 2;
@@ -165,6 +170,8 @@ const CMD_DICT_SETUP: u32 = 39;
 const CMD_AI_SETUP: u32 = 40;
 /// Korrekturstufe: `CMD_CORRECTION_MODE` + Nummer.
 const CMD_CORRECTION_MODE: u32 = 3600;
+/// Mikrofon: `CMD_MICROPHONE` (Windows-Standard) bzw. + 1 + Geräte-Nummer.
+const CMD_MICROPHONE: u32 = 3700;
 /// Art der Zusammenfassung: `CMD_SUMMARY_MODE` + Nummer.
 const CMD_SUMMARY_MODE: u32 = 3500;
 
@@ -210,6 +217,13 @@ struct App {
     follow: Option<Follow>,
     /// Laufendes Diktat (Mikrofon); beim Verwerfen endet die Aufnahme.
     dictation: Option<dictation::Recorder>,
+    dict_target: DictTarget,
+    /// Was in diesem Diktat in ein anderes Programm getippt wurde (für „Korrigieren“).
+    dict_typed: String,
+    /// „Korrigieren“ wurde während des Diktats gedrückt: nach dem letzten Abschnitt korrigieren.
+    dict_correct_pending: bool,
+    /// Erkannter Text, der noch nicht getippt ist, weil das Zielprogramm nicht vorn war.
+    dict_waiting: Vec<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -270,6 +284,20 @@ static AI_CORRECTING: AtomicBool = AtomicBool::new(false);
 /// Erkannter Text des Diktats, der noch ins Fenster muss.
 static DICT_TEXTS: std::sync::Mutex<std::collections::VecDeque<String>> = std::sync::Mutex::new(std::collections::VecDeque::new());
 static DICT_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// Die laufende Korrektur gilt einem Diktat in einem anderen Programm.
+static AI_FOR_PROGRAM: AtomicBool = AtomicBool::new(false);
+/// Name in der Diktier-Pille, wenn ins eigene Fenster diktiert wird.
+const APP_NAME_TEXT: &str = "Vorleser";
+
+/// Wohin ein Diktat schreibt.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum DictTarget {
+    /// Ins Textfeld des Vorleser-Fensters.
+    Window,
+    /// In ein anderes Programm (Fenster als Zahl), per Tastatureingabe.
+    Program(isize),
+}
+
 /// Im laufenden Diktat wurde schon Text erkannt (sonst gibt es nichts zu korrigieren).
 static DICT_GOT_TEXT: AtomicBool = AtomicBool::new(false);
 /// Es wird gerade eine Datei gelesen.
@@ -298,7 +326,7 @@ impl App {
         tts.set_rate(cfg.rate);
         // Der Testlauf bleibt stumm.
         tts.set_volume(if TEST_MODE.load(Ordering::Relaxed) { 0 } else { cfg.volume });
-        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None };
+        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_waiting: Vec::new() };
         app.add_icon();
         app.register_hotkeys();
         app.fill_window();
@@ -336,6 +364,7 @@ impl App {
             (HOTKEY_PAUSE, &self.cfg.hotkey_pause),
             (HOTKEY_MENU, &self.cfg.hotkey_menu),
             (HOTKEY_OCR, &self.cfg.hotkey_ocr),
+            (HOTKEY_DICTATE, &self.cfg.hotkey_dictate),
         ];
         let mut failed = Vec::new();
         for (id, text) in hotkeys {
@@ -368,6 +397,7 @@ impl App {
             hotkey_pause: self.cfg.hotkey_pause.clone(),
             hotkey_menu: self.cfg.hotkey_menu.clone(),
             hotkey_ocr: self.cfg.hotkey_ocr.clone(),
+            hotkey_dictate: self.cfg.hotkey_dictate.clone(),
             mouse_menu: self.cfg.mouse_menu.clone(),
             volume: self.cfg.volume,
             clean_text: self.cfg.clean_text,
@@ -383,6 +413,7 @@ impl App {
         self.cfg.hotkey_pause = values.hotkey_pause;
         self.cfg.hotkey_menu = values.hotkey_menu;
         self.cfg.hotkey_ocr = values.hotkey_ocr;
+        self.cfg.hotkey_dictate = values.hotkey_dictate;
         self.cfg.mouse_menu = values.mouse_menu;
         self.cfg.volume = values.volume;
         self.cfg.clean_text = values.clean_text;
@@ -395,7 +426,7 @@ impl App {
         }
         update::set_enabled(values.update_check);
         self.cfg.save();
-        for id in [HOTKEY_READ, HOTKEY_PAUSE, HOTKEY_MENU, HOTKEY_OCR] {
+        for id in [HOTKEY_READ, HOTKEY_PAUSE, HOTKEY_MENU, HOTKEY_OCR, HOTKEY_DICTATE] {
             unsafe {
                 let _ = UnregisterHotKey(Some(self.hwnd), id);
             }
@@ -463,12 +494,18 @@ impl App {
         self.refresh_menu_bar();
     }
 
-    /// Startet oder beendet das Diktat. `false`, wenn die Spracherkennung erst eingerichtet werden muss.
+    /// Diktat ins Vorleser-Fenster (F8). `false`, wenn die Spracherkennung erst eingerichtet werden muss.
     fn toggle_dictation(&mut self) -> bool {
+        self.toggle_dictation_to(DictTarget::Window)
+    }
+
+    /// Startet oder beendet das Diktat. `false`, wenn die Spracherkennung erst eingerichtet werden muss.
+    fn toggle_dictation_to(&mut self, target: DictTarget) -> bool {
         if self.dictation.is_some() {
             // Das Verwerfen beendet die Aufnahme; der letzte Abschnitt wird noch erkannt.
             self.dictation = None;
             window::set_dictating(false, t("assist.dict_finishing"));
+            dictbar::set_state(dictbar::State::Writing);
             self.refresh_menu_bar();
             return true;
         }
@@ -477,7 +514,7 @@ impl App {
         self.stop();
         DICT_GOT_TEXT.store(false, Ordering::Relaxed);
         let (sender, segments) = std::sync::mpsc::channel::<Vec<i16>>();
-        let recorder = match dictation::Recorder::start(sender) {
+        let recorder = match dictation::Recorder::start(sender, &self.cfg.microphone) {
             Ok(recorder) => recorder,
             Err(error) => {
                 unsafe {
@@ -501,6 +538,7 @@ impl App {
                             post(WM_DICT_READY, 2);
                             continue;
                         }
+                        post(WM_DICT_READY, 3);
                         match server.transcribe(&segment) {
                             Ok(text) if !text.is_empty() => {
                                 DICT_TEXTS.lock().unwrap().push_back(text);
@@ -509,6 +547,7 @@ impl App {
                             Ok(_) => {}
                             Err(error) => *DICT_ERROR.lock().unwrap() = Some(error),
                         }
+                        post(WM_DICT_READY, 1);
                     }
                 }
                 Err(error) => {
@@ -518,8 +557,19 @@ impl App {
             }
             post(WM_DICT_DONE, 0);
         });
+        let program = match target {
+            DictTarget::Window => APP_NAME_TEXT.to_string(),
+            DictTarget::Program(hwnd) => typing::program_name(HWND(hwnd as *mut _)),
+        };
+        dictbar::show(&program, self.provider().is_ready(), Some(recorder.level_meter()), on_dictbar_action);
         self.dictation = Some(recorder);
-        window::show();
+        self.dict_target = target;
+        self.dict_typed.clear();
+        self.dict_waiting.clear();
+        self.dict_correct_pending = false;
+        if target == DictTarget::Window {
+            window::show();
+        }
         window::set_dictating(true, t("assist.dict_preparing"));
         self.refresh_menu_bar();
         true
@@ -527,7 +577,15 @@ impl App {
 
     fn on_dict_ready(&mut self, state: usize) {
         if state != 0 {
-            if self.dictation.is_some() {
+            let running = self.dictation.is_some();
+            // Nach dem Beenden wird nur noch der letzte Abschnitt geschrieben.
+            let bar = match state {
+                2 if running => dictbar::State::Silent,
+                1 if running => dictbar::State::Listening,
+                _ => dictbar::State::Writing,
+            };
+            dictbar::set_state(bar);
+            if running {
                 window::set_dictating(true, if state == 2 { t("assist.dict_silent") } else { t("assist.dict_listening") });
             }
             return;
@@ -535,6 +593,7 @@ impl App {
         self.dictation = None;
         let error = DICT_ERROR.lock().unwrap().take().unwrap_or_default();
         window::set_dictating(false, "");
+        dictbar::hide();
         unsafe {
             MessageBoxW(window::visible(), &HSTRING::from(error), APP_NAME, MB_ICONWARNING);
         }
@@ -544,8 +603,31 @@ impl App {
         let texts: Vec<String> = DICT_TEXTS.lock().unwrap().drain(..).collect();
         for text in texts {
             DICT_GOT_TEXT.store(true, Ordering::Relaxed);
-            window::insert_text(&text);
+            match self.dict_target {
+                DictTarget::Window => window::insert_text(&text),
+                DictTarget::Program(_) => self.dict_waiting.push(text),
+            }
         }
+        self.flush_dictation();
+    }
+
+    /// Tippt wartenden Text, aber nur ins Zielprogramm: Ist gerade ein anderes Fenster vorn,
+    /// wartet er, bis das Zielprogramm wieder vorn ist (nie in ein fremdes Fenster).
+    fn flush_dictation(&mut self) -> bool {
+        let DictTarget::Program(target) = self.dict_target else { return true };
+        if self.dict_waiting.is_empty() {
+            return true;
+        }
+        if typing::foreground().0 as isize != target {
+            dictbar::set_state(dictbar::State::Waiting);
+            return false;
+        }
+        for text in std::mem::take(&mut self.dict_waiting) {
+            let piece = window::dictated_text(&self.dict_typed, &text);
+            typing::type_text(&piece);
+            self.dict_typed.push_str(&piece);
+        }
+        true
     }
 
     fn on_dict_done(&mut self) {
@@ -553,13 +635,66 @@ impl App {
             return; // Ein neues Diktat läuft schon.
         }
         self.show_assistant();
+        dictbar::set_state(if self.flush_dictation() { dictbar::State::Finished } else { dictbar::State::Waiting });
         if let Some(error) = DICT_ERROR.lock().unwrap().take() {
             tray::balloon(self.hwnd, "Vorleser", &error);
         }
         let got_text = DICT_GOT_TEXT.swap(false, Ordering::Relaxed);
-        if got_text && self.cfg.dict_auto_correct && self.provider().is_ready() && window::text().is_some() {
+        if std::mem::take(&mut self.dict_correct_pending) {
+            self.correct_dictation();
+        } else if got_text && self.dict_target == DictTarget::Window && self.cfg.dict_auto_correct && self.provider().is_ready() && window::text().is_some() {
             self.correct();
         }
+    }
+
+    /// „Korrigieren“ in der Diktier-Pille. Läuft das Diktat noch, wird es erst beendet, damit der
+    /// letzte Abschnitt dabei ist. Im Fenster erscheint die Fassung rechts; in einem anderen
+    /// Programm ersetzt sie den eben diktierten Text.
+    fn correct_dictation(&mut self) {
+        if self.dictation.is_some() {
+            self.dict_correct_pending = true;
+            self.toggle_dictation_to(self.dict_target);
+            return;
+        }
+        if self.dict_target == DictTarget::Window {
+            if self.correct() {
+                dictbar::set_state(dictbar::State::Correcting);
+            }
+            return;
+        }
+        let provider = self.provider();
+        if !provider.is_ready() || self.dict_typed.trim().is_empty() || AI_BUSY.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        AI_CORRECTING.store(true, Ordering::Relaxed);
+        AI_FOR_PROGRAM.store(true, Ordering::Relaxed);
+        dictbar::set_state(dictbar::State::Correcting);
+        let text = self.dict_typed.clone();
+        let mode = ai::Correction::from_code(&self.cfg.correction_mode);
+        let custom = self.cfg.correction_custom.clone();
+        let hwnd = self.hwnd.0 as isize;
+        std::thread::spawn(move || {
+            *AI_RESULT.lock().unwrap() = Some(provider.correct(&text, mode, &custom));
+            unsafe {
+                let _ = PostMessageW(Some(HWND(hwnd as *mut _)), WM_AI_DONE, WPARAM(0), LPARAM(0));
+            }
+        });
+    }
+
+    /// Ersetzt im anderen Programm den diktierten Text durch die korrigierte Fassung, aber nur,
+    /// wenn das Programm noch vorn ist; sonst bleibt der Text unangetastet.
+    fn replace_in_program(&mut self, corrected: &str) {
+        let DictTarget::Program(target) = self.dict_target else { return };
+        if typing::foreground().0 as isize != target || !self.dict_waiting.is_empty() {
+            tray::balloon(self.hwnd, "Vorleser", t("dictbar.not_replaced"));
+            return;
+        }
+        let corrected = corrected.trim();
+        let leading = self.dict_typed.len() - self.dict_typed.trim_start().len();
+        let corrected = format!("{}{corrected}", &self.dict_typed[..leading]);
+        typing::backspace(self.dict_typed.chars().count());
+        typing::type_text(&corrected);
+        self.dict_typed = corrected;
     }
 
     /// Überarbeitet den Text links (oder die Markierung) in der eingestellten Stufe; das Ergebnis
@@ -648,9 +783,14 @@ impl App {
         window::set_ai_busy(false);
         window::set_title(None);
         match AI_RESULT.lock().unwrap().take() {
+            Some(Ok(result)) if AI_FOR_PROGRAM.swap(false, Ordering::Relaxed) => {
+                self.replace_in_program(&result);
+                dictbar::set_state(dictbar::State::Finished);
+            }
             Some(Ok(result)) if AI_CORRECTING.load(Ordering::Relaxed) => {
                 window::set_result_label("assist.corrected");
                 window::set_text_in(window::Pane::Result, &to_crlf(&result));
+                dictbar::set_state(dictbar::State::Finished);
             }
             Some(Ok(summary)) => {
                 self.stop();
@@ -659,6 +799,8 @@ impl App {
                 self.speak_pane(window::Pane::Result);
             }
             Some(Err(error)) => {
+                AI_FOR_PROGRAM.store(false, Ordering::Relaxed);
+                dictbar::set_state(dictbar::State::Finished);
                 let text = HSTRING::from(format!("{}\n\n{error}", t("app.ai_failed")));
                 unsafe {
                     MessageBoxW(window::visible(), &text, APP_NAME, MB_ICONWARNING);
@@ -1175,6 +1317,16 @@ impl App {
                     }
                 }
                 let _ = AppendMenuW(assistant, MF_POPUP, corrections.0 as usize, &HSTRING::from(t("menu.correction_mode")));
+                let microphones = CreatePopupMenu().unwrap_or_default();
+                item(microphones, base + CMD_MICROPHONE, t("menu.microphone_default"), true, false);
+                let names = dictation::microphones();
+                let current = names.iter().position(|n| *n == self.cfg.microphone).map_or(0, |i| i as u32 + 1);
+                for (i, name) in names.iter().enumerate() {
+                    item(microphones, base + CMD_MICROPHONE + 1 + i as u32, name, true, false);
+                }
+                let id = base + CMD_MICROPHONE + current;
+                let _ = CheckMenuRadioItem(microphones, id, id, id, MF_BYCOMMAND.0);
+                let _ = AppendMenuW(assistant, MF_POPUP, microphones.0 as usize, &HSTRING::from(t("menu.microphone")));
                 item(assistant, base + CMD_DICT_SETUP, t("menu.dict_setup"), true, false);
                 separator(assistant);
                 item(assistant, base + CMD_AI_SETUP, t("menu.ai_setup"), true, false);
@@ -1272,6 +1424,12 @@ impl App {
             CMD_UPDATE => open_url(update::RELEASES_URL),
             CMD_READ_WINDOW => self.speak_window(),
             CMD_READ_RESULT => self.speak_pane(window::Pane::Result),
+            _ if (CMD_MICROPHONE..CMD_MICROPHONE + 64).contains(&cmd) => {
+                let index = (cmd - CMD_MICROPHONE) as usize;
+                self.cfg.microphone = if index == 0 { String::new() } else { dictation::microphones().get(index - 1).cloned().unwrap_or_default() };
+                self.cfg.save();
+                self.refresh_menu_bar();
+            }
             _ if (CMD_CORRECTION_MODE..CMD_CORRECTION_MODE + 4).contains(&cmd) => {
                 if let Some(mode) = ai::Correction::ALL.get((cmd - CMD_CORRECTION_MODE) as usize) {
                     self.set_correction_mode(*mode);
@@ -1663,6 +1821,48 @@ fn open_ai_setup() {
     }, open_ai_settings);
 }
 
+/// Klick in der Diktier-Pille.
+fn on_dictbar_action(action: dictbar::Action) {
+    let needs_setup = with_app(|app| match action {
+        dictbar::Action::Toggle => !app.toggle_dictation_to(app.dict_target),
+        dictbar::Action::Correct => {
+            app.correct_dictation();
+            false
+        }
+        dictbar::Action::Close => {
+            if app.dictation.is_some() {
+                app.toggle_dictation_to(app.dict_target);
+            }
+            app.dict_waiting.clear();
+            dictbar::hide();
+            false
+        }
+        dictbar::Action::Poll => {
+            if app.flush_dictation() {
+                let state = if app.dictation.is_some() { dictbar::State::Listening } else { dictbar::State::Finished };
+                dictbar::set_state(state);
+            }
+            false
+        }
+    });
+    if needs_setup == Some(true) {
+        open_dict_setup();
+    }
+}
+
+/// Strg+Alt+D: diktiert in das Programm im Vordergrund (oder ins Vorleser-Fenster).
+fn dictate_anywhere() {
+    let foreground = typing::foreground();
+    let target = if window::visible() == Some(foreground) { DictTarget::Window } else { DictTarget::Program(foreground.0 as isize) };
+    let needs_setup = with_app(|app| {
+        let target = if app.dictation.is_some() { app.dict_target } else { target };
+        !app.toggle_dictation_to(target)
+    });
+    if needs_setup == Some(true) {
+        open_dict_setup();
+    }
+}
+
 fn open_dict_setup() {
     dictsetup::open(window::visible(), |_| {
         with_app(|app| app.show_assistant());
@@ -1885,6 +2085,7 @@ fn on_hotkey(hwnd: HWND, id: i32) {
         }
         HOTKEY_MENU => show_selection_menu(hwnd),
         HOTKEY_OCR => screen_ocr(),
+        HOTKEY_DICTATE => dictate_anywhere(),
         _ => {}
     }
 }

@@ -73,6 +73,7 @@ pub struct Values {
     pub hotkey_pause: String,
     pub hotkey_menu: String,
     pub hotkey_ocr: String,
+    pub hotkey_dictate: String,
     pub mouse_menu: String,
     pub volume: u32,
     pub clean_text: bool,
@@ -101,7 +102,7 @@ struct Controls {
     window: HWND,
     voice: HWND,
     rate: HWND,
-    hotkeys: [HWND; 4],
+    hotkeys: [HWND; 5],
     mouse: HWND,
     volume: HWND,
     clean: HWND,
@@ -150,7 +151,7 @@ pub fn open(owner: Option<HWND>, values: Values, voices: Voices, on_save: fn(Val
         let dpi = GetDpiForSystem();
         let px = |value: i32| value * dpi as i32 / 96;
         let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
-        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(576) };
+        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(612) };
         let _ = AdjustWindowRectExForDpi(&mut frame, style, false, WS_EX_CONTROLPARENT, dpi);
         let Ok(window) = CreateWindowExW(
             WS_EX_CONTROLPARENT,
@@ -213,22 +214,23 @@ pub fn open(owner: Option<HWND>, values: Values, voices: Voices, on_save: fn(Val
         label(t("settings.pause_resume"), 1);
         label(t("settings.menu_at_mouse_position"), 2);
         label(t("settings.screen_ocr"), 3);
-        label(t("settings.menu_by_mouse"), 4);
-        label(t("settings.volume"), 5);
-        label("Sprache / Language:", 6);
-        label(t("settings.proxy"), 7);
+        label(t("settings.dictate_anywhere"), 4);
+        label(t("settings.menu_by_mouse"), 5);
+        label(t("settings.volume"), 6);
+        label("Sprache / Language:", 7);
+        label(t("settings.proxy"), 8);
         // Die Reihenfolge der Erzeugung ist die Tab-Reihenfolge.
-        let hotkeys = [hotkey(0), hotkey(1), hotkey(2), hotkey(3)];
-        let mouse = child(w!("COMBOBOX"), "", list, 0, field_x, OFFSET + 44 + 4 * row, field_width, 300);
-        let volume = child(w!("msctls_trackbar32"), "", tab | TBS_AUTOTICKS, 0, field_x - 8, OFFSET + 42 + 5 * row, field_width + 16, 30);
-        let language = child(w!("COMBOBOX"), "", list, 0, field_x, OFFSET + 44 + 6 * row, field_width, 300);
+        let hotkeys = [hotkey(0), hotkey(1), hotkey(2), hotkey(3), hotkey(4)];
+        let mouse = child(w!("COMBOBOX"), "", list, 0, field_x, OFFSET + 44 + 5 * row, field_width, 300);
+        let volume = child(w!("msctls_trackbar32"), "", tab | TBS_AUTOTICKS, 0, field_x - 8, OFFSET + 42 + 6 * row, field_width + 16, 30);
+        let language = child(w!("COMBOBOX"), "", list, 0, field_x, OFFSET + 44 + 7 * row, field_width, 300);
         let proxy = CreateWindowExW(
             WS_EX_CLIENTEDGE,
             w!("EDIT"),
             &HSTRING::from(values.proxy.as_str()),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(ES_AUTOHSCROLL as u32),
             px(field_x),
-            px(OFFSET + 44 + 7 * row),
+            px(OFFSET + 44 + 8 * row),
             px(field_width),
             px(26),
             Some(window),
@@ -245,22 +247,22 @@ pub fn open(owner: Option<HWND>, values: Values, voices: Voices, on_save: fn(Val
             w!("BUTTON"),
             t("settings.clean_up_text_before"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, OFFSET + 46 + 8 * row, 438, 24,
+            0, label_x, OFFSET + 46 + 9 * row, 438, 24,
         );
         let update = child(
             w!("BUTTON"),
             t("settings.check_github_for_new"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, OFFSET + 46 + 9 * row, 438, 24,
+            0, label_x, OFFSET + 46 + 10 * row, 438, 24,
         );
         let remember = child(
             w!("BUTTON"),
             t("settings.remember_text"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, OFFSET + 42 + 10 * row, 438, 24,
+            0, label_x, OFFSET + 42 + 11 * row, 438, 24,
         );
-        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, OFFSET + 446, 100, 30);
-        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, OFFSET + 446, 98, 30);
+        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, OFFSET + 482, 100, 30);
+        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, OFFSET + 482, 98, 30);
 
         let c = Controls { window, voice, rate, hotkeys, mouse, volume, clean, update, language, proxy, remember, font };
         fill(&c, &values);
@@ -321,7 +323,7 @@ unsafe fn cancel(hwnd: HWND) {
 }
 
 unsafe fn fill(c: &Controls, values: &Values) {
-    let texts = [&values.hotkey_read, &values.hotkey_pause, &values.hotkey_menu, &values.hotkey_ocr];
+    let texts = [&values.hotkey_read, &values.hotkey_pause, &values.hotkey_menu, &values.hotkey_ocr, &values.hotkey_dictate];
     for (control, text) in c.hotkeys.iter().zip(texts) {
         // Ohne Zusatztaste wäre die Kombination ungültig; das Feld ergänzt dann Strg+Alt.
         let rules = LPARAM((HOTKEYF_CONTROL | HOTKEYF_ALT) as isize);
@@ -391,7 +393,7 @@ unsafe fn read_hotkey(control: HWND, original: &str) -> Result<String, ()> {
 
 unsafe fn save(c: &Controls) {
     let Some(original) = ORIGINAL.with(|cell| cell.borrow().clone()) else { return };
-    let originals = [&original.hotkey_read, &original.hotkey_pause, &original.hotkey_menu, &original.hotkey_ocr];
+    let originals = [&original.hotkey_read, &original.hotkey_pause, &original.hotkey_menu, &original.hotkey_ocr, &original.hotkey_dictate];
     let mut hotkeys = Vec::new();
     for (control, original) in c.hotkeys.iter().zip(originals) {
         match read_hotkey(*control, original) {
@@ -410,6 +412,7 @@ unsafe fn save(c: &Controls) {
         None => original.mouse_menu.clone(),
     };
     let values = Values {
+        hotkey_dictate: hotkeys.pop().unwrap_or_default(),
         hotkey_ocr: hotkeys.pop().unwrap_or_default(),
         hotkey_menu: hotkeys.pop().unwrap_or_default(),
         hotkey_pause: hotkeys.pop().unwrap_or_default(),

@@ -26,6 +26,8 @@ pub struct Config {
     pub hotkey_menu: String,
     /// Bildschirmausschnitt erkennen und vorlesen.
     pub hotkey_ocr: String,
+    /// Diktieren in das Programm im Vordergrund.
+    pub hotkey_dictate: String,
     /// Mausauslöser für das Menü, z. B. "Strg+Rechtsklick"; leer = aus.
     pub mouse_menu: String,
     /// Lautstärke in Prozent.
@@ -64,6 +66,8 @@ pub struct Config {
     pub correction_custom: String,
     /// Nach dem Diktat automatisch korrigieren (wenn eine KI eingerichtet ist).
     pub dict_auto_correct: bool,
+    /// Mikrofon fürs Diktieren (Name wie in Windows); leer = Windows-Standard.
+    pub microphone: String,
 }
 
 impl Default for Config {
@@ -75,6 +79,7 @@ impl Default for Config {
             hotkey_pause: "Strg+Alt+P".into(),
             hotkey_menu: "Strg+Alt+M".into(),
             hotkey_ocr: "Strg+Alt+O".into(),
+            hotkey_dictate: "Strg+Alt+D".into(),
             mouse_menu: "Strg+Rechtsklick".into(),
             volume: 100,
             clean_text: true,
@@ -95,6 +100,7 @@ impl Default for Config {
             correction_mode: "spelling".into(),
             correction_custom: String::new(),
             dict_auto_correct: true,
+            microphone: String::new(),
         }
     }
 }
@@ -116,6 +122,7 @@ impl Config {
                 "hotkey_pause" => cfg.hotkey_pause = value.to_string(),
                 "hotkey_menu" => cfg.hotkey_menu = value.to_string(),
                 "hotkey_ocr" => cfg.hotkey_ocr = value.to_string(),
+                "hotkey_dictate" => cfg.hotkey_dictate = value.to_string(),
                 "mouse_menu" => cfg.mouse_menu = value.to_string(),
                 "volume" => cfg.volume = value.parse().unwrap_or(100).min(100),
                 "clean_text" => cfg.clean_text = value != "0",
@@ -136,6 +143,7 @@ impl Config {
                 "correction_mode" => cfg.correction_mode = value.to_string(),
                 "correction_custom" => cfg.correction_custom = value.to_string(),
                 "dict_auto_correct" => cfg.dict_auto_correct = value != "0",
+                "microphone" => cfg.microphone = value.to_string(),
                 _ => {}
             }
         }
@@ -146,18 +154,19 @@ impl Config {
         format!(
             "# Vorleser-Einstellungen. Tastenkombinationen z. B. Strg+Alt+V, Ctrl+Shift+F9, Win+Alt+R; leer = aus.\r\n\
              # mouse_menu: Zusatztaste(n) + Rechtsklick, z. B. Strg+Rechtsklick oder Strg+Shift+Rechtsklick.\r\n\
-             voice={}\r\nrate={}\r\nhotkey_read={}\r\nhotkey_pause={}\r\nhotkey_menu={}\r\nhotkey_ocr={}\r\nmouse_menu={}\r\n\
+             voice={}\r\nrate={}\r\nhotkey_read={}\r\nhotkey_pause={}\r\nhotkey_menu={}\r\nhotkey_ocr={}\r\nhotkey_dictate={}\r\nmouse_menu={}\r\n\
              volume={}\r\nclean_text={}\r\nalways_on_top={}\r\n\
              update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n\
              remember_text={}\r\nresume_pos={}\r\nguide_shown={}\r\n\
              assistant={}\r\nai_kind={}\r\nai_url={}\r\nai_key={}\r\nai_model={}\r\nsummary_mode={}\r\n\
-             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\n",
+             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\nmicrophone={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
             self.hotkey_pause,
             self.hotkey_menu,
             self.hotkey_ocr,
+            self.hotkey_dictate,
             self.mouse_menu,
             self.volume,
             self.clean_text as u8,
@@ -177,7 +186,8 @@ impl Config {
             self.summary_mode,
             self.correction_mode,
             self.correction_custom,
-            self.dict_auto_correct as u8
+            self.dict_auto_correct as u8,
+            self.microphone
         )
     }
 
@@ -340,6 +350,7 @@ mod tests {
             hotkey_pause: String::new(),
             hotkey_menu: "Win+Alt+M".into(),
             hotkey_ocr: String::new(),
+            hotkey_dictate: "Strg+Shift+D".into(),
             mouse_menu: "Strg+Shift+Rechtsklick".into(),
             volume: 70,
             clean_text: false,
@@ -360,6 +371,7 @@ mod tests {
             correction_mode: "custom".into(),
             correction_custom: "als freundliche E-Mail".into(),
             dict_auto_correct: false,
+            microphone: "Mikrofon (USB Audio)".into(),
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }
