@@ -58,6 +58,12 @@ pub struct Config {
     pub ai_model: String,
     /// Art der Zusammenfassung: "short", "bullets" oder "detailed".
     pub summary_mode: String,
+    /// Korrekturstufe für Diktate: "spelling", "style", "rewrite" oder "custom".
+    pub correction_mode: String,
+    /// Eigene Vorgabe für die Korrektur, z. B. „als freundliche E-Mail“.
+    pub correction_custom: String,
+    /// Nach dem Diktat automatisch korrigieren (wenn eine KI eingerichtet ist).
+    pub dict_auto_correct: bool,
 }
 
 impl Default for Config {
@@ -86,6 +92,9 @@ impl Default for Config {
             ai_key: String::new(),
             ai_model: String::new(),
             summary_mode: "short".into(),
+            correction_mode: "spelling".into(),
+            correction_custom: String::new(),
+            dict_auto_correct: true,
         }
     }
 }
@@ -124,6 +133,9 @@ impl Config {
                 "ai_key" => cfg.ai_key = value.to_string(),
                 "ai_model" => cfg.ai_model = value.to_string(),
                 "summary_mode" => cfg.summary_mode = value.to_string(),
+                "correction_mode" => cfg.correction_mode = value.to_string(),
+                "correction_custom" => cfg.correction_custom = value.to_string(),
+                "dict_auto_correct" => cfg.dict_auto_correct = value != "0",
                 _ => {}
             }
         }
@@ -138,7 +150,8 @@ impl Config {
              volume={}\r\nclean_text={}\r\nalways_on_top={}\r\n\
              update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n\
              remember_text={}\r\nresume_pos={}\r\nguide_shown={}\r\n\
-             assistant={}\r\nai_kind={}\r\nai_url={}\r\nai_key={}\r\nai_model={}\r\nsummary_mode={}\r\n",
+             assistant={}\r\nai_kind={}\r\nai_url={}\r\nai_key={}\r\nai_model={}\r\nsummary_mode={}\r\n\
+             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
@@ -161,7 +174,10 @@ impl Config {
             self.ai_url,
             self.ai_key,
             self.ai_model,
-            self.summary_mode
+            self.summary_mode,
+            self.correction_mode,
+            self.correction_custom,
+            self.dict_auto_correct as u8
         )
     }
 
@@ -341,6 +357,9 @@ mod tests {
             ai_key: "dpapi:00ff".into(),
             ai_model: "llama3.1:8b".into(),
             summary_mode: "bullets".into(),
+            correction_mode: "custom".into(),
+            correction_custom: "als freundliche E-Mail".into(),
+            dict_auto_correct: false,
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }

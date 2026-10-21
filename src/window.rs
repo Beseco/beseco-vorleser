@@ -62,6 +62,9 @@ pub const ID_SUMMARIZE: u32 = 114;
 pub const ID_SUMMARY_MODE: u32 = 115;
 pub const ID_READ_RESULT: u32 = 116;
 const ID_RESULT: u32 = 117;
+pub const ID_DICTATE: u32 = 118;
+pub const ID_CORRECT: u32 = 119;
+pub const ID_CORRECTION_MODE: u32 = 120;
 /// Befehle der Menüleiste und der Tastenkürzel: `MENU_BASE` + Befehlsnummer aus `main.rs`.
 pub const MENU_BASE: u32 = 20_000;
 
@@ -112,11 +115,27 @@ struct Controls {
     text_label: HWND,
     result_label: HWND,
     result: HWND,
+    dictate: HWND,
+    correct: HWND,
+    correction_mode: HWND,
+    dict_status: HWND,
 }
 
 impl Controls {
-    fn assistant_controls(&self) -> [HWND; 7] {
-        [self.summarize, self.summary_mode, self.read_result, self.ai_status, self.text_label, self.result_label, self.result]
+    fn assistant_controls(&self) -> [HWND; 11] {
+        [
+            self.summarize,
+            self.summary_mode,
+            self.read_result,
+            self.ai_status,
+            self.text_label,
+            self.result_label,
+            self.result,
+            self.dictate,
+            self.correct,
+            self.correction_mode,
+            self.dict_status,
+        ]
     }
 
     fn edit_of(&self, pane: Pane) -> HWND {
@@ -128,7 +147,7 @@ impl Controls {
 }
 
 impl Controls {
-    fn children(&self) -> [HWND; 20] {
+    fn children(&self) -> [HWND; 24] {
         [
             self.voice_label,
             self.voice,
@@ -150,6 +169,10 @@ impl Controls {
             self.text_label,
             self.result_label,
             self.result,
+            self.dictate,
+            self.correct,
+            self.correction_mode,
+            self.dict_status,
         ]
     }
 }
@@ -162,6 +185,8 @@ thread_local! {
     static ACCELERATORS: Cell<HACCEL> = const { Cell::new(HACCEL(std::ptr::null_mut())) };
     static PAUSED: Cell<bool> = const { Cell::new(false) };
     static ASSISTANT: Cell<bool> = const { Cell::new(false) };
+    static DICTATING: Cell<bool> = const { Cell::new(false) };
+    static RESULT_KIND: Cell<&'static str> = const { Cell::new("assist.result") };
 }
 
 fn controls() -> Option<Controls> {
@@ -281,6 +306,10 @@ pub fn create(icon: HICON, on_command: fn(u32, u32), on_drop: fn(String)) -> Opt
             text_label: child(w!("STATIC"), 0, none, 0),
             result_label: child(w!("STATIC"), 0, none, 0),
             result: child(w!("EDIT"), edit_style, WS_EX_CLIENTEDGE, ID_RESULT),
+            dictate: child(w!("BUTTON"), tab, none, ID_DICTATE),
+            correct: child(w!("BUTTON"), tab, none, ID_CORRECT),
+            correction_mode: child(w!("COMBOBOX"), list, none, ID_CORRECTION_MODE),
+            dict_status: child(w!("STATIC"), 0, none, 0),
         };
         for control in c.assistant_controls() {
             let _ = ShowWindow(control, SW_HIDE);
@@ -322,12 +351,18 @@ pub fn relabel() {
         (c.summarize, t("assist.summarize")),
         (c.read_result, t("assist.read_result")),
         (c.text_label, t("assist.text")),
-        (c.result_label, t("assist.result")),
+        (c.correct, t("assist.correct")),
     ];
     for (control, text) in texts {
         unsafe {
             let _ = SetWindowTextW(control, &HSTRING::from(text));
         }
+    }
+    let dictating = DICTATING.with(|d| d.get());
+    let result = RESULT_KIND.with(|k| k.get());
+    unsafe {
+        let _ = SetWindowTextW(c.dictate, &HSTRING::from(if dictating { t("assist.dictate_stop") } else { t("assist.dictate") }));
+        let _ = SetWindowTextW(c.result_label, &HSTRING::from(t(result)));
     }
 }
 
@@ -344,6 +379,62 @@ pub fn set_assistant(on: bool) {
 }
 
 /// Füllt die Auswahl der Zusammenfassungsart und wählt `selected`.
+/// Überschrift des rechten Feldes, z. B. „Zusammenfassung“ oder „Korrigierte Fassung“.
+pub fn set_result_label(key: &'static str) {
+    RESULT_KIND.with(|k| k.set(key));
+    if let Some(c) = controls() {
+        unsafe {
+            let _ = SetWindowTextW(c.result_label, &HSTRING::from(t(key)));
+        }
+    }
+}
+
+/// Schaltfläche und Hinweis während eines Diktats.
+pub fn set_dictating(on: bool, status: &str) {
+    DICTATING.with(|d| d.set(on));
+    if let Some(c) = controls() {
+        unsafe {
+            let label = if on { t("assist.dictate_stop") } else { t("assist.dictate") };
+            let _ = SetWindowTextW(c.dictate, &HSTRING::from(label));
+            let _ = SetWindowTextW(c.dict_status, &HSTRING::from(status));
+        }
+    }
+}
+
+pub fn set_correction_modes(labels: &[&str], selected: usize) {
+    let Some(c) = controls() else { return };
+    fill(c.correction_mode, labels.iter().copied().enumerate());
+    select(c.correction_mode, Some(selected));
+}
+
+pub fn selected_correction_mode() -> Option<usize> {
+    selected(controls()?.correction_mode)
+}
+
+/// Fügt diktierten Text an der Schreibmarke des linken Feldes ein (mit Leerzeichen davor, wenn
+/// dort schon Text steht) und lässt sich mit Strg+Z zurücknehmen.
+pub fn insert_text(text: &str) {
+    let Some(source) = source() else { return };
+    let Some(c) = controls() else { return };
+    let before = source.content.get(..source.selection.0 as usize).unwrap_or_default();
+    let text = HSTRING::from(dictated_text(&String::from_utf16_lossy(before), text));
+    unsafe {
+        SendMessageW(c.edit, EM_REPLACESEL, Some(WPARAM(1)), Some(LPARAM(text.as_ptr() as isize)));
+        SendMessageW(c.edit, EM_SCROLLCARET, None, None);
+    }
+}
+
+/// Fügt einen erkannten Abschnitt an `before` an: mit Leerzeichen dazwischen und großem Anfang
+/// nach einem Satzende (die Erkennung arbeitet abschnittsweise und weiß das nicht).
+fn dictated_text(before: &str, text: &str) -> String {
+    let last = before.chars().last();
+    let space = if last.is_some_and(|ch| !ch.is_whitespace()) { " " } else { "" };
+    let sentence_start = before.trim_end().chars().last().is_none_or(|ch| matches!(ch, '.' | '!' | '?' | ':'));
+    let mut chars = text.chars();
+    let first = chars.next().map(|ch| if sentence_start { ch.to_uppercase().collect() } else { ch.to_string() });
+    format!("{space}{}{}", first.unwrap_or_default(), chars.as_str())
+}
+
 pub fn set_summary_modes(labels: &[&str], selected: usize) {
     let Some(c) = controls() else { return };
     fill(c.summary_mode, labels.iter().copied().enumerate());
@@ -368,6 +459,7 @@ pub fn set_ai_busy(busy: bool) {
     if let Some(c) = controls() {
         unsafe {
             let _ = EnableWindow(c.summarize, !busy);
+            let _ = EnableWindow(c.correct, !busy);
         }
     }
 }
@@ -699,6 +791,13 @@ unsafe fn layout(c: &Controls) {
         let status_x = margin + px(566);
         place(c.ai_status, status_x, y + px(4), width - status_x - margin, row);
         y += row + gap;
+        // Zweite Leiste: Diktieren und Korrigieren.
+        place(c.dictate, margin, y - px(1), px(150), row + px(2));
+        place(c.correct, margin + px(158), y - px(1), px(110), row + px(2));
+        place(c.correction_mode, margin + px(276), y, px(220), px(300));
+        let dict_x = margin + px(506);
+        place(c.dict_status, dict_x, y + px(4), width - dict_x - margin, row);
+        y += row + gap;
         let half = (width - 2 * margin - gap) / 2;
         place(c.text_label, margin, y, half, px(20));
         place(c.result_label, margin + half + gap, y, half, px(20));
@@ -768,4 +867,18 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         }
     }
     LRESULT(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn joins_dictated_sections() {
+        assert_eq!(dictated_text("", "hallo zusammen."), "Hallo zusammen.");
+        assert_eq!(dictated_text("Ein Angebot.", "mit freundlichen Grüßen"), " Mit freundlichen Grüßen");
+        assert_eq!(dictated_text("Wir melden uns", "bis Freitag"), " bis Freitag");
+        assert_eq!(dictated_text("Zeile\r\n", "neu"), "neu");
+        assert_eq!(dictated_text("Frage? ", "ja"), "Ja");
+    }
 }

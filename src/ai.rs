@@ -88,6 +88,53 @@ impl Summary {
     }
 }
 
+/// Wie stark ein diktierter Text überarbeitet wird.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Correction {
+    /// Nur Rechtschreibung, Grammatik und Zeichensetzung.
+    Spelling,
+    /// Zusätzlich Satzbau glätten.
+    Style,
+    /// Als gut lesbaren Text neu formulieren.
+    Rewrite,
+    /// Nach eigener Vorgabe.
+    Custom,
+}
+
+impl Correction {
+    pub const ALL: [Correction; 4] = [Correction::Spelling, Correction::Style, Correction::Rewrite, Correction::Custom];
+
+    pub fn code(self) -> &'static str {
+        match self {
+            Correction::Spelling => "spelling",
+            Correction::Style => "style",
+            Correction::Rewrite => "rewrite",
+            Correction::Custom => "custom",
+        }
+    }
+
+    pub fn from_code(code: &str) -> Correction {
+        Correction::ALL.into_iter().find(|c| c.code() == code).unwrap_or(Correction::Spelling)
+    }
+
+    fn instruction(self, custom: &str) -> String {
+        let task = match self {
+            Correction::Spelling => "Correct only spelling, grammar and punctuation, and obvious speech recognition errors. Keep the wording, word order and sentence structure exactly as they are.",
+            Correction::Style => "Correct spelling, grammar, punctuation and speech recognition errors, and smooth the sentence structure so the text reads naturally. Keep the content, tone and length; do not add or remove information.",
+            Correction::Rewrite => "Rewrite the text as a clear, well-structured and polished text with sensible paragraphs. Keep all information and the language; you may reorder and rephrase freely.",
+            Correction::Custom => "",
+        };
+        let custom = custom.trim();
+        if self == Correction::Custom && !custom.is_empty() {
+            format!("Edit the text according to this instruction: {custom}. Keep all information unless the instruction says otherwise.")
+        } else if self == Correction::Custom {
+            Correction::Style.instruction("")
+        } else {
+            task.to_string()
+        }
+    }
+}
+
 /// Grundregeln für alle Antworten: Sprache des Textes, nur Klartext (wird vorgelesen).
 const BASE_RULES: &str = "Answer in the same language as the text. Write plain text only, without Markdown (no **, no #, no tables), because the answer is read aloud. Do not add an introduction like \"Here is the summary\".";
 
@@ -191,6 +238,16 @@ impl Provider {
         let start = Instant::now();
         let answer = self.chat("Reply with exactly one word: OK", "Test")?;
         Ok((start.elapsed().as_millis(), answer))
+    }
+
+    /// Überarbeitet einen diktierten Text in der Stufe `mode`.
+    pub fn correct(&self, text: &str, mode: Correction, custom: &str) -> Result<String, String> {
+        let system = format!(
+            "You edit text that was dictated and converted by speech recognition. {} {} Output only the edited text.",
+            mode.instruction(custom),
+            BASE_RULES
+        );
+        self.chat(&system, text)
     }
 
     /// Fasst `text` zusammen. Lange Texte werden zuerst teilweise verdichtet; `progress` erhält
@@ -307,6 +364,14 @@ pub fn unprotect(stored: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn builds_correction_instructions() {
+        assert!(Correction::Spelling.instruction("").contains("Keep the wording"));
+        assert!(Correction::Custom.instruction("als freundliche E-Mail").contains("als freundliche E-Mail"));
+        assert_eq!(Correction::Custom.instruction("  "), Correction::Style.instruction(""));
+        assert_eq!(Correction::from_code("rewrite"), Correction::Rewrite);
+    }
 
     #[test]
     fn builds_base_urls() {

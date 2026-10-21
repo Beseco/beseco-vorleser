@@ -44,7 +44,7 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [ ] Beseco-Konto als Anbieter (Anmeldung, Kontingente).
 - [x] Arbeitsbereich mit geteilter Ansicht, Zusammenfassen (kurz, Stichpunkte, ausführlich).
 - [ ] Antwort der KI während des Schreibens anzeigen (Streaming) und Abbrechen-Schaltfläche.
-- [ ] Diktieren mit lokalem Whisper, KI-Korrektur in Stufen.
+- [x] Diktieren mit lokalem Whisper, KI-Korrektur in Stufen.
 - [ ] Audiodatei → Abschrift → Protokoll.
 - [ ] Datenschutz-Modus (personenbezogene Daten lokal ersetzen).
 - [ ] Sprachbefehle („Beseco, lies vor“), nach Machbarkeitstest.

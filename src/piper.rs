@@ -182,20 +182,9 @@ pub fn install(voice: &CatalogVoice, mut progress: impl FnMut(Stage, u64, u64) -
         let target = engine_dir();
         let _ = std::fs::remove_dir_all(&target);
         std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
-        // tar.exe gehört seit Windows 10 (1803) zum System und entpackt auch ZIP-Dateien.
-        let tar = PathBuf::from(std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()))
-            .join("System32")
-            .join("tar.exe");
-        let status = Command::new(tar)
-            .arg("-xf")
-            .arg(&zip)
-            .arg("-C")
-            .arg(&target)
-            .creation_flags(CREATE_NO_WINDOW)
-            .status()
-            .map_err(|e| e.to_string())?;
+        let unpacked = unpack(&zip, &target);
         let _ = std::fs::remove_file(&zip);
-        if !status.success() || !engine_installed() {
+        if !unpacked || !engine_installed() {
             let _ = std::fs::remove_dir_all(&target);
             return Err(t("err.unpack").to_string());
         }
@@ -225,7 +214,22 @@ pub fn remove(key: &str) {
     }
 }
 
-fn verify(path: &Path, expected: &str) -> Result<(), String> {
+/// Entpackt ein ZIP-Archiv mit dem tar.exe von Windows (seit Windows 10, Version 1803).
+pub(crate) fn unpack(zip: &Path, target: &Path) -> bool {
+    let tar = PathBuf::from(std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()))
+        .join("System32")
+        .join("tar.exe");
+    Command::new(tar)
+        .arg("-xf")
+        .arg(zip)
+        .arg("-C")
+        .arg(target)
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+pub(crate) fn verify(path: &Path, expected: &str) -> Result<(), String> {
     match sha256_file(path) {
         Some(hash) if hash == expected => Ok(()),
         _ => {

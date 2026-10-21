@@ -10,6 +10,9 @@ Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic
 - KI-Anbieter: eigener Server oder dieser PC (Ollama) oder Cloud-Anbieter mit OpenAI-kompatibler Schnittstelle (z. B. IONOS AI Model Hub); Modelle abrufen und Verbindung testen
 - KI-Check: zeigt Prozessor, Arbeitsspeicher und Grafikkarte und empfiehlt lokal, Server oder Cloud
 - Der Schlüssel wird mit dem Windows-Konto verschlüsselt gespeichert
+- Neu: Diktieren (F8) mit lokaler Spracherkennung (Whisper): der Text erscheint während des Sprechens an der Schreibmarke, Aufnahmen verlassen den Rechner nicht. Modell (schnell, genau, sehr genau) einmalig unter Assistent → Diktieren einrichten herunterladen
+- Neu: Korrigieren (Umschalt+F8) in Stufen: nur Rechtschreibung, Satzbau glätten, umformulieren oder eigene Vorgabe (z. B. „als freundliche E-Mail“); nach einem Diktat automatisch, wenn eine KI eingerichtet ist
+- Die Deinstallation entfernt heruntergeladene Modelle der Spracherkennung
 
 ## 0.4.0 – 2026-10-21
 

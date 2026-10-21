@@ -86,6 +86,7 @@ Root: HKCU; Subkey: "Software\Beseco\Vorleser"; ValueType: string; ValueName: "A
 [UninstallDelete]
 ; Heruntergeladene KI-Stimmen (bis mehrere hundert MB). Die Einstellungen bleiben erhalten.
 Type: filesandordirs; Name: "{localappdata}\Vorleser\piper"
+Type: filesandordirs; Name: "{localappdata}\Vorleser\whisper"
 
 [Run]
 Filename: "{app}\vorleser.exe"; Description: "{cm:StartNow}"; Flags: nowait postinstall skipifsilent

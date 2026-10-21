@@ -8,6 +8,8 @@ mod aicheck;
 mod aisettings;
 mod aivoices;
 mod config;
+mod dictation;
+mod dictsetup;
 mod documents;
 mod http;
 mod i18n;
@@ -94,6 +96,13 @@ const WM_OCR_DONE: u32 = WM_APP + 10;
 const WM_AI_DONE: u32 = WM_APP + 11;
 /// Fortschritt der KI: `wparam` = Schritt, `lparam` = Zahl der Schritte.
 const WM_AI_PROGRESS: u32 = WM_APP + 12;
+/// Diktat: Spracherkennung bereit (`wparam` 1), gescheitert (0, Text in `DICT_ERROR`) oder das
+/// Mikrofon bleibt stumm (2).
+const WM_DICT_READY: u32 = WM_APP + 13;
+/// Diktat: neuer Text in `DICT_TEXTS`.
+const WM_DICT_TEXT: u32 = WM_APP + 14;
+/// Diktat: alle Abschnitte erkannt, die Erkennung ist beendet.
+const WM_DICT_DONE: u32 = WM_APP + 15;
 /// Kennung der Update-Meldung im Infobereich.
 const BALLOON_UPDATE: u32 = 1;
 /// Klick auf eine Meldung im Infobereich (NIN_BALLOONUSERCLICK).
@@ -146,6 +155,11 @@ const CMD_ASSISTANT: u32 = 33;
 const CMD_SUMMARIZE: u32 = 34;
 const CMD_READ_RESULT: u32 = 35;
 const CMD_AI_SETTINGS: u32 = 36;
+const CMD_DICTATE: u32 = 37;
+const CMD_CORRECT: u32 = 38;
+const CMD_DICT_SETUP: u32 = 39;
+/// Korrekturstufe: `CMD_CORRECTION_MODE` + Nummer.
+const CMD_CORRECTION_MODE: u32 = 3600;
 /// Art der Zusammenfassung: `CMD_SUMMARY_MODE` + Nummer.
 const CMD_SUMMARY_MODE: u32 = 3500;
 
@@ -189,6 +203,8 @@ struct App {
     retry: Option<String>,
     /// Mitlesen: Der gesprochene Text steht im Fenster; das aktuelle Wort wird dort markiert.
     follow: Option<Follow>,
+    /// Laufendes Diktat (Mikrofon); beim Verwerfen endet die Aufnahme.
+    dictation: Option<dictation::Recorder>,
 }
 
 #[derive(Clone, Copy)]
@@ -244,6 +260,13 @@ static RECOGNIZED: std::sync::Mutex<Option<Result<String, String>>> = std::sync:
 static AI_RESULT: std::sync::Mutex<Option<Result<String, String>>> = std::sync::Mutex::new(None);
 /// Die KI arbeitet gerade.
 static AI_BUSY: AtomicBool = AtomicBool::new(false);
+/// Woran die KI gerade arbeitet: Zusammenfassung (false) oder Korrektur (true).
+static AI_CORRECTING: AtomicBool = AtomicBool::new(false);
+/// Erkannter Text des Diktats, der noch ins Fenster muss.
+static DICT_TEXTS: std::sync::Mutex<std::collections::VecDeque<String>> = std::sync::Mutex::new(std::collections::VecDeque::new());
+static DICT_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// Im laufenden Diktat wurde schon Text erkannt (sonst gibt es nichts zu korrigieren).
+static DICT_GOT_TEXT: AtomicBool = AtomicBool::new(false);
 /// Es wird gerade eine Datei gelesen.
 static LOADING: AtomicBool = AtomicBool::new(false);
 
@@ -270,7 +293,7 @@ impl App {
         tts.set_rate(cfg.rate);
         // Der Testlauf bleibt stumm.
         tts.set_volume(if TEST_MODE.load(Ordering::Relaxed) { 0 } else { cfg.volume });
-        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None };
+        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None };
         app.add_icon();
         app.register_hotkeys();
         app.fill_window();
@@ -411,6 +434,149 @@ impl App {
             t("assist.not_configured").to_string()
         };
         window::set_ai_status(&status);
+        let labels: Vec<&str> = ai::Correction::ALL.iter().map(|c| correction_label(*c)).collect();
+        let correction = ai::Correction::from_code(&self.cfg.correction_mode);
+        window::set_correction_modes(&labels, ai::Correction::ALL.iter().position(|c| *c == correction).unwrap_or(0));
+        if self.dictation.is_none() {
+            let hint = if dictation::best_installed().is_some() { t("assist.dict_hint") } else { t("assist.dict_not_set_up") };
+            window::set_dictating(false, hint);
+        }
+    }
+
+    fn set_correction_mode(&mut self, mode: ai::Correction) {
+        self.cfg.correction_mode = mode.code().to_string();
+        self.cfg.save();
+        self.show_assistant();
+        self.refresh_menu_bar();
+    }
+
+    /// Startet oder beendet das Diktat. `false`, wenn die Spracherkennung erst eingerichtet werden muss.
+    fn toggle_dictation(&mut self) -> bool {
+        if self.dictation.is_some() {
+            // Das Verwerfen beendet die Aufnahme; der letzte Abschnitt wird noch erkannt.
+            self.dictation = None;
+            window::set_dictating(false, t("assist.dict_finishing"));
+            self.refresh_menu_bar();
+            return true;
+        }
+        let Some(model) = dictation::best_installed() else { return false };
+        // Sonst nähme das Mikrofon die eigene Sprachausgabe auf.
+        self.stop();
+        DICT_GOT_TEXT.store(false, Ordering::Relaxed);
+        let (sender, segments) = std::sync::mpsc::channel::<Vec<i16>>();
+        let recorder = match dictation::Recorder::start(sender) {
+            Ok(recorder) => recorder,
+            Err(error) => {
+                unsafe {
+                    MessageBoxW(window::visible(), &HSTRING::from(error), APP_NAME, MB_ICONWARNING);
+                }
+                return true;
+            }
+        };
+        let hwnd = self.hwnd.0 as isize;
+        let language = i18n::current().to_string();
+        std::thread::spawn(move || {
+            let post = |msg: u32, wparam: usize| unsafe {
+                let _ = PostMessageW(Some(HWND(hwnd as *mut _)), msg, WPARAM(wparam), LPARAM(0));
+            };
+            match dictation::Server::start(model, &language) {
+                Ok(server) => {
+                    post(WM_DICT_READY, 1);
+                    // Läuft, bis die Aufnahme endet und alle Abschnitte erkannt sind.
+                    for segment in segments {
+                        if segment.is_empty() {
+                            post(WM_DICT_READY, 2);
+                            continue;
+                        }
+                        match server.transcribe(&segment) {
+                            Ok(text) if !text.is_empty() => {
+                                DICT_TEXTS.lock().unwrap().push_back(text);
+                                post(WM_DICT_TEXT, 0);
+                            }
+                            Ok(_) => {}
+                            Err(error) => *DICT_ERROR.lock().unwrap() = Some(error),
+                        }
+                    }
+                }
+                Err(error) => {
+                    *DICT_ERROR.lock().unwrap() = Some(error);
+                    post(WM_DICT_READY, 0);
+                }
+            }
+            post(WM_DICT_DONE, 0);
+        });
+        self.dictation = Some(recorder);
+        window::show();
+        window::set_dictating(true, t("assist.dict_preparing"));
+        self.refresh_menu_bar();
+        true
+    }
+
+    fn on_dict_ready(&mut self, state: usize) {
+        if state != 0 {
+            if self.dictation.is_some() {
+                window::set_dictating(true, if state == 2 { t("assist.dict_silent") } else { t("assist.dict_listening") });
+            }
+            return;
+        }
+        self.dictation = None;
+        let error = DICT_ERROR.lock().unwrap().take().unwrap_or_default();
+        window::set_dictating(false, "");
+        unsafe {
+            MessageBoxW(window::visible(), &HSTRING::from(error), APP_NAME, MB_ICONWARNING);
+        }
+    }
+
+    fn on_dict_text(&mut self) {
+        let texts: Vec<String> = DICT_TEXTS.lock().unwrap().drain(..).collect();
+        for text in texts {
+            DICT_GOT_TEXT.store(true, Ordering::Relaxed);
+            window::insert_text(&text);
+        }
+    }
+
+    fn on_dict_done(&mut self) {
+        if self.dictation.is_some() {
+            return; // Ein neues Diktat läuft schon.
+        }
+        self.show_assistant();
+        if let Some(error) = DICT_ERROR.lock().unwrap().take() {
+            tray::balloon(self.hwnd, "Vorleser", &error);
+        }
+        let got_text = DICT_GOT_TEXT.swap(false, Ordering::Relaxed);
+        if got_text && self.cfg.dict_auto_correct && self.provider().is_ready() && window::text().is_some() {
+            self.correct();
+        }
+    }
+
+    /// Überarbeitet den Text links (oder die Markierung) in der eingestellten Stufe; das Ergebnis
+    /// erscheint rechts.
+    fn correct(&mut self) -> bool {
+        let provider = self.provider();
+        if !provider.is_ready() {
+            tray::balloon(self.hwnd, "Vorleser", t("app.ai_not_ready"));
+            return false;
+        }
+        let Some(text) = window::text() else {
+            tray::balloon(self.hwnd, "Vorleser", t("app.text_field_empty"));
+            return true;
+        };
+        if AI_BUSY.swap(true, Ordering::Relaxed) {
+            return true;
+        }
+        AI_CORRECTING.store(true, Ordering::Relaxed);
+        let mode = ai::Correction::from_code(&self.cfg.correction_mode);
+        let custom = self.cfg.correction_custom.clone();
+        let hwnd = self.hwnd.0 as isize;
+        window::set_ai_busy(true);
+        window::set_title(Some(t("app.ai_correcting")));
+        std::thread::spawn(move || {
+            *AI_RESULT.lock().unwrap() = Some(provider.correct(&text, mode, &custom));
+            unsafe {
+                let _ = PostMessageW(Some(HWND(hwnd as *mut _)), WM_AI_DONE, WPARAM(0), LPARAM(0));
+            }
+        });
+        true
     }
 
     fn set_assistant(&mut self, on: bool) -> bool {
@@ -447,6 +613,7 @@ impl App {
         if AI_BUSY.swap(true, Ordering::Relaxed) {
             return true;
         }
+        AI_CORRECTING.store(false, Ordering::Relaxed);
         let text = self.prepare(text);
         let mode = ai::Summary::from_code(&self.cfg.summary_mode);
         let hwnd = self.hwnd.0 as isize;
@@ -468,8 +635,13 @@ impl App {
         window::set_ai_busy(false);
         window::set_title(None);
         match AI_RESULT.lock().unwrap().take() {
+            Some(Ok(result)) if AI_CORRECTING.load(Ordering::Relaxed) => {
+                window::set_result_label("assist.corrected");
+                window::set_text_in(window::Pane::Result, &to_crlf(&result));
+            }
             Some(Ok(summary)) => {
                 self.stop();
+                window::set_result_label("assist.result");
                 window::set_text_in(window::Pane::Result, &to_crlf(&summary));
                 self.speak_pane(window::Pane::Result);
             }
@@ -483,7 +655,8 @@ impl App {
         }
     }
 
-    fn apply_ai_settings(&mut self, provider: ai::Provider) {
+    fn apply_ai_settings(&mut self, provider: ai::Provider, custom: String) {
+        self.cfg.correction_custom = custom;
         self.cfg.ai_kind = provider.kind.code().to_string();
         self.cfg.ai_url = provider.url;
         self.cfg.ai_key = ai::protect(&provider.key);
@@ -969,6 +1142,21 @@ impl App {
                 let _ = AppendMenuW(assistant, MF_POPUP, modes.0 as usize, &HSTRING::from(t("menu.summary_mode")));
                 item(assistant, base + CMD_READ_RESULT, t("menu.read_result"), true, false);
                 separator(assistant);
+                let dictating = self.dictation.is_some();
+                item(assistant, base + CMD_DICTATE, if dictating { t("menu.dictate_stop") } else { t("menu.dictate") }, true, dictating);
+                item(assistant, base + CMD_CORRECT, t("menu.correct"), !busy, false);
+                let corrections = CreatePopupMenu().unwrap_or_default();
+                let current = ai::Correction::from_code(&self.cfg.correction_mode);
+                for (i, mode) in ai::Correction::ALL.iter().enumerate() {
+                    let id = base + CMD_CORRECTION_MODE + i as u32;
+                    item(corrections, id, correction_label(*mode), true, false);
+                    if *mode == current {
+                        let _ = CheckMenuRadioItem(corrections, id, id, id, MF_BYCOMMAND.0);
+                    }
+                }
+                let _ = AppendMenuW(assistant, MF_POPUP, corrections.0 as usize, &HSTRING::from(t("menu.correction_mode")));
+                item(assistant, base + CMD_DICT_SETUP, t("menu.dict_setup"), true, false);
+                separator(assistant);
                 item(assistant, base + CMD_AI_SETTINGS, t("menu.ai_settings"), true, false);
                 popup(t("menu.assistant"), assistant);
             }
@@ -1063,6 +1251,11 @@ impl App {
             CMD_UPDATE => open_url(update::RELEASES_URL),
             CMD_READ_WINDOW => self.speak_window(),
             CMD_READ_RESULT => self.speak_pane(window::Pane::Result),
+            _ if (CMD_CORRECTION_MODE..CMD_CORRECTION_MODE + 4).contains(&cmd) => {
+                if let Some(mode) = ai::Correction::ALL.get((cmd - CMD_CORRECTION_MODE) as usize) {
+                    self.set_correction_mode(*mode);
+                }
+            }
             _ if (CMD_SUMMARY_MODE..CMD_SUMMARY_MODE + 3).contains(&cmd) => {
                 if let Some(mode) = ai::Summary::ALL.get((cmd - CMD_SUMMARY_MODE) as usize) {
                     self.set_summary_mode(*mode);
@@ -1220,6 +1413,17 @@ fn run(cmd: u32, selection: Option<String>) {
                 open_ai_settings();
             }
         }
+        CMD_CORRECT => {
+            if with_app(App::correct) == Some(false) {
+                open_ai_settings();
+            }
+        }
+        CMD_DICTATE => {
+            if with_app(App::toggle_dictation) == Some(false) {
+                open_dict_setup();
+            }
+        }
+        CMD_DICT_SETUP => open_dict_setup(),
         _ => {
             with_app(|app| app.command(cmd, selection));
         }
@@ -1418,11 +1622,26 @@ fn provider_name(kind: ai::Kind) -> &'static str {
 }
 
 fn open_ai_settings() {
-    let Some(provider) = with_app(|app| app.provider()) else { return };
+    let Some((provider, custom)) = with_app(|app| (app.provider(), app.cfg.correction_custom.clone())) else { return };
     let report = aicheck::detect().report();
-    aisettings::open(window::visible(), provider, report, |provider| {
-        with_app(|app| app.apply_ai_settings(provider));
+    aisettings::open(window::visible(), provider, custom, report, |provider, custom| {
+        with_app(|app| app.apply_ai_settings(provider, custom));
     });
+}
+
+fn open_dict_setup() {
+    dictsetup::open(window::visible(), |_| {
+        with_app(|app| app.show_assistant());
+    });
+}
+
+fn correction_label(mode: ai::Correction) -> &'static str {
+    match mode {
+        ai::Correction::Spelling => t("correction.spelling"),
+        ai::Correction::Style => t("correction.style"),
+        ai::Correction::Rewrite => t("correction.rewrite"),
+        ai::Correction::Custom => t("correction.custom"),
+    }
 }
 
 fn open_settings() {
@@ -1573,6 +1792,13 @@ fn on_window_command(id: u32, code: u32) {
         }
         (window::ID_AI_VOICES, window::CLICKED) => open_ai_voices(),
         (window::ID_SUMMARIZE, window::CLICKED) => run(CMD_SUMMARIZE, None),
+        (window::ID_DICTATE, window::CLICKED) => run(CMD_DICTATE, None),
+        (window::ID_CORRECT, window::CLICKED) => run(CMD_CORRECT, None),
+        (window::ID_CORRECTION_MODE, window::SELECTED) => {
+            if let Some(mode) = window::selected_correction_mode().and_then(|i| ai::Correction::ALL.get(i)) {
+                with_app(|app| app.set_correction_mode(*mode));
+            }
+        }
         (window::ID_READ_RESULT, window::CLICKED) => run(CMD_READ_RESULT, None),
         (window::ID_SUMMARY_MODE, window::SELECTED) => {
             if let Some(mode) = window::selected_summary_mode().and_then(|i| ai::Summary::ALL.get(i)) {
@@ -1664,6 +1890,15 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         WM_OCR_DONE => on_ocr_done(),
         WM_AI_DONE => {
             with_app(App::on_ai_done);
+        }
+        WM_DICT_READY => {
+            with_app(|app| app.on_dict_ready(wparam.0));
+        }
+        WM_DICT_TEXT => {
+            with_app(App::on_dict_text);
+        }
+        WM_DICT_DONE => {
+            with_app(App::on_dict_done);
         }
         WM_AI_PROGRESS => {
             let title = t("app.ai_working_part").replacen("{}", &wparam.0.to_string(), 1).replacen("{}", &lparam.0.to_string(), 1);
@@ -1791,6 +2026,8 @@ fn main() {
             (ALT, 0x27, CMD_NEXT),        // Alt+Rechts
             (KEY, 0x78, CMD_SUMMARIZE),   // F9
             (SHIFT, 0x78, CMD_READ_RESULT), // Umschalt+F9
+            (KEY, 0x77, CMD_DICTATE),     // F8
+            (SHIFT, 0x77, CMD_CORRECT),   // Umschalt+F8
         ]);
 
         match App::new(hwnd) {
@@ -1832,6 +2069,7 @@ fn main() {
             let handled = settings::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || aivoices::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || aisettings::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
+                || dictsetup::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || IsDialogMessageW(dialog, &msg).as_bool();
             if !handled {
                 let _ = TranslateMessage(&msg);

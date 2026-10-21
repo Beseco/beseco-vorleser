@@ -78,11 +78,15 @@ When on, the window splits: the text on the left, the AI result on the right. **
 
 Choose the AI under **Assistant → AI settings and AI check**: your own server or this PC with Ollama (`http://ki-server:11434`, text stays on your network), or any cloud provider with an OpenAI-compatible API such as IONOS AI Model Hub (`https://openai.inference.de-txl.ionos.com/v1`), Mistral or OpenAI (text is sent to the provider). The **AI check** shows what this computer can handle and recommends local, own server or cloud; "Test connection" checks address, key and model. The key is stored encrypted with the Windows account (DPAPI).
 
-Planned: dictation with local speech recognition, minutes from audio files and a privacy mode that replaces personal data before sending (see [TODO.md](TODO.md)).
+**Dictation** (F8 or "● Dictate"): you speak, and the text appears at the cursor in the left pane after each short pause. Speech recognition (Whisper) runs entirely on your own computer, without an AI provider and without internet; only the model is downloaded once under **Assistant → Set up dictation** (fast 148 MB, accurate 488 MB, very accurate 574 MB; from github.com and huggingface.co).
+
+**Correct** (Shift+F8) edits the text with your AI at the chosen level: spelling and punctuation only, smooth sentences, rewrite cleanly or a custom instruction (in the AI settings, e.g. "phrase as a friendly e-mail"). The corrected version appears on the right; the dictation on the left stays unchanged. After dictation, the text is corrected automatically if an AI is set up.
+
+Planned: minutes from audio files and a privacy mode that replaces personal data before sending (see [TODO.md](TODO.md)).
 
 ## Privacy
 
-Vorleser collects no data. It goes online in only two cases: the update check (at most one request per day to GitHub, without any text, settings or machine identifier; can be turned off in the settings) when you download an AI voice yourself (from github.com and huggingface.co) and, only with the Office Assistant turned on, to the AI provider you chose when you trigger an AI feature. Text is processed only on your own machine.
+Vorleser collects no data. It goes online in only two cases: the update check (at most one request per day to GitHub, without any text, settings or machine identifier; can be turned off in the settings) when you download an AI voice or a dictation model yourself (from github.com and huggingface.co) and, only with the Office Assistant turned on, to the AI provider you chose when you trigger an AI feature. Text is processed only on your own machine.
 
 To read the selection, Vorleser uses the Windows accessibility interface. Where that is not available, it briefly copies the text through the clipboard and restores the previous clipboard content.
 

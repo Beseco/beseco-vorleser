@@ -86,11 +86,15 @@ Die KI wählst du unter **Assistent → KI-Einstellungen und KI-Check**:
 
 Der **KI-Check** im selben Fenster zeigt, was der eigene Rechner schafft (Prozessor, Arbeitsspeicher, Grafikkarte) und empfiehlt lokal, eigenen Server oder Cloud. „Verbindung testen“ prüft Adresse, Schlüssel und Modell mit einem kurzen Probe-Auftrag. Der Schlüssel wird mit dem Windows-Konto verschlüsselt gespeichert (DPAPI).
 
-Geplant sind außerdem Diktieren mit lokaler Spracherkennung, Protokolle aus Audiodateien und ein Datenschutz-Modus, der personenbezogene Daten vor dem Senden ersetzt (siehe [TODO.md](TODO.md)).
+**Diktieren** (F8 oder „● Diktieren“): Du sprichst, und der Text erscheint nach jeder kurzen Pause an der Schreibmarke im linken Feld. Die Spracherkennung (Whisper) läuft vollständig auf dem eigenen Rechner, ohne KI-Anbieter und ohne Internet; nur das Modell wird einmalig unter **Assistent → Diktieren einrichten** heruntergeladen (schnell 148 MB, genau 488 MB, sehr genau 574 MB; von github.com und huggingface.co).
+
+**Korrigieren** (Umschalt+F8) überarbeitet den Text mit der eingestellten KI in der gewählten Stufe: nur Rechtschreibung und Zeichensetzung, Satzbau glätten, sauber umformulieren oder nach eigener Vorgabe (in den KI-Einstellungen, z. B. „als freundliche E-Mail formulieren“). Die korrigierte Fassung erscheint rechts, das Diktat links bleibt unverändert. Nach einem Diktat wird automatisch korrigiert, wenn eine KI eingerichtet ist.
+
+Geplant sind außerdem Protokolle aus Audiodateien und ein Datenschutz-Modus, der personenbezogene Daten vor dem Senden ersetzt (siehe [TODO.md](TODO.md)).
 
 ## Datenschutz
 
-Vorleser sammelt keine Daten. Ins Internet geht Vorleser nur in zwei Fällen: bei der Suche nach neuen Versionen (höchstens einmal am Tag eine Anfrage an GitHub, ohne Text, Einstellungen oder Kennung des Rechners; in den Einstellungen abschaltbar) wenn du selbst eine KI-Stimme herunterlädst (von github.com und huggingface.co) und, nur bei eingeschaltetem Officeassistenten, an den von dir gewählten KI-Anbieter, wenn du eine KI-Funktion auslöst. Der Text wird ausschließlich auf dem eigenen Rechner verarbeitet.
+Vorleser sammelt keine Daten. Ins Internet geht Vorleser nur in zwei Fällen: bei der Suche nach neuen Versionen (höchstens einmal am Tag eine Anfrage an GitHub, ohne Text, Einstellungen oder Kennung des Rechners; in den Einstellungen abschaltbar) wenn du selbst eine KI-Stimme oder ein Modell für das Diktieren herunterlädst (von github.com und huggingface.co) und, nur bei eingeschaltetem Officeassistenten, an den von dir gewählten KI-Anbieter, wenn du eine KI-Funktion auslöst. Der Text wird ausschließlich auf dem eigenen Rechner verarbeitet.
 
 Zum Auslesen der Markierung nutzt Vorleser die Bedienungshilfen-Schnittstelle von Windows. Wo das nicht geht, kopiert es den Text kurz über die Zwischenablage und stellt deren vorherigen Inhalt wieder her.
 

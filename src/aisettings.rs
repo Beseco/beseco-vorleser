@@ -44,6 +44,7 @@ struct Controls {
     key: HWND,
     model: HWND,
     models: HWND,
+    custom: HWND,
     test: HWND,
     status: HWND,
     font: HFONT,
@@ -51,7 +52,7 @@ struct Controls {
 
 thread_local! {
     static CONTROLS: Cell<Option<Controls>> = const { Cell::new(None) };
-    static ON_SAVE: Cell<Option<fn(Provider)>> = const { Cell::new(None) };
+    static ON_SAVE: Cell<Option<fn(Provider, String)>> = const { Cell::new(None) };
     static LAST_KIND: Cell<usize> = const { Cell::new(0) };
     static ORIGINAL: RefCell<Option<Provider>> = const { RefCell::new(None) };
 }
@@ -71,8 +72,9 @@ fn kind_label(kind: Kind) -> &'static str {
     }
 }
 
-/// Öffnet das Fenster; `on_save` erhält den eingestellten Anbieter (Schlüssel im Klartext).
-pub fn open(owner: Option<HWND>, provider: Provider, report: String, on_save: fn(Provider)) {
+/// Öffnet das Fenster; `on_save` erhält den eingestellten Anbieter (Schlüssel im Klartext) und
+/// die eigene Vorgabe für die Korrektur von Diktaten.
+pub fn open(owner: Option<HWND>, provider: Provider, custom: String, report: String, on_save: fn(Provider, String)) {
     if let Some(window) = handle() {
         unsafe {
             let _ = SetForegroundWindow(window);
@@ -94,7 +96,7 @@ pub fn open(owner: Option<HWND>, provider: Provider, report: String, on_save: fn
         let dpi = GetDpiForSystem();
         let px = |value: i32| value * dpi as i32 / 96;
         let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
-        let mut frame = RECT { left: 0, top: 0, right: px(560), bottom: px(470) };
+        let mut frame = RECT { left: 0, top: 0, right: px(560), bottom: px(506) };
         let _ = AdjustWindowRectExForDpi(&mut frame, style, false, WS_EX_CONTROLPARENT, dpi);
         let Ok(window) = CreateWindowExW(
             WS_EX_CONTROLPARENT,
@@ -148,11 +150,17 @@ pub fn open(owner: Option<HWND>, provider: Provider, report: String, on_save: fn
         let key = child(w!("EDIT"), &provider.key, tab | (ES_AUTOHSCROLL | ES_PASSWORD) as u32, WS_EX_CLIENTEDGE, 0, fx, 256, fw, 26);
         child(w!("STATIC"), t("aiset.model"), 0, none, 0, lx, 296, lw, 22);
         let model = child(w!("COMBOBOX"), &provider.model, tab | WS_VSCROLL.0 | CBS_DROPDOWN as u32, none, 0, fx, 292, fw - 128, 260);
+        // Ein Kombinationsfeld übernimmt den Fenstertext beim Anlegen nicht.
+        set_text(model, &provider.model);
         let models = child(w!("BUTTON"), t("aiset.fetch_models"), tab, none, ID_MODELS, fx + fw - 120, 291, 120, 28);
-        let test = child(w!("BUTTON"), t("aiset.test"), tab, none, ID_TEST, fx, 332, 180, 30);
-        let status = child(w!("STATIC"), "", 0, none, 0, lx, 372, 528, 52);
-        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, none, ID_SAVE, 338, 430, 100, 30);
-        child(w!("BUTTON"), t("settings.cancel"), tab, none, ID_CANCEL, 446, 430, 98, 30);
+        child(w!("STATIC"), t("aiset.custom"), 0, none, 0, lx, 332, lw, 22);
+        let custom = child(w!("EDIT"), &custom, tab | ES_AUTOHSCROLL as u32, WS_EX_CLIENTEDGE, 0, fx, 328, fw, 26);
+        let custom_cue = HSTRING::from(t("aiset.custom_hint"));
+        SendMessageW(custom, EM_SETCUEBANNER, Some(WPARAM(1)), Some(LPARAM(custom_cue.as_ptr() as isize)));
+        let test = child(w!("BUTTON"), t("aiset.test"), tab, none, ID_TEST, fx, 368, 180, 30);
+        let status = child(w!("STATIC"), "", 0, none, 0, lx, 408, 528, 52);
+        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, none, ID_SAVE, 338, 466, 100, 30);
+        child(w!("BUTTON"), t("settings.cancel"), tab, none, ID_CANCEL, 446, 466, 98, 30);
 
         for k in Kind::ALL {
             let label = HSTRING::from(kind_label(k));
@@ -164,7 +172,7 @@ pub fn open(owner: Option<HWND>, provider: Provider, report: String, on_save: fn
         let cue = HSTRING::from(t("aiset.key_hint"));
         SendMessageW(key, EM_SETCUEBANNER, Some(WPARAM(1)), Some(LPARAM(cue.as_ptr() as isize)));
 
-        let c = Controls { window, kind, url, key, model, models, test, status, font };
+        let c = Controls { window, kind, url, key, model, models, custom, test, status, font };
         CONTROLS.with(|cell| cell.set(Some(c)));
         ON_SAVE.with(|cell| cell.set(Some(on_save)));
         ORIGINAL.with(|cell| *cell.borrow_mut() = Some(provider));
@@ -295,12 +303,13 @@ fn save(c: &Controls) {
         set_text(c.status, if provider.url.is_empty() { t("aiset.need_url") } else { t("aiset.need_model") });
         return;
     }
+    let custom = text(c.custom);
     let on_save = ON_SAVE.with(|cell| cell.get());
     unsafe {
         let _ = DestroyWindow(c.window);
     }
     if let Some(on_save) = on_save {
-        on_save(provider);
+        on_save(provider, custom);
     }
 }
 

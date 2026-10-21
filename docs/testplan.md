@@ -73,6 +73,12 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 - [ ] F9 mit kurzem Text, mit markiertem Abschnitt und mit einem langen Dokument (Fenstertitel zeigt die Schritte); alle drei Arten der Zusammenfassung
 - [ ] Zusammenfassung wird rechts mitgelesen; Umschalt+F9 liest sie erneut; Alt+←/→ springt rechts satzweise
 - [ ] Im Büro über den Proxy: Cloud-Anbieter erreichbar, Ollama im Büronetz ohne Proxy erreichbar
+- [ ] F8 ohne eingerichtetes Diktieren: Fenster „Diktieren einrichten“ öffnet sich; Modell „Genau“ herunterladen (auch über den Proxy)
+- [ ] F8: „Ich höre zu“, einige Sätze mit Pausen sprechen; Text erscheint abschnittsweise an der Schreibmarke, nach Satzende groß; F8 beendet, der letzte Abschnitt kommt noch
+- [ ] Ohne Mikrofon bzw. mit gesperrtem Mikrofon (Windows-Datenschutz): verständliche Meldung
+- [ ] Nach dem Diktat mit eingerichteter KI: korrigierte Fassung erscheint rechts; ohne KI passiert nichts weiter
+- [ ] Umschalt+F8 in allen vier Stufen; eigene Vorgabe in den KI-Einstellungen eintragen und verwenden
+- [ ] Rechnergeschwindigkeit: Wartezeit nach jeder Pause mit „Genau“ und „Sehr genau“ (es wird immer das genaueste installierte Modell genutzt)
 
 ## 8. Sonderfälle
 
