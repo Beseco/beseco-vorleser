@@ -22,6 +22,7 @@ mod ocr;
 mod ollama;
 mod paint;
 mod piper;
+mod player;
 mod selection;
 mod settings;
 mod snip;
@@ -224,6 +225,10 @@ struct App {
     dict_correct_pending: bool,
     /// Erkannter Text, der noch nicht getippt ist, weil das Zielprogramm nicht vorn war.
     dict_waiting: Vec<String>,
+    /// Der Mini-Player begleitet das laufende Vorlesen (Text von außen, Fenster zu).
+    player_on: bool,
+    /// Satzanfänge des Textes, den der Player begleitet (für „Satz 2 von 5“).
+    player_sentences: Vec<u32>,
 }
 
 #[derive(Clone, Copy)]
@@ -326,7 +331,7 @@ impl App {
         tts.set_rate(cfg.rate);
         // Der Testlauf bleibt stumm.
         tts.set_volume(if TEST_MODE.load(Ordering::Relaxed) { 0 } else { cfg.volume });
-        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_waiting: Vec::new() };
+        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_waiting: Vec::new(), player_on: false, player_sentences: Vec::new() };
         app.add_icon();
         app.register_hotkeys();
         app.fill_window();
@@ -849,7 +854,36 @@ impl App {
             tray::set_tip(self.hwnd, &self.tip());
             window::set_playback(state != State::Idle, state == State::Paused);
             self.refresh_menu_bar();
+            self.update_player();
         }
+    }
+
+    /// Zeigt den Mini-Player mit dem aktuellen Stand oder blendet ihn aus.
+    fn update_player(&mut self) {
+        if !self.player_on {
+            return;
+        }
+        if self.state == State::Idle || window::visible().is_some() {
+            self.player_on = false;
+            player::hide();
+            return;
+        }
+        let voice = self.current_voice().map_or(String::new(), |i| short_voice_name(&self.tts.voices()[i].name));
+        let progress = self.follow.map_or(String::new(), |follow| {
+            let total = self.player_sentences.iter().filter(|s| **s < follow.end).count().max(1);
+            let current = self.player_sentences.iter().filter(|s| **s <= follow.pos).count().clamp(1, total);
+            t("player.sentence").replacen("{}", &current.to_string(), 1).replacen("{}", &total.to_string(), 1)
+        });
+        let rates = RATES.iter().map(|(rate, key)| format!("{}  {}", speed_label(*rate), t(key))).collect();
+        let info = player::Info {
+            voice,
+            progress,
+            paused: self.state == State::Paused,
+            speed: speed_label(self.cfg.rate),
+            rates,
+            rate: self.rate_index(),
+        };
+        player::show(info, on_player_action);
     }
 
     /// Index der gerade eingestellten Stimme in `tts.voices()`.
@@ -922,6 +956,7 @@ impl App {
             self.cfg.save();
         }
         self.sync_window();
+        self.update_player();
     }
 
     /// Kurzer Beispielsatz in der Sprache der eingestellten Stimme.
@@ -947,11 +982,14 @@ impl App {
         };
         self.end_follow();
         let text = to_crlf(&self.prepare(text));
-        let follow = window::visible().map(|_| {
-            window::set_text(&text);
-            Follow::new(0, text.encode_utf16().count() as u32, (0, 0))
-        });
-        self.start(text, follow);
+        // Der Text kommt immer ins Fenster, auch wenn es zu ist: So gehen Satzsprünge, und bei
+        // geschlossenem Fenster begleitet ihn der Mini-Player.
+        window::set_text(&text);
+        let follow = Follow::new(0, text.encode_utf16().count() as u32, (0, 0));
+        self.player_on = window::visible().is_none();
+        self.player_sentences = textprep::sentence_starts(&text.encode_utf16().collect::<Vec<u16>>());
+        self.start(text, Some(follow));
+        self.update_player();
     }
 
     /// Liest den markierten Teil des Textfelds vor; ohne Markierung ab dem Satz, in dem die
@@ -1103,6 +1141,8 @@ impl App {
                 self.retry = Some(text);
                 self.follow = follow;
                 self.set_state(State::Speaking);
+                // Nach einem Satzsprung zeigt der Player gleich den neuen Satz.
+                self.update_player();
             }
             Err(_) => tray::balloon(self.hwnd, "Vorleser", t("app.speech_output_failed")),
         }
@@ -1110,9 +1150,15 @@ impl App {
 
     /// Markiert das gerade gesprochene Wort im Fenster.
     fn on_word(&mut self, start: u32, len: u32) {
+        let mut sentence_changed = false;
         if let Some(follow) = &mut self.follow {
+            let before = self.player_sentences.iter().filter(|s| **s <= follow.pos).count();
             follow.pos = follow.base + start;
             window::mark_in(follow.pane, follow.pos, follow.pos + len);
+            sentence_changed = before != self.player_sentences.iter().filter(|s| **s <= follow.pos).count();
+        }
+        if sentence_changed && self.player_on {
+            self.update_player();
         }
     }
 
@@ -1878,6 +1924,26 @@ fn short_voice_name(name: &str) -> String {
     name.strip_suffix(" Desktop").unwrap_or(name).trim().to_string()
 }
 
+/// Geschwindigkeit als Faktor, z. B. „1,2×“. Bei SAPI verdreifacht +10 das Tempo ungefähr.
+fn speed_label(rate: i32) -> String {
+    format!("{:.1}×", 3f32.powf(rate as f32 / 10.0)).replace('.', t("number.decimal"))
+}
+
+/// Klick im Mini-Player.
+fn on_player_action(action: player::Action) {
+    with_app(|app| match action {
+        player::Action::Prev => app.navigate(false),
+        player::Action::Next => app.navigate(true),
+        player::Action::PlayPause => app.toggle_pause(),
+        player::Action::Rate(index) => app.select_rate(index),
+        player::Action::Stop => app.stop(),
+        player::Action::OpenWindow => {
+            window::show();
+            app.update_player();
+        }
+    });
+}
+
 fn correction_label(mode: ai::Correction) -> &'static str {
     match mode {
         ai::Correction::Spelling => t("correction.spelling"),
@@ -2344,5 +2410,13 @@ mod tests {
         assert_eq!(short_voice_name("Microsoft Hedda Desktop - German"), "Hedda");
         assert_eq!(short_voice_name("Microsoft Katja - German (Germany)"), "Katja");
         assert_eq!(short_voice_name("Thorsten HD (KI-Stimme)"), "Thorsten HD");
+    }
+
+    #[test]
+    fn labels_speeds() {
+        i18n::init("de");
+        assert_eq!(speed_label(0), "1,0×");
+        assert_eq!(speed_label(2), "1,2×");
+        assert_eq!(speed_label(-6), "0,5×");
     }
 }
