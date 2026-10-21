@@ -6,6 +6,7 @@
 mod ai;
 mod aicheck;
 mod aisettings;
+mod aisetup;
 mod aivoices;
 mod config;
 mod dictation;
@@ -17,6 +18,7 @@ mod json;
 mod mouse;
 mod mp3;
 mod ocr;
+mod ollama;
 mod piper;
 mod selection;
 mod settings;
@@ -103,6 +105,8 @@ const WM_DICT_READY: u32 = WM_APP + 13;
 const WM_DICT_TEXT: u32 = WM_APP + 14;
 /// Diktat: alle Abschnitte erkannt, die Erkennung ist beendet.
 const WM_DICT_DONE: u32 = WM_APP + 15;
+/// Einrichtungsassistent der KI öffnen (nach dem Einschalten im Installer).
+const WM_OPEN_AI_SETUP: u32 = WM_APP + 16;
 /// Kennung der Update-Meldung im Infobereich.
 const BALLOON_UPDATE: u32 = 1;
 /// Klick auf eine Meldung im Infobereich (NIN_BALLOONUSERCLICK).
@@ -158,6 +162,7 @@ const CMD_AI_SETTINGS: u32 = 36;
 const CMD_DICTATE: u32 = 37;
 const CMD_CORRECT: u32 = 38;
 const CMD_DICT_SETUP: u32 = 39;
+const CMD_AI_SETUP: u32 = 40;
 /// Korrekturstufe: `CMD_CORRECTION_MODE` + Nummer.
 const CMD_CORRECTION_MODE: u32 = 3600;
 /// Art der Zusammenfassung: `CMD_SUMMARY_MODE` + Nummer.
@@ -297,7 +302,11 @@ impl App {
         app.add_icon();
         app.register_hotkeys();
         app.fill_window();
-        app.apply_installer_choice();
+        if app.apply_installer_choice() && !app.provider().is_ready() {
+            unsafe {
+                let _ = PostMessageW(Some(hwnd), WM_OPEN_AI_SETUP, WPARAM(0), LPARAM(0));
+            }
+        }
         app.show_assistant();
         if !TEST_MODE.load(Ordering::Relaxed) {
             update::start(hwnd, WM_UPDATE, app.cfg.update_check, app.cfg.last_update_check);
@@ -396,8 +405,9 @@ impl App {
         tray::set_tip(self.hwnd, &self.tip());
     }
 
-    /// Der Installer kann den Officeassistenten vorab einschalten (einmalig).
-    fn apply_installer_choice(&mut self) {
+    /// Der Installer kann den Officeassistenten vorab einschalten (einmalig). `true`, wenn er
+    /// ihn gerade eingeschaltet hat.
+    fn apply_installer_choice(&mut self) -> bool {
         let mut value = [0u16; 8];
         let mut size = (value.len() * 2) as u32;
         let status = unsafe {
@@ -409,7 +419,9 @@ impl App {
             unsafe {
                 let _ = RegDeleteKeyValueW(HKEY_CURRENT_USER, INSTALLER_KEY, w!("Assistant"));
             }
+            return self.cfg.assistant;
         }
+        false
     }
 
     fn provider(&self) -> ai::Provider {
@@ -434,6 +446,7 @@ impl App {
             t("assist.not_configured").to_string()
         };
         window::set_ai_status(&status);
+        window::set_ai_ready(provider.is_ready());
         let labels: Vec<&str> = ai::Correction::ALL.iter().map(|c| correction_label(*c)).collect();
         let correction = ai::Correction::from_code(&self.cfg.correction_mode);
         window::set_correction_modes(&labels, ai::Correction::ALL.iter().position(|c| *c == correction).unwrap_or(0));
@@ -663,6 +676,7 @@ impl App {
         self.cfg.ai_model = provider.model;
         self.cfg.save();
         self.show_assistant();
+        self.refresh_menu_bar();
     }
 
     /// Stellt die Sprache der Oberfläche um; Fenster und Menüs wechseln sofort.
@@ -715,25 +729,29 @@ impl App {
         groups.into_iter().map(|((_, language), indices)| (language, indices)).collect()
     }
 
-    fn fill_window(&self) {
+    /// Alle Stimmen, nach Sprache sortiert: Index und Name.
+    fn voice_items(&self) -> Vec<(usize, String)> {
         let voices = self.tts.voices();
-        let items: Vec<(usize, String)> = self
-            .voice_groups()
-            .into_iter()
-            .flat_map(|(_, indices)| indices)
-            .map(|i| (i, voices[i].name.clone()))
-            .collect();
-        window::set_voices(&items);
-        let labels: Vec<&str> = RATES.iter().map(|(_, key)| t(key)).collect();
-        window::set_rates(&labels);
+        self.voice_groups().into_iter().flat_map(|(_, indices)| indices).map(|i| (i, voices[i].name.clone())).collect()
+    }
+
+    fn rate_index(&self) -> usize {
+        RATES.iter().position(|(rate, _)| *rate == self.cfg.rate).unwrap_or(0)
+    }
+
+    fn fill_window(&self) {
+        settings::set_voices(&self.voice_items(), self.current_voice());
         window::set_topmost(self.cfg.always_on_top);
         self.sync_window();
     }
 
-    /// Gleicht die Auswahl im Fenster mit den Einstellungen ab (z. B. nach Änderung über das Menü).
+    /// Gleicht das Fenster mit den Einstellungen ab (z. B. nach Änderung über das Menü).
     fn sync_window(&self) {
-        window::select_voice(self.current_voice());
-        window::select_rate(RATES.iter().position(|(rate, _)| *rate == self.cfg.rate));
+        let voice = self.current_voice().map_or(String::new(), |i| {
+            short_voice_name(&self.tts.voices()[i].name)
+        });
+        let rate = RATES.get(self.rate_index()).map_or("", |(_, key)| t(key));
+        window::set_voice_info(&format!("{voice} · {rate}"));
         window::set_playback(self.state != State::Idle, self.state == State::Paused);
         self.refresh_menu_bar();
     }
@@ -1129,27 +1147,29 @@ impl App {
             if self.cfg.assistant {
                 let assistant = CreatePopupMenu().unwrap_or_default();
                 let busy = AI_BUSY.load(Ordering::Relaxed);
-                item(assistant, base + CMD_SUMMARIZE, t("menu.summarize"), !busy, false);
+                // Ohne eingerichtete KI bleiben deren Befehle grau; Diktieren geht immer.
+                let ready = self.provider().is_ready();
+                item(assistant, base + CMD_SUMMARIZE, t("menu.summarize"), ready && !busy, false);
                 let modes = CreatePopupMenu().unwrap_or_default();
                 let current = ai::Summary::from_code(&self.cfg.summary_mode);
                 for (i, mode) in ai::Summary::ALL.iter().enumerate() {
                     let id = base + CMD_SUMMARY_MODE + i as u32;
-                    item(modes, id, summary_label(*mode), true, false);
+                    item(modes, id, summary_label(*mode), ready, false);
                     if *mode == current {
                         let _ = CheckMenuRadioItem(modes, id, id, id, MF_BYCOMMAND.0);
                     }
                 }
                 let _ = AppendMenuW(assistant, MF_POPUP, modes.0 as usize, &HSTRING::from(t("menu.summary_mode")));
-                item(assistant, base + CMD_READ_RESULT, t("menu.read_result"), true, false);
+                item(assistant, base + CMD_READ_RESULT, t("menu.read_result"), ready, false);
                 separator(assistant);
                 let dictating = self.dictation.is_some();
                 item(assistant, base + CMD_DICTATE, if dictating { t("menu.dictate_stop") } else { t("menu.dictate") }, true, dictating);
-                item(assistant, base + CMD_CORRECT, t("menu.correct"), !busy, false);
+                item(assistant, base + CMD_CORRECT, t("menu.correct"), ready && !busy, false);
                 let corrections = CreatePopupMenu().unwrap_or_default();
                 let current = ai::Correction::from_code(&self.cfg.correction_mode);
                 for (i, mode) in ai::Correction::ALL.iter().enumerate() {
                     let id = base + CMD_CORRECTION_MODE + i as u32;
-                    item(corrections, id, correction_label(*mode), true, false);
+                    item(corrections, id, correction_label(*mode), ready, false);
                     if *mode == current {
                         let _ = CheckMenuRadioItem(corrections, id, id, id, MF_BYCOMMAND.0);
                     }
@@ -1157,6 +1177,7 @@ impl App {
                 let _ = AppendMenuW(assistant, MF_POPUP, corrections.0 as usize, &HSTRING::from(t("menu.correction_mode")));
                 item(assistant, base + CMD_DICT_SETUP, t("menu.dict_setup"), true, false);
                 separator(assistant);
+                item(assistant, base + CMD_AI_SETUP, t("menu.ai_setup"), true, false);
                 item(assistant, base + CMD_AI_SETTINGS, t("menu.ai_settings"), true, false);
                 popup(t("menu.assistant"), assistant);
             }
@@ -1403,19 +1424,20 @@ fn run(cmd: u32, selection: Option<String>) {
         CMD_CHECK_UPDATE => check_update_now(),
         CMD_SCREEN_OCR => screen_ocr(),
         CMD_AI_SETTINGS => open_ai_settings(),
+        CMD_AI_SETUP => open_ai_setup(),
         CMD_ASSISTANT => {
             if with_app(|app| app.set_assistant(!app.cfg.assistant)) == Some(true) {
-                open_ai_settings();
+                open_ai_setup();
             }
         }
         CMD_SUMMARIZE => {
             if with_app(App::summarize) == Some(false) {
-                open_ai_settings();
+                open_ai_setup();
             }
         }
         CMD_CORRECT => {
             if with_app(App::correct) == Some(false) {
-                open_ai_settings();
+                open_ai_setup();
             }
         }
         CMD_DICTATE => {
@@ -1629,10 +1651,31 @@ fn open_ai_settings() {
     });
 }
 
+/// Der Einrichtungsassistent: eine Frage, ein Knopf. Die ausführlichen KI-Einstellungen sind
+/// von dort aus erreichbar.
+fn open_ai_setup() {
+    let Some(provider) = with_app(|app| app.provider()) else { return };
+    aisetup::open(window::visible(), &provider, |provider| {
+        with_app(|app| {
+            let custom = app.cfg.correction_custom.clone();
+            app.apply_ai_settings(provider, custom);
+        });
+    }, open_ai_settings);
+}
+
 fn open_dict_setup() {
     dictsetup::open(window::visible(), |_| {
         with_app(|app| app.show_assistant());
     });
+}
+
+/// Kurzer Name für die Anzeige unten im Fenster: „Microsoft Hedda Desktop - German“ → „Hedda“,
+/// „Thorsten HD (KI-Stimme)“ → „Thorsten HD“.
+fn short_voice_name(name: &str) -> String {
+    let name = name.split(" - ").next().unwrap_or(name);
+    let name = name.split(" (").next().unwrap_or(name);
+    let name = name.strip_prefix("Microsoft ").unwrap_or(name);
+    name.strip_suffix(" Desktop").unwrap_or(name).trim().to_string()
 }
 
 fn correction_label(mode: ai::Correction) -> &'static str {
@@ -1645,11 +1688,32 @@ fn correction_label(mode: ai::Correction) -> &'static str {
 }
 
 fn open_settings() {
-    if let Some(values) = with_app(|app| app.settings()) {
-        settings::open(window::visible(), values, |values| {
-            with_app(|app| app.apply_settings(values));
-        });
-    }
+    let Some((values, items, selected, rate)) = with_app(|app| (app.settings(), app.voice_items(), app.current_voice(), app.rate_index())) else {
+        return;
+    };
+    let voices = settings::Voices {
+        items,
+        selected,
+        rates: RATES.iter().map(|(_, key)| t(key).to_string()).collect(),
+        rate,
+        on_change: |voice, rate| {
+            with_app(|app| {
+                if let Some(voice) = voice.filter(|v| Some(*v) != app.current_voice()) {
+                    app.select_voice(voice);
+                }
+                if rate != app.rate_index() {
+                    app.select_rate(rate);
+                }
+            });
+        },
+        on_sample: || {
+            with_app(App::speak_sample);
+        },
+        on_ai_voices: open_ai_voices,
+    };
+    settings::open(window::visible(), values, voices, |values| {
+        with_app(|app| app.apply_settings(values));
+    });
 }
 
 /// Fragt nach einem Dateinamen und schreibt den Text des Fensters als MP3- oder WAV-Datei.
@@ -1773,24 +1837,13 @@ fn on_window_command(id: u32, code: u32) {
         (window::ID_READ, window::CLICKED) => {
             with_app(App::speak_window);
         }
-        (window::ID_TOPMOST, window::CLICKED) => {
-            with_app(|app| app.set_topmost(window::topmost_checked()));
-        }
         (window::ID_PAUSE, window::CLICKED) => {
             with_app(App::toggle_pause);
         }
         (window::ID_STOP, window::CLICKED) => {
             with_app(App::stop);
         }
-        (window::ID_SAMPLE, window::CLICKED) => {
-            with_app(App::speak_sample);
-        }
-        (window::ID_VOICE, window::SELECTED) => {
-            if let Some(index) = window::selected_voice() {
-                with_app(|app| app.select_voice(index));
-            }
-        }
-        (window::ID_AI_VOICES, window::CLICKED) => open_ai_voices(),
+        (window::ID_SETUP_AI, window::CLICKED) => open_ai_setup(),
         (window::ID_SUMMARIZE, window::CLICKED) => run(CMD_SUMMARIZE, None),
         (window::ID_DICTATE, window::CLICKED) => run(CMD_DICTATE, None),
         (window::ID_CORRECT, window::CLICKED) => run(CMD_CORRECT, None),
@@ -1810,11 +1863,6 @@ fn on_window_command(id: u32, code: u32) {
         }
         (window::ID_NEXT, window::CLICKED) => {
             with_app(|app| app.navigate(true));
-        }
-        (window::ID_RATE, window::SELECTED) => {
-            if let Some(index) = window::selected_rate() {
-                with_app(|app| app.select_rate(index));
-            }
         }
         _ => {}
     }
@@ -1899,6 +1947,10 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         }
         WM_DICT_DONE => {
             with_app(App::on_dict_done);
+        }
+        WM_OPEN_AI_SETUP => {
+            window::show();
+            open_ai_setup();
         }
         WM_AI_PROGRESS => {
             let title = t("app.ai_working_part").replacen("{}", &wparam.0.to_string(), 1).replacen("{}", &lparam.0.to_string(), 1);
@@ -2070,6 +2122,7 @@ fn main() {
                 || aivoices::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || aisettings::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || dictsetup::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
+                || aisetup::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || IsDialogMessageW(dialog, &msg).as_bool();
             if !handled {
                 let _ = TranslateMessage(&msg);
@@ -2078,5 +2131,17 @@ fn main() {
         }
         // Erst nach der Schleife freigeben, solange COM noch initialisiert ist.
         APP.with(|cell| cell.borrow_mut().take());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shortens_voice_names() {
+        assert_eq!(short_voice_name("Microsoft Hedda Desktop - German"), "Hedda");
+        assert_eq!(short_voice_name("Microsoft Katja - German (Germany)"), "Katja");
+        assert_eq!(short_voice_name("Thorsten HD (KI-Stimme)"), "Thorsten HD");
     }
 }

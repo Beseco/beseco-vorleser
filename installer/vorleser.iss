@@ -48,8 +48,8 @@ german.Autostart=Vorleser mit Windows starten
 english.Autostart=Start Vorleser with Windows
 german.StartNow=Vorleser jetzt starten
 english.StartNow=Start Vorleser now
-german.Assistant=Beseco Officeassistent einschalten (KI-Funktionen, spaeter unter Extras umschaltbar)
-english.Assistant=Turn on Beseco Office Assistant (AI features, can be changed later under Tools)
+german.Assistant=Beseco Officeassistent einschalten (KI und Diktieren; beim ersten Start hilft ein Assistent beim Einrichten, spaeter unter Extras umschaltbar)
+english.Assistant=Turn on Beseco Office Assistant (AI and dictation; a wizard helps with the setup on first start, can be changed later under Tools)
 
 [Tasks]
 Name: "autostart"; Description: "{cm:Autostart}"

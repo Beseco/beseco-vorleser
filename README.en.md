@@ -56,7 +56,7 @@ Vorleser uses the voices installed in Windows. More can be added in Windows Sett
 
 ### AI voices
 
-Much more natural are the AI voices you can add with one click via **"AI voices …"** in the Vorleser window. They are based on [Piper](https://github.com/rhasspy/piper) and, after a one-time download, run offline on your own machine only.
+Much more natural are the AI voices you can add with one click via **Voice → AI voices …** (or in the settings). They are based on [Piper](https://github.com/rhasspy/piper) and, after a one-time download, run offline on your own machine only.
 
 | Voice | Language | Download | Training data license |
 |---|---|---|---|
@@ -76,7 +76,9 @@ Turn on the AI features under **Tools → Beseco Office Assistant** (or already 
 
 When on, the window splits: the text on the left, the AI result on the right. **Summarize** (F9) summarizes the selected or entire text briefly, as bullet points or in detail, and the summary is read aloud right away (Shift+F9 reads it again).
 
-Choose the AI under **Assistant → AI settings and AI check**: your own server or this PC with Ollama (`http://ki-server:11434`, text stays on your network), or any cloud provider with an OpenAI-compatible API such as IONOS AI Model Hub (`https://openai.inference.de-txl.ionos.com/v1`), Mistral or OpenAI (text is sent to the provider). The **AI check** shows what this computer can handle and recommends local, own server or cloud; "Test connection" checks address, key and model. The key is stored encrypted with the Windows account (DPAPI).
+The easiest way is the **setup wizard** (**Assistant → Set up AI**; it also appears by itself while no AI is set up). It asks one question – where should the AI run? – and does the rest: **on this PC** it downloads and installs Ollama for your user account if needed (about 1.7 GB, no administrator rights) and a language model suited to the computer (qwen3.5:4b, with a strong graphics card gemma3:12b); for an **Ollama server on your network** you only enter its name, e.g. `ki-server`; for a **cloud provider** the address (IONOS is prefilled) and API key; or **without AI**. It picks a suitable model, sends a test request and saves everything. While no AI is set up, Summarize and Correct are greyed out.
+
+For everything else, see **Assistant → AI settings and AI check**: your own server or this PC with Ollama (`http://ki-server:11434`, text stays on your network), or any cloud provider with an OpenAI-compatible API such as IONOS AI Model Hub (`https://openai.inference.de-txl.ionos.com/v1`), Mistral or OpenAI (text is sent to the provider). The **AI check** shows what this computer can handle and recommends local, own server or cloud; "Test connection" checks address, key and model. The key is stored encrypted with the Windows account (DPAPI).
 
 **Dictation** (F8 or "● Dictate"): you speak, and the text appears at the cursor in the left pane after each short pause. Speech recognition (Whisper) runs entirely on your own computer, without an AI provider and without internet; only the model is downloaded once under **Assistant → Set up dictation** (fast 148 MB, accurate 488 MB, very accurate 574 MB; from github.com and huggingface.co).
 

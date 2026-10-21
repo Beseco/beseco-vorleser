@@ -1,4 +1,5 @@
-//! Einstellungsfenster: Tastenkombinationen, Maus-Auslöser, Lautstärke, Textbereinigung.
+//! Einstellungsfenster: Stimme und Geschwindigkeit, Tastenkombinationen, Maus-Auslöser,
+//! Lautstärke, Textbereinigung.
 
 use std::cell::{Cell, RefCell};
 
@@ -12,7 +13,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowTextW, ES_AUTOHSCROLL, WS_EX_CLIENTEDGE,
     CreateWindowExW, DefWindowProcW, DestroyWindow, LoadCursorW, MessageBoxW, RegisterClassW,
     SendMessageW, SetForegroundWindow, ShowWindow, BS_AUTOCHECKBOX, BS_DEFPUSHBUTTON,
-    CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT, HMENU, IDC_ARROW,
+    CBN_SELCHANGE, CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_GETITEMDATA, CB_RESETCONTENT, CB_SETCURSEL,
+    CB_SETITEMDATA, CW_USEDEFAULT, HMENU, IDC_ARROW,
     MB_ICONWARNING, SW_SHOW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_COMMAND, WM_DESTROY,
     WM_SETFONT, WM_USER, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_EX_CONTROLPARENT, WS_OVERLAPPED,
     WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
@@ -27,6 +29,10 @@ use crate::window::message_font;
 // IDOK und IDCANCEL: so lösen Eingabe und Esc die beiden Schaltflächen aus.
 const ID_SAVE: u32 = 1;
 const ID_CANCEL: u32 = 2;
+const ID_VOICE: u32 = 10;
+const ID_RATE: u32 = 11;
+const ID_SAMPLE: u32 = 12;
+const ID_AI_VOICES: u32 = 13;
 
 // Nachrichten des Tastenkombinations-Felds und des Schiebereglers.
 const HKM_SETHOTKEY: u32 = WM_USER + 1;
@@ -76,9 +82,25 @@ pub struct Values {
     pub language: String,
 }
 
+/// Stimmenauswahl oben im Fenster. Sie wirkt sofort (damit die Hörprobe passt); „Abbrechen“
+/// stellt die vorherige Stimme wieder her.
+pub struct Voices {
+    /// Programmweiter Index der Stimme und Anzeige, schon nach Sprache sortiert.
+    pub items: Vec<(usize, String)>,
+    pub selected: Option<usize>,
+    pub rates: Vec<String>,
+    pub rate: usize,
+    /// Neue Stimme bzw. Geschwindigkeit (Index in `rates`).
+    pub on_change: fn(Option<usize>, usize),
+    pub on_sample: fn(),
+    pub on_ai_voices: fn(),
+}
+
 #[derive(Clone, Copy)]
 struct Controls {
     window: HWND,
+    voice: HWND,
+    rate: HWND,
     hotkeys: [HWND; 4],
     mouse: HWND,
     volume: HWND,
@@ -94,6 +116,9 @@ thread_local! {
     static CONTROLS: Cell<Option<Controls>> = const { Cell::new(None) };
     static ORIGINAL: RefCell<Option<Values>> = const { RefCell::new(None) };
     static ON_SAVE: Cell<Option<fn(Values)>> = const { Cell::new(None) };
+    static VOICE_CALLBACKS: Cell<Option<(fn(Option<usize>, usize), fn(), fn())>> = const { Cell::new(None) };
+    /// Stimme und Geschwindigkeit beim Öffnen, für „Abbrechen“.
+    static VOICE_BEFORE: Cell<(Option<usize>, usize)> = const { Cell::new((None, 0)) };
 }
 
 /// Das Fenster, solange es offen ist.
@@ -102,7 +127,7 @@ pub fn handle() -> Option<HWND> {
 }
 
 /// Öffnet das Fenster mit `values`; beim Speichern erhält `on_save` die neuen Werte.
-pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
+pub fn open(owner: Option<HWND>, values: Values, voices: Voices, on_save: fn(Values)) {
     if let Some(window) = handle() {
         unsafe {
             let _ = SetForegroundWindow(window);
@@ -125,7 +150,7 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
         let dpi = GetDpiForSystem();
         let px = |value: i32| value * dpi as i32 / 96;
         let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
-        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(492) };
+        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(576) };
         let _ = AdjustWindowRectExForDpi(&mut frame, style, false, WS_EX_CONTROLPARENT, dpi);
         let Ok(window) = CreateWindowExW(
             WS_EX_CONTROLPARENT,
@@ -166,13 +191,23 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
         };
         let tab = WS_TABSTOP.0;
         let (label_x, field_x, label_width, field_width, row) = (16, 220, 200, 234, 36);
-        let label = |text: &str, line: i32| child(w!("STATIC"), text, 0, 0, label_x, 48 + line * row, label_width, 22);
-        let hotkey = |line: i32| child(w!("msctls_hotkey32"), "", tab, 0, field_x, 44 + line * row, field_width, 26);
+        // Oben die Stimme, darunter (um OFFSET verschoben) die übrigen Einstellungen.
+        const OFFSET: i32 = 84;
+        let list = tab | WS_VSCROLL.0 | CBS_DROPDOWNLIST as u32;
+        child(w!("STATIC"), t("window.voice"), 0, 0, label_x, 18, 110, 22);
+        let voice = child(w!("COMBOBOX"), "", list, ID_VOICE, 130, 14, 214, 400);
+        child(w!("BUTTON"), t("window.sample"), tab, ID_SAMPLE, 352, 13, 102, 28);
+        child(w!("STATIC"), t("window.speed"), 0, 0, label_x, 54, 110, 22);
+        let rate = child(w!("COMBOBOX"), "", list, ID_RATE, 130, 50, 214, 400);
+        child(w!("BUTTON"), t("app.ai_voices"), tab, ID_AI_VOICES, 352, 49, 102, 28);
+        child(w!("STATIC"), "", 0x10 /* SS_ETCHEDHORZ */, 0, label_x, 90, 438, 2);
+        let label = |text: &str, line: i32| child(w!("STATIC"), text, 0, 0, label_x, OFFSET + 48 + line * row, label_width, 22);
+        let hotkey = |line: i32| child(w!("msctls_hotkey32"), "", tab, 0, field_x, OFFSET + 44 + line * row, field_width, 26);
 
         child(
             w!("STATIC"),
             t("settings.click_field_press_shortcut"),
-            0, 0, label_x, 14, 438, 22,
+            0, 0, label_x, OFFSET + 14, 438, 22,
         );
         label(t("settings.read_selected_text_stop"), 0);
         label(t("settings.pause_resume"), 1);
@@ -184,17 +219,16 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
         label(t("settings.proxy"), 7);
         // Die Reihenfolge der Erzeugung ist die Tab-Reihenfolge.
         let hotkeys = [hotkey(0), hotkey(1), hotkey(2), hotkey(3)];
-        let list = tab | WS_VSCROLL.0 | CBS_DROPDOWNLIST as u32;
-        let mouse = child(w!("COMBOBOX"), "", list, 0, field_x, 44 + 4 * row, field_width, 300);
-        let volume = child(w!("msctls_trackbar32"), "", tab | TBS_AUTOTICKS, 0, field_x - 8, 42 + 5 * row, field_width + 16, 30);
-        let language = child(w!("COMBOBOX"), "", list, 0, field_x, 44 + 6 * row, field_width, 300);
+        let mouse = child(w!("COMBOBOX"), "", list, 0, field_x, OFFSET + 44 + 4 * row, field_width, 300);
+        let volume = child(w!("msctls_trackbar32"), "", tab | TBS_AUTOTICKS, 0, field_x - 8, OFFSET + 42 + 5 * row, field_width + 16, 30);
+        let language = child(w!("COMBOBOX"), "", list, 0, field_x, OFFSET + 44 + 6 * row, field_width, 300);
         let proxy = CreateWindowExW(
             WS_EX_CLIENTEDGE,
             w!("EDIT"),
             &HSTRING::from(values.proxy.as_str()),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(ES_AUTOHSCROLL as u32),
             px(field_x),
-            px(44 + 7 * row),
+            px(OFFSET + 44 + 7 * row),
             px(field_width),
             px(26),
             Some(window),
@@ -211,31 +245,78 @@ pub fn open(owner: Option<HWND>, values: Values, on_save: fn(Values)) {
             w!("BUTTON"),
             t("settings.clean_up_text_before"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, 46 + 8 * row, 438, 24,
+            0, label_x, OFFSET + 46 + 8 * row, 438, 24,
         );
         let update = child(
             w!("BUTTON"),
             t("settings.check_github_for_new"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, 46 + 9 * row, 438, 24,
+            0, label_x, OFFSET + 46 + 9 * row, 438, 24,
         );
         let remember = child(
             w!("BUTTON"),
             t("settings.remember_text"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, 42 + 10 * row, 438, 24,
+            0, label_x, OFFSET + 42 + 10 * row, 438, 24,
         );
-        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, 446, 100, 30);
-        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, 446, 98, 30);
+        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, OFFSET + 446, 100, 30);
+        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, OFFSET + 446, 98, 30);
 
-        let c = Controls { window, hotkeys, mouse, volume, clean, update, language, proxy, remember, font };
+        let c = Controls { window, voice, rate, hotkeys, mouse, volume, clean, update, language, proxy, remember, font };
         fill(&c, &values);
+        fill_voices(&c, &voices.items, voices.selected);
+        for label in &voices.rates {
+            let label = HSTRING::from(label.as_str());
+            SendMessageW(rate, CB_ADDSTRING, None, Some(LPARAM(label.as_ptr() as isize)));
+        }
+        SendMessageW(rate, CB_SETCURSEL, Some(WPARAM(voices.rate)), None);
+        VOICE_CALLBACKS.with(|cell| cell.set(Some((voices.on_change, voices.on_sample, voices.on_ai_voices))));
+        VOICE_BEFORE.with(|cell| cell.set((voices.selected, voices.rate)));
         CONTROLS.with(|cell| cell.set(Some(c)));
         ORIGINAL.with(|cell| *cell.borrow_mut() = Some(values));
         ON_SAVE.with(|cell| cell.set(Some(on_save)));
         let _ = ShowWindow(window, SW_SHOW);
         let _ = SetForegroundWindow(window);
-        let _ = SetFocus(Some(hotkeys[0]));
+        let _ = SetFocus(Some(voice));
+    }
+}
+
+unsafe fn fill_voices(c: &Controls, items: &[(usize, String)], selected: Option<usize>) {
+    SendMessageW(c.voice, CB_RESETCONTENT, None, None);
+    for (row, (index, label)) in items.iter().enumerate() {
+        let label = HSTRING::from(label.as_str());
+        SendMessageW(c.voice, CB_ADDSTRING, None, Some(LPARAM(label.as_ptr() as isize)));
+        SendMessageW(c.voice, CB_SETITEMDATA, Some(WPARAM(row)), Some(LPARAM(*index as isize)));
+        if Some(*index) == selected {
+            SendMessageW(c.voice, CB_SETCURSEL, Some(WPARAM(row)), None);
+        }
+    }
+}
+
+/// Neue Stimmenliste, z. B. nach dem Download einer KI-Stimme, solange das Fenster offen ist.
+pub fn set_voices(items: &[(usize, String)], selected: Option<usize>) {
+    if let Some(c) = CONTROLS.with(|cell| cell.get()) {
+        unsafe { fill_voices(&c, items, selected) };
+        VOICE_BEFORE.with(|cell| cell.set((selected, cell.get().1)));
+    }
+}
+
+unsafe fn chosen_voice(c: &Controls) -> (Option<usize>, usize) {
+    let row = SendMessageW(c.voice, CB_GETCURSEL, None, None).0;
+    let voice = (row >= 0).then(|| SendMessageW(c.voice, CB_GETITEMDATA, Some(WPARAM(row as usize)), None).0 as usize);
+    let rate = SendMessageW(c.rate, CB_GETCURSEL, None, None).0.max(0) as usize;
+    (voice, rate)
+}
+
+/// Schließt ohne Speichern und stellt die Stimme von vorher wieder her.
+unsafe fn cancel(hwnd: HWND) {
+    let changed = CONTROLS.with(|cell| cell.get()).map(|c| chosen_voice(&c)) != Some(VOICE_BEFORE.with(|b| b.get()));
+    let _ = DestroyWindow(hwnd);
+    if changed {
+        if let Some((on_change, _, _)) = VOICE_CALLBACKS.with(|cell| cell.get()) {
+            let (voice, rate) = VOICE_BEFORE.with(|b| b.get());
+            on_change(voice, rate);
+        }
     }
 }
 
@@ -361,17 +442,20 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             WM_COMMAND => {
                 let (id, code) = ((wparam.0 & 0xffff) as u32, (wparam.0 >> 16) & 0xffff);
                 let controls = CONTROLS.with(|c| c.get());
-                match (id, code, controls) {
-                    (ID_SAVE, 0, Some(c)) => save(&c),
-                    (ID_CANCEL, 0, _) => {
-                        let _ = DestroyWindow(hwnd);
+                let callbacks = VOICE_CALLBACKS.with(|cell| cell.get());
+                match (id, code as u32, controls, callbacks) {
+                    (ID_SAVE, 0, Some(c), _) => save(&c),
+                    (ID_CANCEL, 0, _, _) => cancel(hwnd),
+                    (ID_VOICE | ID_RATE, CBN_SELCHANGE, Some(c), Some((on_change, _, _))) => {
+                        let (voice, rate) = chosen_voice(&c);
+                        on_change(voice, rate);
                     }
+                    (ID_SAMPLE, 0, _, Some((_, on_sample, _))) => on_sample(),
+                    (ID_AI_VOICES, 0, _, Some((_, _, on_ai_voices))) => on_ai_voices(),
                     _ => {}
                 }
             }
-            WM_CLOSE => {
-                let _ = DestroyWindow(hwnd);
-            }
+            WM_CLOSE => cancel(hwnd),
             WM_DESTROY => {
                 if let Some(c) = CONTROLS.with(|cell| cell.take()) {
                     let _ = DeleteObject(c.font.into());

@@ -40,7 +40,8 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [x] Schalter im Installer und unter Extras; ausgeschaltet bleibt Vorleser unverändert.
 - [x] KI-Check (Hardware, Empfehlung) und Verbindungstest im Fenster KI-Einstellungen.
 - [x] KI-Anbieter: keiner, Ollama (eigener Server oder dieser PC), OpenAI-kompatibel (IONOS, Mistral …).
-- [ ] Lokal ohne Ollama: Sprachmodell mit einem Klick herunterladen (wie die KI-Stimmen).
+- [x] Einrichtungsassistent: Ollama auf diesem PC installieren und Modell laden, Server oder Cloud mit Schlüssel.
+- [ ] Lokal ganz ohne Ollama: Sprachmodell mit eigener Laufzeit (llama.cpp) wie bei Whisper.
 - [ ] Beseco-Konto als Anbieter (Anmeldung, Kontingente).
 - [x] Arbeitsbereich mit geteilter Ansicht, Zusammenfassen (kurz, Stichpunkte, ausführlich).
 - [ ] Antwort der KI während des Schreibens anzeigen (Streaming) und Abbrechen-Schaltfläche.

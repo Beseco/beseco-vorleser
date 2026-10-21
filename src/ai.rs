@@ -206,8 +206,12 @@ impl Provider {
 
     /// Eine Anfrage an das Modell: Anweisung (`system`) und Inhalt (`user`).
     pub fn chat(&self, system: &str, user: &str) -> Result<String, String> {
+        // Denkende Modelle (qwen3.5 u. a.) schreiben sonst erst seitenweise Überlegungen: auf einem
+        // PC ohne Grafikkarte Minuten statt Sekunden. Ollama nimmt den Wert auch bei anderen
+        // Modellen an; Cloud-Anbieter bekommen ihn nicht, manche lehnen unbekannte Werte ab.
+        let reasoning = if self.kind == Kind::Ollama { ",\"reasoning_effort\":\"none\"" } else { "" };
         let body = format!(
-            "{{\"model\":{},\"temperature\":0.3,\"stream\":false,\"messages\":[{{\"role\":\"system\",\"content\":{}}},{{\"role\":\"user\",\"content\":{}}}]}}",
+            "{{\"model\":{},\"temperature\":0.3,\"stream\":false{reasoning},\"messages\":[{{\"role\":\"system\",\"content\":{}}},{{\"role\":\"user\",\"content\":{}}}]}}",
             json::string(self.model.trim()),
             json::string(system),
             json::string(user)

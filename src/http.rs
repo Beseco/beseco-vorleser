@@ -260,6 +260,31 @@ pub fn fetch(request: &Request) -> Result<(u16, String), String> {
     Ok((status, String::from_utf8_lossy(&body).into_owned()))
 }
 
+/// Schickt eine Anfrage und gibt die Antwort zeilenweise an `on_line`, sobald sie eintrifft (z. B.
+/// den Fortschritt von Ollama). `on_line` bricht mit `false` ab. Liefert den Status.
+pub fn stream(request: &Request, mut on_line: impl FnMut(&str) -> bool) -> Result<u16, String> {
+    let (response, status) = send(request)?;
+    let mut pending = Vec::new();
+    let mut chunk = [0u8; 16384];
+    loop {
+        let n = read(&response, &mut chunk).ok_or_else(|| t("err.connection_lost").to_string())?;
+        if n == 0 {
+            break;
+        }
+        pending.extend_from_slice(&chunk[..n]);
+        while let Some(end) = pending.iter().position(|&b| b == b'\n') {
+            let line: Vec<u8> = pending.drain(..=end).collect();
+            if !on_line(String::from_utf8_lossy(&line).trim()) {
+                return Ok(status);
+            }
+        }
+    }
+    if !pending.is_empty() {
+        on_line(String::from_utf8_lossy(&pending).trim());
+    }
+    Ok(status)
+}
+
 /// Liest den nächsten Block; `Some(0)` am Ende, `None` bei einem Fehler.
 fn read(response: &Response, buffer: &mut [u8]) -> Option<usize> {
     let mut read = 0;

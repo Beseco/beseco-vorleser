@@ -35,12 +35,12 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 ## Funktionen
 
 - **Systemweit:** funktioniert in Browser, Office, PDF-Readern, Editoren und den meisten anderen Programmen
-- **Fenster zum Einfügen:** Text hineinkopieren, Stimmen per Hörprobe vergleichen
+- **Fenster zum Einfügen:** Text hineinkopieren und vorlesen; Stimme und Geschwindigkeit im Menü „Stimme“ oder unter Extras → Einstellungen (mit Hörprobe)
 - **Dateien vorlesen:** Word (DOCX), OpenDocument (ODT), RTF, PDF, EPUB, HTML, Textdateien und Bilder öffnen, über Datei → Öffnen, durch Hineinziehen ins Fenster oder „Öffnen mit“ im Explorer
 - **Texterkennung (OCR):** Text, der sich nicht markieren lässt, etwa in Bildern, gescannten PDFs oder Programmen ohne Textauswahl, per Rahmen auf dem Bildschirm erkennen und vorlesen. Dafür nutzt Vorleser die Texterkennung von Windows, offline und ohne Zusatzsoftware.
 - **Anleitung zum Anhören:** erscheint beim ersten Start im Textfeld und lässt sich unter Hilfe jederzeit anzeigen oder vorlesen
 - **Mitlesen:** das gerade gesprochene Wort wird im Fenster markiert
-- **Immer im Vordergrund:** das Fenster bleibt auf Wunsch über anderen Fenstern
+- **Immer im Vordergrund:** das Fenster bleibt auf Wunsch über anderen Fenstern (Extras)
 - **Stimmen:** alle installierten Windows-Stimmen, nach Sprache gruppiert
 - **Textbereinigung:** fügt umbrochene PDF-Zeilen zusammen, hebt Silbentrennung auf, kürzt Links
 - **Audio-Export:** Text als MP3- oder WAV-Datei speichern
@@ -57,7 +57,7 @@ Vorleser verwendet die in Windows installierten Stimmen. Weitere lassen sich in 
 
 ### KI-Stimmen
 
-Deutlich natürlicher klingen die KI-Stimmen, die sich im Vorleser-Fenster über **„KI-Stimmen …“** mit einem Klick laden lassen. Sie beruhen auf [Piper](https://github.com/rhasspy/piper) und laufen nach dem einmaligen Download ohne Internet nur auf dem eigenen Rechner.
+Deutlich natürlicher klingen die KI-Stimmen, die sich über **Stimme → KI-Stimmen …** (oder in den Einstellungen) mit einem Klick laden lassen. Sie beruhen auf [Piper](https://github.com/rhasspy/piper) und laufen nach dem einmaligen Download ohne Internet nur auf dem eigenen Rechner.
 
 | Stimme | Sprache | Download | Lizenz der Trainingsdaten |
 |---|---|---|---|
@@ -77,7 +77,16 @@ Wer mehr möchte, schaltet unter **Extras → Beseco Officeassistent** (oder sch
 
 Eingeschaltet teilt sich das Fenster: links der Text, rechts das Ergebnis der KI. **Zusammenfassen** (F9) fasst den markierten oder ganzen Text kurz, in Stichpunkten oder ausführlich zusammen, und die Zusammenfassung wird gleich vorgelesen (Umschalt+F9 liest sie erneut).
 
-Die KI wählst du unter **Assistent → KI-Einstellungen und KI-Check**:
+Am einfachsten richtet der **Einrichtungsassistent** die KI ein (**Assistent → KI einrichten**; er erscheint auch von selbst, wenn noch keine KI eingerichtet ist). Er stellt eine Frage – wo soll die KI laufen? – und erledigt den Rest:
+
+- **Auf diesem PC:** Ist Ollama nicht installiert, lädt der Assistent es herunter (ca. 1,7 GB) und installiert es für das eigene Benutzerkonto, ohne Administratorrechte. Fehlt ein Sprachmodell, lädt er eines passend zum Rechner (qwen3.5:4b, mit starker Grafikkarte gemma3:12b).
+- **Ollama-Server im Firmennetz:** Name des Servers eintragen, z. B. `ki-server`; Adresse und Port ergänzt der Assistent.
+- **Cloud-Anbieter mit API-Schlüssel:** Adresse (IONOS ist vorbelegt) und Schlüssel eintragen.
+- **Ohne KI:** nur Vorlesen und Diktieren.
+
+Der Assistent sucht ein geeignetes Modell aus, schickt einen Probe-Auftrag und speichert alles. Solange keine KI eingerichtet ist, sind Zusammenfassen und Korrigieren grau.
+
+Alles Weitere stellst du unter **Assistent → KI-Einstellungen und KI-Check** ein:
 
 | Anbieter | Beispiel | Datenschutz |
 |---|---|---|

@@ -13,6 +13,10 @@ Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic
 - Neu: Diktieren (F8) mit lokaler Spracherkennung (Whisper): der Text erscheint während des Sprechens an der Schreibmarke, Aufnahmen verlassen den Rechner nicht. Modell (schnell, genau, sehr genau) einmalig unter Assistent → Diktieren einrichten herunterladen
 - Neu: Korrigieren (Umschalt+F8) in Stufen: nur Rechtschreibung, Satzbau glätten, umformulieren oder eigene Vorgabe (z. B. „als freundliche E-Mail“); nach einem Diktat automatisch, wenn eine KI eingerichtet ist
 - Die Deinstallation entfernt heruntergeladene Modelle der Spracherkennung
+- Neu: Einrichtungsassistent für die KI (Assistent → KI einrichten): auf diesem PC, Ollama-Server im Firmennetz, Cloud-Anbieter mit API-Schlüssel oder ohne KI. Auf diesem PC installiert er bei Bedarf Ollama und lädt ein passendes Sprachmodell; er wählt das Modell aus und prüft die Verbindung. Öffnet sich auch beim ersten Start, wenn der Officeassistent im Installer gewählt wurde
+- Ohne eingerichtete KI sind deren Schaltflächen und Menüpunkte gesperrt, statt des Status steht „KI einrichten …“ da; Diktieren geht immer
+- Lokale Modelle mit Denkfunktion (z. B. qwen3.5) antworten ohne langes Nachdenken: deutlich schneller auf PCs ohne Grafikkarte
+- Aufgeräumtes Hauptfenster: Stimme, Geschwindigkeit, Hörprobe und KI-Stimmen stehen jetzt in den Einstellungen (und wie bisher im Menü „Stimme“); unten zeigt das Fenster die eingestellte Stimme. „Immer im Vordergrund“ unter Extras
 
 ## 0.4.0 – 2026-10-21
 

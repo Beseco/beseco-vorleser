@@ -30,8 +30,8 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 - [ ] Während des Lesens Strg+Alt+V: hört auf
 - [ ] Strg+Alt+P: pausiert, nochmals: liest weiter
 - [ ] Pause und Stopp im Fenster und im Tray-Menü
-- [ ] Stimme und Geschwindigkeit wechseln, Programm beenden und neu starten: Auswahl ist noch da
-- [ ] Hörprobe mit einer deutschen und einer englischen Stimme
+- [ ] Stimme und Geschwindigkeit in den Einstellungen und im Menü wechseln, Programm beenden und neu starten: Auswahl ist noch da; unten im Fenster steht die Stimme
+- [ ] Hörprobe in den Einstellungen mit einer deutschen und einer englischen Stimme; Stimme ändern und „Abbrechen“: die vorherige Stimme gilt wieder
 
 ## 3. Fenster
 
@@ -68,6 +68,11 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 
 - [ ] Installer mit Häkchen „Officeassistent einschalten“: Fenster zeigt beim Start den Arbeitsbereich
 - [ ] Extras → Beseco Officeassistent aus und an: Arbeitsbereich verschwindet und erscheint wieder
+- [ ] Ohne KI: Zusammenfassen, Korrigieren und die Auswahllisten sind grau, „KI einrichten …“ öffnet den Assistenten; Diktieren geht
+- [ ] Assistent „Auf diesem PC“ ohne Ollama: Download und Installation ohne Administratorrechte, danach Modell-Download mit Fortschrittsbalken; Abbrechen während des Downloads
+- [ ] Assistent „Ollama-Server im Firmennetz“ mit nur dem Servernamen; Server ohne Modell: verständliche Meldung
+- [ ] Assistent „Cloud“ mit IONOS-Schlüssel; mit falschem Schlüssel: verständliche Meldung
+- [ ] Installer mit Häkchen „Officeassistent“: beim ersten Start öffnet sich der Assistent
 - [ ] KI-Einstellungen: KI-Check zeigt den Rechner richtig an; Ollama-Server eintragen, Modelle abrufen, Verbindung testen
 - [ ] IONOS (oder anderer Cloud-Anbieter) mit Schlüssel: Verbindung testen; mit falschem Schlüssel verständliche Meldung
 - [ ] F9 mit kurzem Text, mit markiertem Abschnitt und mit einem langen Dokument (Fenstertitel zeigt die Schritte); alle drei Arten der Zusammenfassung
