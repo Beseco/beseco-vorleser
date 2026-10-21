@@ -2,7 +2,7 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## 0.4.0 – unveröffentlicht
+## 0.4.0 – 2026-10-21
 
 - Neu: Dateien vorlesen: Word (DOCX), OpenDocument (ODT), RTF, PDF, EPUB, HTML, Textdateien und Bilder; über Datei → Öffnen, durch Hineinziehen oder „Öffnen mit“ im Explorer
 - Neu: Texterkennung (OCR) mit der Windows-Texterkennung: Bildschirmausschnitt per Rahmen erkennen und vorlesen (Strg+Alt+O), PDFs und gescannte Dokumente
