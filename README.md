@@ -71,9 +71,26 @@ Beim ersten Download kommt einmalig die Sprachausgabe Piper hinzu (22 MB). Alle 
 
 Online-Stimmen, die manche Zusatzprogramme in Windows einbinden (erkennbar am Zusatz „Online“ im Namen), zeigt Vorleser nicht an: Sie hängen von einem fremden Dienst ab, brechen je nach Netz ab und schicken den Text an ihren Anbieter.
 
+## Beseco Officeassistent (optional)
+
+Wer mehr möchte, schaltet unter **Extras → Beseco Officeassistent** (oder schon im Installer) die KI-Funktionen ein. Ausgeschaltet bleibt Vorleser genau so einfach wie bisher; es braucht keinen Schlüssel und kein Konto.
+
+Eingeschaltet teilt sich das Fenster: links der Text, rechts das Ergebnis der KI. **Zusammenfassen** (F9) fasst den markierten oder ganzen Text kurz, in Stichpunkten oder ausführlich zusammen, und die Zusammenfassung wird gleich vorgelesen (Umschalt+F9 liest sie erneut).
+
+Die KI wählst du unter **Assistent → KI-Einstellungen und KI-Check**:
+
+| Anbieter | Beispiel | Datenschutz |
+|---|---|---|
+| Eigener Server oder dieser PC (Ollama) | `http://ki-server:11434` | Text bleibt im eigenen Netz |
+| Cloud-Anbieter mit OpenAI-kompatibler Schnittstelle | IONOS AI Model Hub: `https://openai.inference.de-txl.ionos.com/v1`, außerdem Mistral, OpenAI u. a. | Text geht zur Verarbeitung an den Anbieter |
+
+Der **KI-Check** im selben Fenster zeigt, was der eigene Rechner schafft (Prozessor, Arbeitsspeicher, Grafikkarte) und empfiehlt lokal, eigenen Server oder Cloud. „Verbindung testen“ prüft Adresse, Schlüssel und Modell mit einem kurzen Probe-Auftrag. Der Schlüssel wird mit dem Windows-Konto verschlüsselt gespeichert (DPAPI).
+
+Geplant sind außerdem Diktieren mit lokaler Spracherkennung, Protokolle aus Audiodateien und ein Datenschutz-Modus, der personenbezogene Daten vor dem Senden ersetzt (siehe [TODO.md](TODO.md)).
+
 ## Datenschutz
 
-Vorleser sammelt keine Daten. Ins Internet geht Vorleser nur in zwei Fällen: bei der Suche nach neuen Versionen (höchstens einmal am Tag eine Anfrage an GitHub, ohne Text, Einstellungen oder Kennung des Rechners; in den Einstellungen abschaltbar) und wenn du selbst eine KI-Stimme herunterlädst (von github.com und huggingface.co). Der Text wird ausschließlich auf dem eigenen Rechner verarbeitet.
+Vorleser sammelt keine Daten. Ins Internet geht Vorleser nur in zwei Fällen: bei der Suche nach neuen Versionen (höchstens einmal am Tag eine Anfrage an GitHub, ohne Text, Einstellungen oder Kennung des Rechners; in den Einstellungen abschaltbar) wenn du selbst eine KI-Stimme herunterlädst (von github.com und huggingface.co) und, nur bei eingeschaltetem Officeassistenten, an den von dir gewählten KI-Anbieter, wenn du eine KI-Funktion auslöst. Der Text wird ausschließlich auf dem eigenen Rechner verarbeitet.
 
 Zum Auslesen der Markierung nutzt Vorleser die Bedienungshilfen-Schnittstelle von Windows. Wo das nicht geht, kopiert es den Text kurz über die Zwischenablage und stellt deren vorherigen Inhalt wieder her.
 

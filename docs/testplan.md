@@ -64,7 +64,17 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 - [ ] Mit zwei Bildschirmen: Ausschnitt auf dem zweiten Bildschirm
 - [ ] Neue Installation: Anleitung steht beim ersten Start im Fenster; Hilfe → Anleitung vorlesen
 
-## 7. Sonderfälle
+## 7. Officeassistent
+
+- [ ] Installer mit Häkchen „Officeassistent einschalten“: Fenster zeigt beim Start den Arbeitsbereich
+- [ ] Extras → Beseco Officeassistent aus und an: Arbeitsbereich verschwindet und erscheint wieder
+- [ ] KI-Einstellungen: KI-Check zeigt den Rechner richtig an; Ollama-Server eintragen, Modelle abrufen, Verbindung testen
+- [ ] IONOS (oder anderer Cloud-Anbieter) mit Schlüssel: Verbindung testen; mit falschem Schlüssel verständliche Meldung
+- [ ] F9 mit kurzem Text, mit markiertem Abschnitt und mit einem langen Dokument (Fenstertitel zeigt die Schritte); alle drei Arten der Zusammenfassung
+- [ ] Zusammenfassung wird rechts mitgelesen; Umschalt+F9 liest sie erneut; Alt+←/→ springt rechts satzweise
+- [ ] Im Büro über den Proxy: Cloud-Anbieter erreichbar, Ollama im Büronetz ohne Proxy erreichbar
+
+## 8. Sonderfälle
 
 - [ ] Programm als Administrator starten (z. B. Editor), dort markieren: Vorleser meldet „Kein Text markiert“ statt sich aufzuhängen
 - [ ] Explorer neu starten (Task-Manager): Symbol im Infobereich kommt zurück

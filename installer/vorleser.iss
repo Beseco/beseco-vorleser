@@ -48,10 +48,13 @@ german.Autostart=Vorleser mit Windows starten
 english.Autostart=Start Vorleser with Windows
 german.StartNow=Vorleser jetzt starten
 english.StartNow=Start Vorleser now
+german.Assistant=Beseco Officeassistent einschalten (KI-Funktionen, spaeter unter Extras umschaltbar)
+english.Assistant=Turn on Beseco Office Assistant (AI features, can be changed later under Tools)
 
 [Tasks]
 Name: "autostart"; Description: "{cm:Autostart}"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked
+Name: "assistant"; Description: "{cm:Assistant}"; Flags: unchecked
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "vorleser.exe"; Flags: ignoreversion
@@ -76,6 +79,9 @@ Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes";
 Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".epub"; ValueData: ""
 Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".html"; ValueData: ""
 Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".htm"; ValueData: ""
+
+; Wunsch "Officeassistent einschalten"; Vorleser uebernimmt ihn beim Start und loescht den Wert.
+Root: HKCU; Subkey: "Software\Beseco\Vorleser"; ValueType: string; ValueName: "Assistant"; ValueData: "1"; Tasks: assistant; Flags: uninsdeletekeyifempty
 
 [UninstallDelete]
 ; Heruntergeladene KI-Stimmen (bis mehrere hundert MB). Die Einstellungen bleiben erhalten.

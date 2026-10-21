@@ -58,6 +58,10 @@ pub const ID_TOPMOST: u32 = 110;
 pub const ID_AI_VOICES: u32 = 111;
 pub const ID_PREV: u32 = 112;
 pub const ID_NEXT: u32 = 113;
+pub const ID_SUMMARIZE: u32 = 114;
+pub const ID_SUMMARY_MODE: u32 = 115;
+pub const ID_READ_RESULT: u32 = 116;
+const ID_RESULT: u32 = 117;
 /// Befehle der Menüleiste und der Tastenkürzel: `MENU_BASE` + Befehlsnummer aus `main.rs`.
 pub const MENU_BASE: u32 = 20_000;
 
@@ -65,6 +69,13 @@ pub const MENU_BASE: u32 = 20_000;
 pub const CLICKED: u32 = 0;
 /// Benachrichtigungscode einer geänderten Auswahl in einer Liste.
 pub const SELECTED: u32 = CBN_SELCHANGE;
+
+/// Die beiden Textfelder des Arbeitsbereichs: links der Text, rechts das Ergebnis der KI.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Pane {
+    Text,
+    Result,
+}
 
 /// Bearbeiten-Befehle für das Textfeld.
 #[derive(Clone, Copy)]
@@ -93,10 +104,31 @@ struct Controls {
     stop: HWND,
     prev: HWND,
     next: HWND,
+    // Officeassistent
+    summarize: HWND,
+    summary_mode: HWND,
+    read_result: HWND,
+    ai_status: HWND,
+    text_label: HWND,
+    result_label: HWND,
+    result: HWND,
 }
 
 impl Controls {
-    fn children(&self) -> [HWND; 13] {
+    fn assistant_controls(&self) -> [HWND; 7] {
+        [self.summarize, self.summary_mode, self.read_result, self.ai_status, self.text_label, self.result_label, self.result]
+    }
+
+    fn edit_of(&self, pane: Pane) -> HWND {
+        match pane {
+            Pane::Text => self.edit,
+            Pane::Result => self.result,
+        }
+    }
+}
+
+impl Controls {
+    fn children(&self) -> [HWND; 20] {
         [
             self.voice_label,
             self.voice,
@@ -111,6 +143,13 @@ impl Controls {
             self.stop,
             self.prev,
             self.next,
+            self.summarize,
+            self.summary_mode,
+            self.read_result,
+            self.ai_status,
+            self.text_label,
+            self.result_label,
+            self.result,
         ]
     }
 }
@@ -122,6 +161,7 @@ thread_local! {
     static ON_DROP: Cell<Option<fn(String)>> = const { Cell::new(None) };
     static ACCELERATORS: Cell<HACCEL> = const { Cell::new(HACCEL(std::ptr::null_mut())) };
     static PAUSED: Cell<bool> = const { Cell::new(false) };
+    static ASSISTANT: Cell<bool> = const { Cell::new(false) };
 }
 
 fn controls() -> Option<Controls> {
@@ -234,7 +274,18 @@ pub fn create(icon: HICON, on_command: fn(u32, u32), on_drop: fn(String)) -> Opt
             stop: child(w!("BUTTON"), tab, none, ID_STOP),
             prev: child(w!("BUTTON"), tab, none, ID_PREV),
             next: child(w!("BUTTON"), tab, none, ID_NEXT),
+            summarize: child(w!("BUTTON"), tab, none, ID_SUMMARIZE),
+            summary_mode: child(w!("COMBOBOX"), list, none, ID_SUMMARY_MODE),
+            read_result: child(w!("BUTTON"), tab, none, ID_READ_RESULT),
+            ai_status: child(w!("STATIC"), 0, none, 0),
+            text_label: child(w!("STATIC"), 0, none, 0),
+            result_label: child(w!("STATIC"), 0, none, 0),
+            result: child(w!("EDIT"), edit_style, WS_EX_CLIENTEDGE, ID_RESULT),
         };
+        for control in c.assistant_controls() {
+            let _ = ShowWindow(control, SW_HIDE);
+        }
+        SendMessageW(c.result, EM_SETLIMITTEXT, Some(WPARAM(0)), Some(LPARAM(0)));
         CONTROLS.with(|cell| cell.set(Some(c)));
         ON_COMMAND.with(|cell| cell.set(Some(on_command)));
         ON_DROP.with(|cell| cell.set(Some(on_drop)));
@@ -268,12 +319,64 @@ pub fn relabel() {
         (c.stop, t("app.stop")),
         (c.prev, t("window.prev_sentence")),
         (c.next, t("window.next_sentence")),
+        (c.summarize, t("assist.summarize")),
+        (c.read_result, t("assist.read_result")),
+        (c.text_label, t("assist.text")),
+        (c.result_label, t("assist.result")),
     ];
     for (control, text) in texts {
         unsafe {
             let _ = SetWindowTextW(control, &HSTRING::from(text));
         }
     }
+}
+
+/// Blendet den Arbeitsbereich des Officeassistenten ein oder aus.
+pub fn set_assistant(on: bool) {
+    let Some(c) = controls() else { return };
+    ASSISTANT.with(|a| a.set(on));
+    for control in c.assistant_controls() {
+        unsafe {
+            let _ = ShowWindow(control, if on { SW_SHOW } else { SW_HIDE });
+        }
+    }
+    unsafe { layout(&c) };
+}
+
+/// Füllt die Auswahl der Zusammenfassungsart und wählt `selected`.
+pub fn set_summary_modes(labels: &[&str], selected: usize) {
+    let Some(c) = controls() else { return };
+    fill(c.summary_mode, labels.iter().copied().enumerate());
+    select(c.summary_mode, Some(selected));
+}
+
+pub fn selected_summary_mode() -> Option<usize> {
+    selected(controls()?.summary_mode)
+}
+
+/// Zeile rechts in der Leiste des Assistenten, z. B. Anbieter und Modell.
+pub fn set_ai_status(text: &str) {
+    if let Some(c) = controls() {
+        unsafe {
+            let _ = SetWindowTextW(c.ai_status, &HSTRING::from(text));
+        }
+    }
+}
+
+/// Während die KI arbeitet, ist „Zusammenfassen“ gesperrt.
+pub fn set_ai_busy(busy: bool) {
+    if let Some(c) = controls() {
+        unsafe {
+            let _ = EnableWindow(c.summarize, !busy);
+        }
+    }
+}
+
+/// Das Textfeld mit der Tastatureingabe.
+pub fn focused_pane() -> Pane {
+    let Some(c) = controls() else { return Pane::Text };
+    let focus = unsafe { windows::Win32::UI::Input::KeyboardAndMouse::GetFocus() };
+    if ASSISTANT.with(|a| a.get()) && focus == c.result { Pane::Result } else { Pane::Text }
 }
 
 /// Ersetzt die Menüleiste; die alte wird freigegeben.
@@ -384,14 +487,19 @@ pub struct Source {
 }
 
 pub fn source() -> Option<Source> {
+    source_of(Pane::Text)
+}
+
+pub fn source_of(pane: Pane) -> Option<Source> {
     let c = controls()?;
+    let edit = c.edit_of(pane);
     unsafe {
-        let mut content = vec![0u16; GetWindowTextLengthW(c.edit) as usize + 1];
-        let len = GetWindowTextW(c.edit, &mut content) as usize;
+        let mut content = vec![0u16; GetWindowTextLengthW(edit) as usize + 1];
+        let len = GetWindowTextW(edit, &mut content) as usize;
         content.truncate(len);
         let (mut start, mut end) = (0u32, 0u32);
         SendMessageW(
-            c.edit,
+            edit,
             EM_GETSEL,
             Some(WPARAM(&mut start as *mut u32 as usize)),
             Some(LPARAM(&mut end as *mut u32 as isize)),
@@ -403,19 +511,27 @@ pub fn source() -> Option<Source> {
 /// Ersetzt den Inhalt des Textfelds. Anders als `SetWindowTextW` lässt sich das mit Strg+Z
 /// rückgängig machen, sodass ein vorher eingefügter Text nicht verloren ist.
 pub fn set_text(text: &str) {
+    set_text_in(Pane::Text, text);
+}
+
+pub fn set_text_in(pane: Pane, text: &str) {
     if let Some(c) = controls() {
+        let edit = c.edit_of(pane);
         let text = HSTRING::from(text);
         unsafe {
-            SendMessageW(c.edit, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(-1)));
-            SendMessageW(c.edit, EM_REPLACESEL, Some(WPARAM(1)), Some(LPARAM(text.as_ptr() as isize)));
-            SendMessageW(c.edit, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(0)));
-            SendMessageW(c.edit, EM_SCROLLCARET, None, None);
+            SendMessageW(edit, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(-1)));
+            SendMessageW(edit, EM_REPLACESEL, Some(WPARAM(1)), Some(LPARAM(text.as_ptr() as isize)));
+            SendMessageW(edit, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(0)));
+            SendMessageW(edit, EM_SCROLLCARET, None, None);
         }
     }
 }
 
 pub fn edit(action: Edit) {
     let Some(c) = controls() else { return };
+    // Gilt für das Textfeld, in dem gerade geschrieben wird.
+    let mut c = c;
+    c.edit = c.edit_of(focused_pane());
     unsafe {
         match action {
             Edit::Undo => SendMessageW(c.edit, WM_UNDO, None, None),
@@ -434,10 +550,15 @@ pub fn edit(action: Edit) {
 
 /// Markiert einen Bereich des Textfelds und rollt ihn ins Bild (Mitlesen).
 pub fn mark(start: u32, end: u32) {
+    mark_in(Pane::Text, start, end);
+}
+
+pub fn mark_in(pane: Pane, start: u32, end: u32) {
     if let Some(c) = controls() {
+        let edit = c.edit_of(pane);
         unsafe {
-            SendMessageW(c.edit, EM_SETSEL, Some(WPARAM(start as usize)), Some(LPARAM(end as isize)));
-            SendMessageW(c.edit, EM_SCROLLCARET, None, None);
+            SendMessageW(edit, EM_SETSEL, Some(WPARAM(start as usize)), Some(LPARAM(end as isize)));
+            SendMessageW(edit, EM_SCROLLCARET, None, None);
         }
     }
 }
@@ -570,7 +691,23 @@ unsafe fn layout(c: &Controls) {
     y += row + gap;
 
     let buttons = height - margin - button;
-    place(c.edit, margin, y, width - 2 * margin, buttons - gap - y);
+    if ASSISTANT.with(|a| a.get()) {
+        // Leiste des Assistenten, darunter zwei Textfelder nebeneinander.
+        place(c.summarize, margin, y - px(1), px(150), row + px(2));
+        place(c.summary_mode, margin + px(158), y, px(190), px(300));
+        place(c.read_result, margin + px(356), y - px(1), px(200), row + px(2));
+        let status_x = margin + px(566);
+        place(c.ai_status, status_x, y + px(4), width - status_x - margin, row);
+        y += row + gap;
+        let half = (width - 2 * margin - gap) / 2;
+        place(c.text_label, margin, y, half, px(20));
+        place(c.result_label, margin + half + gap, y, half, px(20));
+        y += px(22);
+        place(c.edit, margin, y, half, buttons - gap - y);
+        place(c.result, margin + half + gap, y, half, buttons - gap - y);
+    } else {
+        place(c.edit, margin, y, width - 2 * margin, buttons - gap - y);
+    }
     place(c.read, margin, buttons, px(120), button);
     place(c.pause, margin + px(128), buttons, px(110), button);
     place(c.stop, margin + px(246), buttons, px(90), button);

@@ -1,6 +1,6 @@
 [package]
 name = "vorleser"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 description = "Kleines Tray-Tool, das markierten Text mit den Windows-Stimmen vorliest"
 authors = ["Florian Beubl, beseco – Beubl IT Systems <info@beseco.com>"]
@@ -27,6 +27,8 @@ features = [
     "Storage_Streams",
     "Win32_Foundation",
     "Win32_Globalization",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
     "Win32_Graphics_Gdi",
     "Win32_Media_Audio",
     "Win32_Media_MediaFoundation",

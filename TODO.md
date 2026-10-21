@@ -37,10 +37,13 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 
 ## Beseco Officeassistent (optionale Erweiterung)
 
-- [ ] Schalter im Installer und unter Extras; ausgeschaltet bleibt Vorleser unverändert.
-- [ ] KI-Check beim Einrichten (Hardware, Empfehlung, Verbindungstest).
-- [ ] KI-Anbieter: keiner, lokal, eigener Server (Ollama), OpenAI-kompatibel (IONOS, Mistral …); später Beseco-Konto.
-- [ ] Arbeitsbereich mit geteilter Ansicht, Zusammenfassen.
+- [x] Schalter im Installer und unter Extras; ausgeschaltet bleibt Vorleser unverändert.
+- [x] KI-Check (Hardware, Empfehlung) und Verbindungstest im Fenster KI-Einstellungen.
+- [x] KI-Anbieter: keiner, Ollama (eigener Server oder dieser PC), OpenAI-kompatibel (IONOS, Mistral …).
+- [ ] Lokal ohne Ollama: Sprachmodell mit einem Klick herunterladen (wie die KI-Stimmen).
+- [ ] Beseco-Konto als Anbieter (Anmeldung, Kontingente).
+- [x] Arbeitsbereich mit geteilter Ansicht, Zusammenfassen (kurz, Stichpunkte, ausführlich).
+- [ ] Antwort der KI während des Schreibens anzeigen (Streaming) und Abbrechen-Schaltfläche.
 - [ ] Diktieren mit lokalem Whisper, KI-Korrektur in Stufen.
 - [ ] Audiodatei → Abschrift → Protokoll.
 - [ ] Datenschutz-Modus (personenbezogene Daten lokal ersetzen).

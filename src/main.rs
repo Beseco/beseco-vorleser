@@ -3,11 +3,15 @@
 
 #![windows_subsystem = "windows"]
 
+mod ai;
+mod aicheck;
+mod aisettings;
 mod aivoices;
 mod config;
 mod documents;
 mod http;
 mod i18n;
+mod json;
 mod mouse;
 mod mp3;
 mod ocr;
@@ -86,6 +90,10 @@ const WM_FILE_LOADED: u32 = WM_APP + 8;
 const WM_FILE_PROGRESS: u32 = WM_APP + 9;
 /// Die Texterkennung eines Bildschirmausschnitts ist fertig; das Ergebnis liegt in `RECOGNIZED`.
 const WM_OCR_DONE: u32 = WM_APP + 10;
+/// Die KI ist fertig; das Ergebnis liegt in `AI_RESULT`.
+const WM_AI_DONE: u32 = WM_APP + 11;
+/// Fortschritt der KI: `wparam` = Schritt, `lparam` = Zahl der Schritte.
+const WM_AI_PROGRESS: u32 = WM_APP + 12;
 /// Kennung der Update-Meldung im Infobereich.
 const BALLOON_UPDATE: u32 = 1;
 /// Klick auf eine Meldung im Infobereich (NIN_BALLOONUSERCLICK).
@@ -134,6 +142,15 @@ const CMD_NEXT: u32 = 29;
 const CMD_SCREEN_OCR: u32 = 30;
 const CMD_GUIDE_SHOW: u32 = 31;
 const CMD_GUIDE_READ: u32 = 32;
+const CMD_ASSISTANT: u32 = 33;
+const CMD_SUMMARIZE: u32 = 34;
+const CMD_READ_RESULT: u32 = 35;
+const CMD_AI_SETTINGS: u32 = 36;
+/// Art der Zusammenfassung: `CMD_SUMMARY_MODE` + Nummer.
+const CMD_SUMMARY_MODE: u32 = 3500;
+
+/// Registrierungswert, mit dem der Installer den Officeassistenten einschaltet.
+const INSTALLER_KEY: PCWSTR = w!(r"Software\Beseco\Vorleser");
 const CMD_RATE: u32 = 100;
 const CMD_VOICE: u32 = 1000;
 /// Sprache der Oberfläche: `CMD_LANGUAGE` = automatisch, danach eine Nummer je Sprache.
@@ -184,11 +201,17 @@ struct Follow {
     pos: u32,
     /// Ende des vorzulesenden Bereichs im Textfeld.
     end: u32,
+    /// Das Textfeld, in dem mitgelesen wird.
+    pane: window::Pane,
 }
 
 impl Follow {
     fn new(base: u32, end: u32, restore: (u32, u32)) -> Follow {
-        Follow { base, restore, pos: base, end }
+        Follow { base, restore, pos: base, end, pane: window::Pane::Text }
+    }
+
+    fn in_pane(self, pane: window::Pane) -> Follow {
+        Follow { pane, ..self }
     }
 }
 
@@ -218,6 +241,9 @@ thread_local! {
 /// Ergebnis des Hintergrund-Threads, der eine Datei liest bzw. einen Ausschnitt erkennt.
 static LOADED_FILE: std::sync::Mutex<Option<Result<String, String>>> = std::sync::Mutex::new(None);
 static RECOGNIZED: std::sync::Mutex<Option<Result<String, String>>> = std::sync::Mutex::new(None);
+static AI_RESULT: std::sync::Mutex<Option<Result<String, String>>> = std::sync::Mutex::new(None);
+/// Die KI arbeitet gerade.
+static AI_BUSY: AtomicBool = AtomicBool::new(false);
 /// Es wird gerade eine Datei gelesen.
 static LOADING: AtomicBool = AtomicBool::new(false);
 
@@ -244,10 +270,12 @@ impl App {
         tts.set_rate(cfg.rate);
         // Der Testlauf bleibt stumm.
         tts.set_volume(if TEST_MODE.load(Ordering::Relaxed) { 0 } else { cfg.volume });
-        let app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None };
+        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None };
         app.add_icon();
         app.register_hotkeys();
         app.fill_window();
+        app.apply_installer_choice();
+        app.show_assistant();
         if !TEST_MODE.load(Ordering::Relaxed) {
             update::start(hwnd, WM_UPDATE, app.cfg.update_check, app.cfg.last_update_check);
         }
@@ -345,12 +373,132 @@ impl App {
         tray::set_tip(self.hwnd, &self.tip());
     }
 
+    /// Der Installer kann den Officeassistenten vorab einschalten (einmalig).
+    fn apply_installer_choice(&mut self) {
+        let mut value = [0u16; 8];
+        let mut size = (value.len() * 2) as u32;
+        let status = unsafe {
+            RegGetValueW(HKEY_CURRENT_USER, INSTALLER_KEY, w!("Assistant"), RRF_RT_REG_SZ, None, Some(value.as_mut_ptr() as *mut _), Some(&mut size))
+        };
+        if status == ERROR_SUCCESS && !config::is_read_only() {
+            self.cfg.assistant = value[0] == b'1' as u16;
+            self.cfg.save();
+            unsafe {
+                let _ = RegDeleteKeyValueW(HKEY_CURRENT_USER, INSTALLER_KEY, w!("Assistant"));
+            }
+        }
+    }
+
+    fn provider(&self) -> ai::Provider {
+        ai::Provider {
+            kind: ai::Kind::from_code(&self.cfg.ai_kind),
+            url: self.cfg.ai_url.clone(),
+            key: ai::unprotect(&self.cfg.ai_key),
+            model: self.cfg.ai_model.clone(),
+        }
+    }
+
+    /// Arbeitsbereich, Auswahl der Zusammenfassungsart und Anzeige des Anbieters.
+    fn show_assistant(&self) {
+        window::set_assistant(self.cfg.assistant);
+        let labels: Vec<&str> = ai::Summary::ALL.iter().map(|s| summary_label(*s)).collect();
+        let mode = ai::Summary::from_code(&self.cfg.summary_mode);
+        window::set_summary_modes(&labels, ai::Summary::ALL.iter().position(|s| *s == mode).unwrap_or(0));
+        let provider = self.provider();
+        let status = if provider.is_ready() {
+            t("assist.status").replace("{}", &format!("{} · {}", provider_name(provider.kind), provider.model))
+        } else {
+            t("assist.not_configured").to_string()
+        };
+        window::set_ai_status(&status);
+    }
+
+    fn set_assistant(&mut self, on: bool) -> bool {
+        self.cfg.assistant = on;
+        self.cfg.save();
+        self.show_assistant();
+        self.refresh_menu_bar();
+        if on {
+            window::show();
+        }
+        // Beim ersten Einschalten gleich die Einrichtung anbieten.
+        on && !self.provider().is_ready()
+    }
+
+    fn set_summary_mode(&mut self, mode: ai::Summary) {
+        self.cfg.summary_mode = mode.code().to_string();
+        self.cfg.save();
+        self.show_assistant();
+        self.refresh_menu_bar();
+    }
+
+    /// Fasst den markierten Text bzw. den ganzen Text links zusammen; das Ergebnis erscheint
+    /// rechts und wird vorgelesen.
+    fn summarize(&mut self) -> bool {
+        let provider = self.provider();
+        if !provider.is_ready() {
+            tray::balloon(self.hwnd, "Vorleser", t("app.ai_not_ready"));
+            return false;
+        }
+        let Some(text) = window::text() else {
+            tray::balloon(self.hwnd, "Vorleser", t("app.text_field_empty"));
+            return true;
+        };
+        if AI_BUSY.swap(true, Ordering::Relaxed) {
+            return true;
+        }
+        let text = self.prepare(text);
+        let mode = ai::Summary::from_code(&self.cfg.summary_mode);
+        let hwnd = self.hwnd.0 as isize;
+        window::set_ai_busy(true);
+        window::set_title(Some(t("app.ai_working")));
+        std::thread::spawn(move || {
+            let post = |msg: u32, wparam: usize, lparam: isize| unsafe {
+                let _ = PostMessageW(Some(HWND(hwnd as *mut _)), msg, WPARAM(wparam), LPARAM(lparam));
+            };
+            let result = provider.summarize(&text, mode, |step, steps| post(WM_AI_PROGRESS, step, steps as isize));
+            *AI_RESULT.lock().unwrap() = Some(result);
+            post(WM_AI_DONE, 0, 0);
+        });
+        true
+    }
+
+    fn on_ai_done(&mut self) {
+        AI_BUSY.store(false, Ordering::Relaxed);
+        window::set_ai_busy(false);
+        window::set_title(None);
+        match AI_RESULT.lock().unwrap().take() {
+            Some(Ok(summary)) => {
+                self.stop();
+                window::set_text_in(window::Pane::Result, &to_crlf(&summary));
+                self.speak_pane(window::Pane::Result);
+            }
+            Some(Err(error)) => {
+                let text = HSTRING::from(format!("{}\n\n{error}", t("app.ai_failed")));
+                unsafe {
+                    MessageBoxW(window::visible(), &text, APP_NAME, MB_ICONWARNING);
+                }
+            }
+            None => {}
+        }
+    }
+
+    fn apply_ai_settings(&mut self, provider: ai::Provider) {
+        self.cfg.ai_kind = provider.kind.code().to_string();
+        self.cfg.ai_url = provider.url;
+        self.cfg.ai_key = ai::protect(&provider.key);
+        self.cfg.ai_model = provider.model;
+        self.cfg.save();
+        self.show_assistant();
+    }
+
     /// Stellt die Sprache der Oberfläche um; Fenster und Menüs wechseln sofort.
     fn set_language(&mut self, code: &str) {
         self.cfg.language = code.to_string();
         self.cfg.save();
         i18n::init(code);
         window::relabel();
+        self.show_assistant();
         // Die Namen der KI-Stimmen tragen einen übersetzten Zusatz.
         self.tts.reload_voices();
         self.fill_window();
@@ -476,15 +624,20 @@ impl App {
     /// Liest den markierten Teil des Textfelds vor; ohne Markierung ab dem Satz, in dem die
     /// Schreibmarke steht, und steht sie am Anfang oder Ende, den ganzen Text.
     fn speak_window(&mut self) {
+        self.speak_pane(window::focused_pane());
+    }
+
+    /// Wie [`App::speak_window`], für ein bestimmtes Textfeld des Arbeitsbereichs.
+    fn speak_pane(&mut self, pane: window::Pane) {
         // Zuerst die eigene Wortmarkierung zurücknehmen, sonst gälte sie als Auswahl.
         self.end_follow();
-        let Some(source) = window::source() else { return };
+        let Some(source) = window::source_of(pane) else { return };
         let (start, end) = source.selection;
         let len = source.content.len() as u32;
         if start == end && start > 0 && start < len {
             let starts = textprep::sentence_starts(&source.content);
             let from = textprep::sentence_at(&starts, start).unwrap_or(0);
-            self.speak_range(&source.content, from, len, (from, from));
+            self.speak_range(pane, &source.content, from, len, (from, from));
             return;
         }
         let (text, follow) = if start < end {
@@ -495,7 +648,7 @@ impl App {
             let shown = String::from_utf16_lossy(&source.content);
             let text = to_crlf(&self.prepare(shown.clone()));
             if text != shown {
-                window::set_text(&text);
+                window::set_text_in(pane, &text);
             }
             let len = text.encode_utf16().count() as u32;
             (text, Follow::new(0, len, (0, 0)))
@@ -504,29 +657,30 @@ impl App {
             tray::balloon(self.hwnd, "Vorleser", t("app.text_field_empty"));
             return;
         }
-        self.start(text, Some(follow));
+        self.start(text, Some(follow.in_pane(pane)));
     }
 
     /// Liest einen Bereich des Textfelds vor (Weiterlesen, Navigation).
-    fn speak_range(&mut self, content: &[u16], start: u32, end: u32, restore: (u32, u32)) {
+    fn speak_range(&mut self, pane: window::Pane, content: &[u16], start: u32, end: u32, restore: (u32, u32)) {
         let end = end.min(content.len() as u32);
         if start >= end {
             return;
         }
         let text = String::from_utf16_lossy(&content[start as usize..end as usize]);
-        self.start(text, Some(Follow::new(start, end, restore)));
+        self.start(text, Some(Follow::new(start, end, restore).in_pane(pane)));
     }
 
     /// Springt einen Satz vor oder zurück. Beim Vorlesen geht es dort weiter, sonst wandert
     /// nur die Schreibmarke (F5 liest dann ab dort).
     fn navigate(&mut self, forward: bool) {
-        let Some(source) = window::source() else { return };
+        let pane = self.follow.map_or_else(window::focused_pane, |f| f.pane);
+        let Some(source) = window::source_of(pane) else { return };
         let starts = textprep::sentence_starts(&source.content);
         match self.follow {
             Some(follow) => match textprep::neighbor(&starts, follow.pos, forward) {
                 Some(target) if target < follow.end => {
                     self.tts.stop();
-                    self.speak_range(&source.content, target, follow.end, follow.restore);
+                    self.speak_range(pane, &source.content, target, follow.end, follow.restore);
                 }
                 // Hinter dem letzten Satz: aufhören, wie am Ende des Textes.
                 _ if forward => self.stop(),
@@ -534,7 +688,7 @@ impl App {
             },
             None => {
                 if let Some(target) = textprep::neighbor(&starts, source.selection.0, forward) {
-                    window::mark(target, target);
+                    window::mark_in(pane, target, target);
                 }
             }
         }
@@ -551,7 +705,7 @@ impl App {
             return;
         }
         let Some(source) = window::source() else { return };
-        let pos = self.follow.map_or(source.selection.0, |f| f.pos);
+        let pos = self.follow.filter(|f| f.pane == window::Pane::Text).map_or(source.selection.0, |f| f.pos);
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
@@ -625,14 +779,14 @@ impl App {
     fn on_word(&mut self, start: u32, len: u32) {
         if let Some(follow) = &mut self.follow {
             follow.pos = follow.base + start;
-            window::mark(follow.pos, follow.pos + len);
+            window::mark_in(follow.pane, follow.pos, follow.pos + len);
         }
     }
 
     /// Beendet das Mitlesen und stellt die ursprüngliche Markierung wieder her.
     fn end_follow(&mut self) {
         if let Some(follow) = self.follow.take() {
-            window::mark(follow.restore.0, follow.restore.1);
+            window::mark_in(follow.pane, follow.restore.0, follow.restore.1);
         }
     }
 
@@ -679,9 +833,9 @@ impl App {
         self.retry = None;
         self.tts.stop();
         if let Some(follow) = self.follow.take() {
-            let starts = window::source().map(|s| textprep::sentence_starts(&s.content)).unwrap_or_default();
+            let starts = window::source_of(follow.pane).map(|s| textprep::sentence_starts(&s.content)).unwrap_or_default();
             let at = textprep::sentence_at(&starts, follow.pos).unwrap_or(follow.pos);
-            window::mark(at, at);
+            window::mark_in(follow.pane, at, at);
         }
         self.set_state(State::Idle);
         self.save_session();
@@ -799,9 +953,30 @@ impl App {
             item(voice, base + CMD_AI_VOICES, t("menu.ai_voices"), true, false);
             popup(t("menu.voice"), voice);
 
+            if self.cfg.assistant {
+                let assistant = CreatePopupMenu().unwrap_or_default();
+                let busy = AI_BUSY.load(Ordering::Relaxed);
+                item(assistant, base + CMD_SUMMARIZE, t("menu.summarize"), !busy, false);
+                let modes = CreatePopupMenu().unwrap_or_default();
+                let current = ai::Summary::from_code(&self.cfg.summary_mode);
+                for (i, mode) in ai::Summary::ALL.iter().enumerate() {
+                    let id = base + CMD_SUMMARY_MODE + i as u32;
+                    item(modes, id, summary_label(*mode), true, false);
+                    if *mode == current {
+                        let _ = CheckMenuRadioItem(modes, id, id, id, MF_BYCOMMAND.0);
+                    }
+                }
+                let _ = AppendMenuW(assistant, MF_POPUP, modes.0 as usize, &HSTRING::from(t("menu.summary_mode")));
+                item(assistant, base + CMD_READ_RESULT, t("menu.read_result"), true, false);
+                separator(assistant);
+                item(assistant, base + CMD_AI_SETTINGS, t("menu.ai_settings"), true, false);
+                popup(t("menu.assistant"), assistant);
+            }
+
             let tools = CreatePopupMenu().unwrap_or_default();
             item(tools, base + CMD_TOPMOST, t("menu.topmost"), true, self.cfg.always_on_top);
             item(tools, base + CMD_AUTOSTART, t("menu.autostart"), true, autostart_enabled());
+            item(tools, base + CMD_ASSISTANT, t("menu.assistant_toggle"), true, self.cfg.assistant);
             separator(tools);
             let languages = CreatePopupMenu().unwrap_or_default();
             item(languages, base + CMD_LANGUAGE, t("menu.language_auto"), true, false);
@@ -887,6 +1062,12 @@ impl App {
             CMD_OPEN => window::show(),
             CMD_UPDATE => open_url(update::RELEASES_URL),
             CMD_READ_WINDOW => self.speak_window(),
+            CMD_READ_RESULT => self.speak_pane(window::Pane::Result),
+            _ if (CMD_SUMMARY_MODE..CMD_SUMMARY_MODE + 3).contains(&cmd) => {
+                if let Some(mode) = ai::Summary::ALL.get((cmd - CMD_SUMMARY_MODE) as usize) {
+                    self.set_summary_mode(*mode);
+                }
+            }
             CMD_GUIDE_SHOW => self.show_guide(false),
             CMD_GUIDE_READ => self.show_guide(true),
             CMD_PREV => self.navigate(false),
@@ -1028,6 +1209,17 @@ fn run(cmd: u32, selection: Option<String>) {
         CMD_REPORT => open_url(REPORT_URL),
         CMD_CHECK_UPDATE => check_update_now(),
         CMD_SCREEN_OCR => screen_ocr(),
+        CMD_AI_SETTINGS => open_ai_settings(),
+        CMD_ASSISTANT => {
+            if with_app(|app| app.set_assistant(!app.cfg.assistant)) == Some(true) {
+                open_ai_settings();
+            }
+        }
+        CMD_SUMMARIZE => {
+            if with_app(App::summarize) == Some(false) {
+                open_ai_settings();
+            }
+        }
         _ => {
             with_app(|app| app.command(cmd, selection));
         }
@@ -1209,6 +1401,30 @@ fn on_ai_voices_changed(new_voice: Option<String>) {
     });
 }
 
+fn summary_label(mode: ai::Summary) -> &'static str {
+    match mode {
+        ai::Summary::Short => t("summary.short"),
+        ai::Summary::Bullets => t("summary.bullets"),
+        ai::Summary::Detailed => t("summary.detailed"),
+    }
+}
+
+fn provider_name(kind: ai::Kind) -> &'static str {
+    match kind {
+        ai::Kind::None => t("aiset.kind_none"),
+        ai::Kind::Ollama => "Ollama",
+        ai::Kind::OpenAi => t("assist.cloud"),
+    }
+}
+
+fn open_ai_settings() {
+    let Some(provider) = with_app(|app| app.provider()) else { return };
+    let report = aicheck::detect().report();
+    aisettings::open(window::visible(), provider, report, |provider| {
+        with_app(|app| app.apply_ai_settings(provider));
+    });
+}
+
 fn open_settings() {
     if let Some(values) = with_app(|app| app.settings()) {
         settings::open(window::visible(), values, |values| {
@@ -1356,6 +1572,13 @@ fn on_window_command(id: u32, code: u32) {
             }
         }
         (window::ID_AI_VOICES, window::CLICKED) => open_ai_voices(),
+        (window::ID_SUMMARIZE, window::CLICKED) => run(CMD_SUMMARIZE, None),
+        (window::ID_READ_RESULT, window::CLICKED) => run(CMD_READ_RESULT, None),
+        (window::ID_SUMMARY_MODE, window::SELECTED) => {
+            if let Some(mode) = window::selected_summary_mode().and_then(|i| ai::Summary::ALL.get(i)) {
+                with_app(|app| app.set_summary_mode(*mode));
+            }
+        }
         (window::ID_PREV, window::CLICKED) => {
             with_app(|app| app.navigate(false));
         }
@@ -1439,6 +1662,13 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             window::set_title(Some(&title));
         }
         WM_OCR_DONE => on_ocr_done(),
+        WM_AI_DONE => {
+            with_app(App::on_ai_done);
+        }
+        WM_AI_PROGRESS => {
+            let title = t("app.ai_working_part").replacen("{}", &wparam.0.to_string(), 1).replacen("{}", &lparam.0.to_string(), 1);
+            window::set_title(Some(&title));
+        }
         WM_TTS => {
             with_app(|app| {
                 let progress = app.tts.poll();
@@ -1549,6 +1779,7 @@ fn main() {
         const CONTROL: u8 = 0x08 | 0x01; // FCONTROL | FVIRTKEY
         const KEY: u8 = 0x01; // FVIRTKEY
         const ALT: u8 = 0x10 | 0x01; // FALT | FVIRTKEY
+        const SHIFT: u8 = 0x04 | 0x01; // FSHIFT | FVIRTKEY
         window::set_accelerators(&[
             (CONTROL, b'O' as u16, CMD_OPEN_FILE),
             (CONTROL, b'S' as u16, CMD_SAVE_WAV),
@@ -1558,6 +1789,8 @@ fn main() {
             (KEY, 0x76, CMD_STOP),        // F7
             (ALT, 0x25, CMD_PREV),        // Alt+Links
             (ALT, 0x27, CMD_NEXT),        // Alt+Rechts
+            (KEY, 0x78, CMD_SUMMARIZE),   // F9
+            (SHIFT, 0x78, CMD_READ_RESULT), // Umschalt+F9
         ]);
 
         match App::new(hwnd) {
@@ -1598,6 +1831,7 @@ fn main() {
             // Tab, Eingabe und Esc im Fenster wie in einem Dialog behandeln.
             let handled = settings::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || aivoices::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
+                || aisettings::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || IsDialogMessageW(dialog, &msg).as_bool();
             if !handled {
                 let _ = TranslateMessage(&msg);

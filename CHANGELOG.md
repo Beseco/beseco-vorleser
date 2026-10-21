@@ -2,6 +2,15 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.0 – unveröffentlicht
+
+- Neu: Beseco Officeassistent, optional unter Extras oder im Installer einschaltbar; ausgeschaltet ändert sich nichts
+- Arbeitsbereich mit geteilter Ansicht: links der Text, rechts die Zusammenfassung, die gleich vorgelesen wird
+- Zusammenfassen (F9) kurz, in Stichpunkten oder ausführlich; lange Texte werden in Teilen verarbeitet
+- KI-Anbieter: eigener Server oder dieser PC (Ollama) oder Cloud-Anbieter mit OpenAI-kompatibler Schnittstelle (z. B. IONOS AI Model Hub); Modelle abrufen und Verbindung testen
+- KI-Check: zeigt Prozessor, Arbeitsspeicher und Grafikkarte und empfiehlt lokal, Server oder Cloud
+- Der Schlüssel wird mit dem Windows-Konto verschlüsselt gespeichert
+
 ## 0.4.0 – 2026-10-21
 
 - Neu: Dateien vorlesen: Word (DOCX), OpenDocument (ODT), RTF, PDF, EPUB, HTML, Textdateien und Bilder; über Datei → Öffnen, durch Hineinziehen oder „Öffnen mit“ im Explorer

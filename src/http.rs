@@ -111,10 +111,49 @@ fn query_number(request: &Handle, info: u32) -> Option<u64> {
     Some(value as u64)
 }
 
-fn open(url: &str, accept: Option<&str>) -> Result<Response, String> {
+/// Eine HTTP-Anfrage. `http://` ist für Server im eigenen Netz gedacht (z. B. Ollama).
+pub struct Request<'a> {
+    pub method: &'a str,
+    pub url: &'a str,
+    /// Zusätzliche Kopfzeilen, z. B. `Authorization: Bearer …`.
+    pub headers: Vec<String>,
+    pub body: Option<&'a [u8]>,
+    /// Höchste Wartezeit auf Daten in Millisekunden (KI-Antworten können dauern).
+    pub timeout: i32,
+}
+
+impl<'a> Request<'a> {
+    pub fn get(url: &'a str) -> Request<'a> {
+        Request { method: "GET", url, headers: Vec::new(), body: None, timeout: 60_000 }
+    }
+}
+
+/// Zerlegt eine Adresse in (https?, Rechner, Port, Pfad).
+fn split_url(url: &str) -> Option<(bool, String, u16, String)> {
+    let (secure, rest) = if let Some(rest) = url.strip_prefix("https://") {
+        (true, rest)
+    } else {
+        (false, url.strip_prefix("http://")?)
+    };
+    let (authority, path) = match rest.find('/') {
+        Some(i) => rest.split_at(i),
+        None => (rest, "/"),
+    };
+    let default = if secure { INTERNET_DEFAULT_HTTPS_PORT } else { 80 };
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((host, port)) if !host.is_empty() && port.chars().all(|c| c.is_ascii_digit()) => (host, port.parse().ok()?),
+        _ => (authority, default),
+    };
+    if host.is_empty() {
+        return None;
+    }
+    Some((secure, host.to_string(), port, path.to_string()))
+}
+
+/// Schickt eine Anfrage und liefert die Antwort samt Status, ohne ihn zu bewerten.
+fn send(request: &Request) -> Result<(Response, u16), String> {
     let server = || t("err.server").to_string();
-    let rest = url.strip_prefix("https://").ok_or_else(server)?;
-    let (host, path) = rest.split_at(rest.find('/').ok_or_else(server)?);
+    let (secure, host, port, path) = split_url(request.url).ok_or_else(server)?;
     let agent = HSTRING::from(format!("Vorleser/{}", env!("CARGO_PKG_VERSION")));
     let proxy = proxy();
     unsafe {
@@ -129,57 +168,96 @@ fn open(url: &str, accept: Option<&str>) -> Result<Response, String> {
         if session.0.is_null() {
             return Err(server());
         }
-        // Auflösen, Verbinden, Senden: 15 s; Empfangen eines Datenblocks: 60 s.
-        let _ = WinHttpSetTimeouts(session.0, 15_000, 15_000, 15_000, 60_000);
-        let connection = Handle(WinHttpConnect(session.0, &HSTRING::from(host), INTERNET_DEFAULT_HTTPS_PORT, 0));
+        // Auflösen, Verbinden, Senden: 15 s; Warten auf Daten: je nach Anfrage.
+        let _ = WinHttpSetTimeouts(session.0, 15_000, 15_000, 30_000, request.timeout);
+        let connection = Handle(WinHttpConnect(session.0, &HSTRING::from(host.as_str()), port, 0));
         if connection.0.is_null() {
             return Err(server());
         }
-        let request = Handle(WinHttpOpenRequest(
+        let handle = Handle(WinHttpOpenRequest(
             connection.0,
-            w!("GET"),
-            &HSTRING::from(path),
+            &HSTRING::from(request.method),
+            &HSTRING::from(path.as_str()),
             PCWSTR::null(),
             PCWSTR::null(),
             std::ptr::null(),
-            WINHTTP_FLAG_SECURE,
+            if secure { WINHTTP_FLAG_SECURE } else { Default::default() },
         ));
-        if request.0.is_null() {
+        if handle.0.is_null() {
             return Err(server());
         }
         if let Proxy::Script(script) = &proxy {
-            apply_script(&session, &request, script, url)?;
+            apply_script(&session, &handle, script, request.url)?;
         }
         // Erlaubt die Anmeldung mit dem Windows-Konto auch an Proxys außerhalb des Intranets.
         let policy = WINHTTP_AUTOLOGON_SECURITY_LEVEL_LOW.to_ne_bytes();
-        let _ = WinHttpSetOption(Some(request.0), WINHTTP_OPTION_AUTOLOGON_POLICY, Some(&policy));
+        let _ = WinHttpSetOption(Some(handle.0), WINHTTP_OPTION_AUTOLOGON_POLICY, Some(&policy));
 
-        let headers: Option<Vec<u16>> = accept.map(|a| format!("Accept: {a}").encode_utf16().collect());
+        let headers: Vec<u16> = request.headers.join("\r\n").encode_utf16().collect();
+        let headers = (!headers.is_empty()).then_some(headers);
+        let (body, length) = match request.body {
+            Some(body) => (Some(body.as_ptr() as *const core::ffi::c_void), body.len() as u32),
+            None => (None, 0),
+        };
         let mut authenticated = false;
         loop {
-            WinHttpSendRequest(request.0, headers.as_deref(), None, 0, 0, 0).map_err(|_| server())?;
-            WinHttpReceiveResponse(request.0, std::ptr::null_mut()).map_err(|_| server())?;
-            match query_number(&request, WINHTTP_QUERY_STATUS_CODE) {
-                Some(200) => return Ok(Response { request, _connection: connection, _session: session }),
+            WinHttpSendRequest(handle.0, headers.as_deref(), body, length, length, 0).map_err(|_| server())?;
+            WinHttpReceiveResponse(handle.0, std::ptr::null_mut()).map_err(|e| {
+                // Zeitüberschreitung beim Warten auf die Antwort deutlich benennen.
+                if e.code().0 as u32 & 0xFFFF == 12002 { t("err.timeout").to_string() } else { server() }
+            })?;
+            match query_number(&handle, WINHTTP_QUERY_STATUS_CODE).map(|s| s as u16) {
                 // Der Proxy verlangt eine Anmeldung: einmal mit dem Windows-Konto versuchen.
                 Some(407) if !authenticated => {
                     authenticated = true;
                     let (mut supported, mut first, mut target) = (0, 0, 0);
-                    WinHttpQueryAuthSchemes(request.0, &mut supported, &mut first, &mut target)
+                    WinHttpQueryAuthSchemes(handle.0, &mut supported, &mut first, &mut target)
                         .map_err(|_| t("err.proxy_auth").to_string())?;
                     let scheme = [WINHTTP_AUTH_SCHEME_NEGOTIATE.0, WINHTTP_AUTH_SCHEME_NTLM.0]
                         .into_iter()
                         .find(|scheme| supported & scheme != 0)
                         .ok_or_else(|| t("err.proxy_auth").to_string())?;
-                    WinHttpSetCredentials(request.0, WINHTTP_AUTH_TARGET_PROXY, scheme, PCWSTR::null(), PCWSTR::null(), std::ptr::null_mut())
+                    WinHttpSetCredentials(handle.0, WINHTTP_AUTH_TARGET_PROXY, scheme, PCWSTR::null(), PCWSTR::null(), std::ptr::null_mut())
                         .map_err(|_| t("err.proxy_auth").to_string())?;
                 }
                 Some(407) => return Err(t("err.proxy_auth").to_string()),
-                Some(status) => return Err(format!("{} (HTTP {status})", server())),
+                Some(status) => return Ok((Response { request: handle, _connection: connection, _session: session }, status)),
                 None => return Err(server()),
             }
         }
     }
+}
+
+/// Wie [`send`], verlangt aber Status 200.
+fn open(url: &str, accept: Option<&str>) -> Result<Response, String> {
+    let mut request = Request::get(url);
+    request.headers.extend(accept.map(|a| format!("Accept: {a}")));
+    match send(&request)? {
+        (response, 200) => Ok(response),
+        (_, status) => Err(format!("{} (HTTP {status})", t("err.server"))),
+    }
+}
+
+fn read_all(response: &Response, limit: usize) -> Option<Vec<u8>> {
+    let mut body = Vec::new();
+    let mut chunk = [0u8; 16384];
+    loop {
+        let n = read(response, &mut chunk)?;
+        if n == 0 {
+            return Some(body);
+        }
+        body.extend_from_slice(&chunk[..n]);
+        if body.len() > limit {
+            return None;
+        }
+    }
+}
+
+/// Schickt eine Anfrage und liefert Status und Text der Antwort (höchstens 8 MB).
+pub fn fetch(request: &Request) -> Result<(u16, String), String> {
+    let (response, status) = send(request)?;
+    let body = read_all(&response, 8 << 20).ok_or_else(|| t("err.connection_lost").to_string())?;
+    Ok((status, String::from_utf8_lossy(&body).into_owned()))
 }
 
 /// Liest den nächsten Block; `Some(0)` am Ende, `None` bei einem Fehler.
@@ -194,18 +272,7 @@ fn read(response: &Response, buffer: &mut [u8]) -> Option<usize> {
 /// Lädt eine kleine Antwort (höchstens 1 MB) als Text.
 pub fn get_text(url: &str, accept: Option<&str>) -> Option<String> {
     let response = open(url, accept).ok()?;
-    let mut body = Vec::new();
-    let mut chunk = [0u8; 8192];
-    loop {
-        let n = read(&response, &mut chunk)?;
-        if n == 0 {
-            break;
-        }
-        body.extend_from_slice(&chunk[..n]);
-        if body.len() > 1 << 20 {
-            return None;
-        }
-    }
+    let body = read_all(&response, 1 << 20)?;
     Some(String::from_utf8_lossy(&body).into_owned())
 }
 
@@ -243,6 +310,15 @@ pub fn download(url: &str, target: &Path, mut progress: impl FnMut(u64, u64) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn splits_urls() {
+        assert_eq!(split_url("https://api.example.com/v1/models"), Some((true, "api.example.com".into(), 443, "/v1/models".into())));
+        assert_eq!(split_url("http://ki-server:11434/v1"), Some((false, "ki-server".into(), 11434, "/v1".into())));
+        assert_eq!(split_url("http://10.0.0.5"), Some((false, "10.0.0.5".into(), 80, "/".into())));
+        assert_eq!(split_url("ftp://x"), None);
+        assert_eq!(split_url("https://"), None);
+    }
 
     #[test]
     fn recognizes_proxy_settings() {

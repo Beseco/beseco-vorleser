@@ -48,6 +48,16 @@ pub struct Config {
     pub resume_pos: u32,
     /// Die Anleitung wurde beim ersten Start schon gezeigt.
     pub guide_shown: bool,
+    /// Beseco Officeassistent (KI-Funktionen) eingeschaltet.
+    pub assistant: bool,
+    /// KI-Anbieter: "none", "ollama" oder "openai".
+    pub ai_kind: String,
+    pub ai_url: String,
+    /// Schlüssel, mit dem Windows-Konto verschlüsselt ("dpapi:…").
+    pub ai_key: String,
+    pub ai_model: String,
+    /// Art der Zusammenfassung: "short", "bullets" oder "detailed".
+    pub summary_mode: String,
 }
 
 impl Default for Config {
@@ -70,6 +80,12 @@ impl Default for Config {
             remember_text: true,
             resume_pos: 0,
             guide_shown: false,
+            assistant: false,
+            ai_kind: "none".into(),
+            ai_url: String::new(),
+            ai_key: String::new(),
+            ai_model: String::new(),
+            summary_mode: "short".into(),
         }
     }
 }
@@ -102,6 +118,12 @@ impl Config {
                 "remember_text" => cfg.remember_text = value != "0",
                 "resume_pos" => cfg.resume_pos = value.parse().unwrap_or(0),
                 "guide_shown" => cfg.guide_shown = value == "1",
+                "assistant" => cfg.assistant = value == "1",
+                "ai_kind" => cfg.ai_kind = value.to_string(),
+                "ai_url" => cfg.ai_url = value.to_string(),
+                "ai_key" => cfg.ai_key = value.to_string(),
+                "ai_model" => cfg.ai_model = value.to_string(),
+                "summary_mode" => cfg.summary_mode = value.to_string(),
                 _ => {}
             }
         }
@@ -115,7 +137,8 @@ impl Config {
              voice={}\r\nrate={}\r\nhotkey_read={}\r\nhotkey_pause={}\r\nhotkey_menu={}\r\nhotkey_ocr={}\r\nmouse_menu={}\r\n\
              volume={}\r\nclean_text={}\r\nalways_on_top={}\r\n\
              update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n\
-             remember_text={}\r\nresume_pos={}\r\nguide_shown={}\r\n",
+             remember_text={}\r\nresume_pos={}\r\nguide_shown={}\r\n\
+             assistant={}\r\nai_kind={}\r\nai_url={}\r\nai_key={}\r\nai_model={}\r\nsummary_mode={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
@@ -132,7 +155,13 @@ impl Config {
             self.proxy,
             self.remember_text as u8,
             self.resume_pos,
-            self.guide_shown as u8
+            self.guide_shown as u8,
+            self.assistant as u8,
+            self.ai_kind,
+            self.ai_url,
+            self.ai_key,
+            self.ai_model,
+            self.summary_mode
         )
     }
 
@@ -306,6 +335,12 @@ mod tests {
             remember_text: false,
             resume_pos: 42,
             guide_shown: true,
+            assistant: true,
+            ai_kind: "ollama".into(),
+            ai_url: "http://ki-server:11434".into(),
+            ai_key: "dpapi:00ff".into(),
+            ai_model: "llama3.1:8b".into(),
+            summary_mode: "bullets".into(),
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }

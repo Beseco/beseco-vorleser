@@ -70,9 +70,19 @@ The first download also fetches the Piper speech engine once (22 MB). All files 
 
 Online voices that some add-ons register in Windows (marked "Online" in their name) are not listed: they depend on a third-party service, fail depending on the network and send the text to their provider.
 
+## Beseco Office Assistant (optional)
+
+Turn on the AI features under **Tools → Beseco Office Assistant** (or already in the installer). When off, Vorleser stays as simple as before; no key and no account are needed.
+
+When on, the window splits: the text on the left, the AI result on the right. **Summarize** (F9) summarizes the selected or entire text briefly, as bullet points or in detail, and the summary is read aloud right away (Shift+F9 reads it again).
+
+Choose the AI under **Assistant → AI settings and AI check**: your own server or this PC with Ollama (`http://ki-server:11434`, text stays on your network), or any cloud provider with an OpenAI-compatible API such as IONOS AI Model Hub (`https://openai.inference.de-txl.ionos.com/v1`), Mistral or OpenAI (text is sent to the provider). The **AI check** shows what this computer can handle and recommends local, own server or cloud; "Test connection" checks address, key and model. The key is stored encrypted with the Windows account (DPAPI).
+
+Planned: dictation with local speech recognition, minutes from audio files and a privacy mode that replaces personal data before sending (see [TODO.md](TODO.md)).
+
 ## Privacy
 
-Vorleser collects no data. It goes online in only two cases: the update check (at most one request per day to GitHub, without any text, settings or machine identifier; can be turned off in the settings) and when you download an AI voice yourself (from github.com and huggingface.co). Text is processed only on your own machine.
+Vorleser collects no data. It goes online in only two cases: the update check (at most one request per day to GitHub, without any text, settings or machine identifier; can be turned off in the settings) when you download an AI voice yourself (from github.com and huggingface.co) and, only with the Office Assistant turned on, to the AI provider you chose when you trigger an AI feature. Text is processed only on your own machine.
 
 To read the selection, Vorleser uses the Windows accessibility interface. Where that is not available, it briefly copies the text through the clipboard and restores the previous clipboard content.
 
