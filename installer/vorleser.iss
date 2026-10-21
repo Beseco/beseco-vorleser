@@ -65,6 +65,18 @@ Name: "{autodesktop}\Vorleser"; Filename: "{app}\vorleser.exe"; Tasks: desktopic
 ; Derselbe Eintrag, den das Programm ueber "Mit Windows starten" selbst setzt.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Vorleser"; ValueData: """{app}\vorleser.exe"" --tray"; Tasks: autostart
 
+; "Oeffnen mit" im Explorer: Vorleser erscheint fuer diese Dateitypen in der Auswahl.
+Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "Vorleser"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\shell\open\command"; ValueType: string; ValueData: """{app}\vorleser.exe"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".txt"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".docx"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".odt"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".rtf"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".pdf"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".epub"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".html"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".htm"; ValueData: ""
+
 [UninstallDelete]
 ; Heruntergeladene KI-Stimmen (bis mehrere hundert MB). Die Einstellungen bleiben erhalten.
 Type: filesandordirs; Name: "{localappdata}\Vorleser\piper"

@@ -24,6 +24,8 @@ pub struct Config {
     pub hotkey_read: String,
     pub hotkey_pause: String,
     pub hotkey_menu: String,
+    /// Bildschirmausschnitt erkennen und vorlesen.
+    pub hotkey_ocr: String,
     /// Mausauslöser für das Menü, z. B. "Strg+Rechtsklick"; leer = aus.
     pub mouse_menu: String,
     /// Lautstärke in Prozent.
@@ -44,6 +46,8 @@ pub struct Config {
     pub remember_text: bool,
     /// Gemerkte Leseposition im Text (UTF-16-Einheiten).
     pub resume_pos: u32,
+    /// Die Anleitung wurde beim ersten Start schon gezeigt.
+    pub guide_shown: bool,
 }
 
 impl Default for Config {
@@ -54,6 +58,7 @@ impl Default for Config {
             hotkey_read: "Strg+Alt+V".into(),
             hotkey_pause: "Strg+Alt+P".into(),
             hotkey_menu: "Strg+Alt+M".into(),
+            hotkey_ocr: "Strg+Alt+O".into(),
             mouse_menu: "Strg+Rechtsklick".into(),
             volume: 100,
             clean_text: true,
@@ -64,6 +69,7 @@ impl Default for Config {
             proxy: String::new(),
             remember_text: true,
             resume_pos: 0,
+            guide_shown: false,
         }
     }
 }
@@ -84,6 +90,7 @@ impl Config {
                 "hotkey_read" => cfg.hotkey_read = value.to_string(),
                 "hotkey_pause" => cfg.hotkey_pause = value.to_string(),
                 "hotkey_menu" => cfg.hotkey_menu = value.to_string(),
+                "hotkey_ocr" => cfg.hotkey_ocr = value.to_string(),
                 "mouse_menu" => cfg.mouse_menu = value.to_string(),
                 "volume" => cfg.volume = value.parse().unwrap_or(100).min(100),
                 "clean_text" => cfg.clean_text = value != "0",
@@ -94,6 +101,7 @@ impl Config {
                 "proxy" => cfg.proxy = value.to_string(),
                 "remember_text" => cfg.remember_text = value != "0",
                 "resume_pos" => cfg.resume_pos = value.parse().unwrap_or(0),
+                "guide_shown" => cfg.guide_shown = value == "1",
                 _ => {}
             }
         }
@@ -104,15 +112,16 @@ impl Config {
         format!(
             "# Vorleser-Einstellungen. Tastenkombinationen z. B. Strg+Alt+V, Ctrl+Shift+F9, Win+Alt+R; leer = aus.\r\n\
              # mouse_menu: Zusatztaste(n) + Rechtsklick, z. B. Strg+Rechtsklick oder Strg+Shift+Rechtsklick.\r\n\
-             voice={}\r\nrate={}\r\nhotkey_read={}\r\nhotkey_pause={}\r\nhotkey_menu={}\r\nmouse_menu={}\r\n\
+             voice={}\r\nrate={}\r\nhotkey_read={}\r\nhotkey_pause={}\r\nhotkey_menu={}\r\nhotkey_ocr={}\r\nmouse_menu={}\r\n\
              volume={}\r\nclean_text={}\r\nalways_on_top={}\r\n\
              update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n\
-             remember_text={}\r\nresume_pos={}\r\n",
+             remember_text={}\r\nresume_pos={}\r\nguide_shown={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
             self.hotkey_pause,
             self.hotkey_menu,
+            self.hotkey_ocr,
             self.mouse_menu,
             self.volume,
             self.clean_text as u8,
@@ -122,7 +131,8 @@ impl Config {
             self.language,
             self.proxy,
             self.remember_text as u8,
-            self.resume_pos
+            self.resume_pos,
+            self.guide_shown as u8
         )
     }
 
@@ -284,6 +294,7 @@ mod tests {
             hotkey_read: "Strg+Alt+R".into(),
             hotkey_pause: String::new(),
             hotkey_menu: "Win+Alt+M".into(),
+            hotkey_ocr: String::new(),
             mouse_menu: "Strg+Shift+Rechtsklick".into(),
             volume: 70,
             clean_text: false,
@@ -294,6 +305,7 @@ mod tests {
             proxy: "http://wpad.firma.local/wpad.dat".into(),
             remember_text: false,
             resume_pos: 42,
+            guide_shown: true,
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }

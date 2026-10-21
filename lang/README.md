@@ -26,6 +26,7 @@ Was fehlt, zeigt Vorleser auf Englisch an; eine Übersetzung muss also nicht vol
 | `\t` | Trennt im Menü die Tastenkombination ab (`&Öffnen …\tStrg+O`). |
 | `\n` | Zeilenumbruch. |
 | `{}` | Platzhalter, den Vorleser durch einen Wert ersetzt, z. B. eine Versionsnummer. Muss erhalten bleiben. |
+| `{read}`, `{pause}`, `{menu}`, `{ocr}`, `{mouse}` | Nur in `help.guide`: werden durch die eingestellten Tastenkombinationen ersetzt. |
 | `#` | Am Zeilenanfang: Kommentar. |
 
 Eine Datei in einem der beiden Ordner mit dem Code einer eingebauten Sprache (`de` oder `en`) ersetzt einzelne Texte, z. B. um eine Formulierung zu verbessern.

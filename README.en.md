@@ -26,6 +26,7 @@ Requires Windows 10 or 11 (64-bit).
 | Read selected text, press again to stop | Ctrl+Alt+V |
 | Pause and resume | Ctrl+Alt+P |
 | Vorleser menu at the mouse position | Ctrl+right-click or Ctrl+Alt+M |
+| Recognize and read text on screen (drag a frame) | Ctrl+Alt+O |
 | Open the window | Left-click the notification area icon |
 | Menu with voice, speed and settings | Right-click the icon |
 
@@ -36,6 +37,9 @@ Windows does not let a program add an entry to the regular right-click menu of o
 ## Features
 
 - **System-wide:** works in browsers, Office, PDF readers, editors and most other programs
+- **Read files:** opens Word (DOCX), OpenDocument (ODT), RTF, PDF, EPUB, HTML, text files and images via File → Open, drag and drop or "Open with" in Explorer
+- **Text recognition (OCR):** recognize and read text you cannot select, such as in images, scanned PDFs or programs without text selection, by dragging a frame on the screen. Uses the built-in Windows text recognition, offline and without extra software.
+- **Spoken guide:** appears in the text field on first start and can be shown or read aloud from Help at any time
 - **Paste window:** paste any text and compare voices with a sample sentence
 - **Read along:** the word being spoken is highlighted in the window
 - **Always on top:** the window can stay above other windows
@@ -81,7 +85,8 @@ Vorleser uses the Windows proxy settings, including automatic configuration via 
 ## Known limitations
 
 - Vorleser cannot read the selection in windows running with administrator rights.
-- Copy-protected PDFs and password fields do not hand out text.
+- Password fields do not hand out text. PDFs are read via text recognition; very small print or poor scans may lose single words.
+- The old Word format (.doc) is not supported; please save as .docx.
 - Text copied while reading the selection may show up in the clipboard history (Win+V).
 
 ## Building

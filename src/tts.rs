@@ -426,7 +426,7 @@ mod tests {
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         }
         let tts = Tts::new().expect("SAPI nicht verfügbar");
-        let local = tts.voices().first().map(|v| v.id.as_str());
+        let local = tts.voices().iter().find(|v| v.token.is_some()).map(|v| v.id.as_str());
         let path = std::env::temp_dir().join("vorleser_test.wav");
         // Wie im Programm auf einem eigenen Thread.
         let id = local.map(str::to_string);
@@ -457,7 +457,7 @@ mod tests {
             tts.voice.SetInterest(INTEREST, INTEREST).unwrap();
         }
         // Eine lokale Stimme, damit der Test nicht vom Netz abhängt.
-        let local = tts.voices().first().map(|v| v.id.clone());
+        let local = tts.voices().iter().find(|v| v.token.is_some()).map(|v| v.id.clone());
         if let Some(id) = local {
             assert!(tts.set_voice(&id));
         }

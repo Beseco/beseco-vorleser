@@ -30,8 +30,21 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [x] MP3-Export über den MP3-Encoder von Windows (Media Foundation).
 - [x] WAV-Export im Hintergrund (ohne Fortschrittsanzeige).
 - [x] **Textdateien öffnen** über Datei → Öffnen und per Drag-and-drop.
-- [ ] **Weitere Dateiformate:** DOCX, EPUB, PDF.
-- [ ] **Texterkennung (OCR)** für Bildschirmbereiche, die sich nicht markieren lassen (gescannte PDFs, Bilder).
+- [x] **Weitere Dateiformate:** DOCX, ODT, RTF, EPUB, HTML, PDF, Bilder.
+- [x] **Texterkennung (OCR)** für Bildschirmausschnitte, Bilder und PDFs (Windows-Texterkennung).
+- [x] **Anleitung** beim ersten Start und im Hilfe-Menü.
+- [ ] PDF mit Textebene direkt auslesen statt über die Texterkennung (schneller, exakter bei kleiner Schrift).
+
+## Beseco Officeassistent (optionale Erweiterung)
+
+- [ ] Schalter im Installer und unter Extras; ausgeschaltet bleibt Vorleser unverändert.
+- [ ] KI-Check beim Einrichten (Hardware, Empfehlung, Verbindungstest).
+- [ ] KI-Anbieter: keiner, lokal, eigener Server (Ollama), OpenAI-kompatibel (IONOS, Mistral …); später Beseco-Konto.
+- [ ] Arbeitsbereich mit geteilter Ansicht, Zusammenfassen.
+- [ ] Diktieren mit lokalem Whisper, KI-Korrektur in Stufen.
+- [ ] Audiodatei → Abschrift → Protokoll.
+- [ ] Datenschutz-Modus (personenbezogene Daten lokal ersetzen).
+- [ ] Sprachbefehle („Beseco, lies vor“), nach Machbarkeitstest.
 - [ ] **Stimmenliste im Fenster nach Sprache gruppieren** (im Menü schon vorhanden) und Online-Stimmen kennzeichnen.
 
 ## Oberfläche und Barrierefreiheit

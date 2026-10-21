@@ -24,6 +24,7 @@ Voraussetzung ist Windows 10 oder 11 (64 Bit).
 | Markierten Text vorlesen, erneut drücken zum Stoppen | Strg+Alt+V |
 | Pause und Fortsetzen | Strg+Alt+P |
 | Vorleser-Menü an der Mausposition | Strg+Rechtsklick oder Strg+Alt+M |
+| Text vom Bildschirm erkennen und vorlesen (Rahmen aufziehen) | Strg+Alt+O |
 | Fenster öffnen | Linksklick auf das Symbol im Infobereich |
 | Menü mit Stimme, Geschwindigkeit, Einstellungen | Rechtsklick auf das Symbol |
 
@@ -35,6 +36,9 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 
 - **Systemweit:** funktioniert in Browser, Office, PDF-Readern, Editoren und den meisten anderen Programmen
 - **Fenster zum Einfügen:** Text hineinkopieren, Stimmen per Hörprobe vergleichen
+- **Dateien vorlesen:** Word (DOCX), OpenDocument (ODT), RTF, PDF, EPUB, HTML, Textdateien und Bilder öffnen, über Datei → Öffnen, durch Hineinziehen ins Fenster oder „Öffnen mit“ im Explorer
+- **Texterkennung (OCR):** Text, der sich nicht markieren lässt, etwa in Bildern, gescannten PDFs oder Programmen ohne Textauswahl, per Rahmen auf dem Bildschirm erkennen und vorlesen. Dafür nutzt Vorleser die Texterkennung von Windows, offline und ohne Zusatzsoftware.
+- **Anleitung zum Anhören:** erscheint beim ersten Start im Textfeld und lässt sich unter Hilfe jederzeit anzeigen oder vorlesen
 - **Mitlesen:** das gerade gesprochene Wort wird im Fenster markiert
 - **Immer im Vordergrund:** das Fenster bleibt auf Wunsch über anderen Fenstern
 - **Stimmen:** alle installierten Windows-Stimmen, nach Sprache gruppiert
@@ -82,7 +86,8 @@ Vorleser nutzt die Proxy-Einstellungen von Windows, auch eine automatische Konfi
 ## Bekannte Grenzen
 
 - In Fenstern, die mit Administratorrechten laufen, kann Vorleser die Markierung nicht auslesen.
-- Kopiergeschützte PDFs und Passwortfelder geben keinen Text heraus.
+- Passwortfelder geben keinen Text heraus. PDFs liest Vorleser über die Texterkennung; bei sehr kleiner Schrift oder schlechten Scans kann sie einzelne Wörter verfehlen.
+- Das alte Word-Format (.doc) wird nicht unterstützt, bitte als .docx speichern.
 - Der beim Auslesen kopierte Text kann im Zwischenablageverlauf (Win+V) erscheinen.
 
 ## Selbst bauen

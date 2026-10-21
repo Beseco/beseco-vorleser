@@ -26,10 +26,10 @@ jobs:
       - name: Inno Setup
         run: choco install innosetup --no-progress -y
 
-      # Die Tests der Sprachausgabe und des MP3-Exports brauchen Windows-Stimmen, ein Audiogerät
-      # und Media Foundation; auf dem Build-Server fehlt das.
+      # Die Tests von Sprachausgabe, MP3-Export und Texterkennung brauchen Windows-Stimmen, ein
+      # Audiogerät, Media Foundation und die Windows-Texterkennung; auf dem Build-Server fehlt das.
       - name: Tests
-        run: cargo test -- --skip "tts::" --skip "mp3::"
+        run: cargo test -- --skip "tts::" --skip "mp3::" --skip "ocr::"
 
       - name: Installer und ZIP bauen
         run: pwsh -File release.ps1 -SkipTests

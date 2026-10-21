@@ -2,6 +2,13 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.4.0 – unveröffentlicht
+
+- Neu: Dateien vorlesen: Word (DOCX), OpenDocument (ODT), RTF, PDF, EPUB, HTML, Textdateien und Bilder; über Datei → Öffnen, durch Hineinziehen oder „Öffnen mit“ im Explorer
+- Neu: Texterkennung (OCR) mit der Windows-Texterkennung: Bildschirmausschnitt per Rahmen erkennen und vorlesen (Strg+Alt+O), PDFs und gescannte Dokumente
+- Neu: Anleitung beim ersten Start im Textfeld; Hilfe → Anleitung anzeigen / vorlesen
+- Große Dateien werden im Hintergrund gelesen, der Fenstertitel zeigt den Fortschritt
+
 ## 0.3.0 – 2026-10-20
 
 - Neu: KI-Stimmen (Piper) mit deutlich natürlicherem Klang: Thorsten, Thorsten HD und Kerstin auf Deutsch, Linda und Kristin auf Englisch. Download mit einem Klick über „KI-Stimmen …“, danach ohne Internet

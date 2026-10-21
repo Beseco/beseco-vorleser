@@ -56,7 +56,15 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 - [ ] Neue Version installieren, während die alte läuft: alte wird beendet, neue startet
 - [ ] Deinstallieren über Windows-Einstellungen → Apps: Programm, Startmenü-Eintrag und Autostart sind weg
 
-## 6. Sonderfälle
+## 6. Dateien und Texterkennung
+
+- [ ] Je eine Datei öffnen (Datei → Öffnen, Hineinziehen, im Explorer „Öffnen mit“): DOCX, ODT, RTF, EPUB, HTML, TXT, PDF mit Text, gescanntes PDF, Foto/Screenshot
+- [ ] Großes PDF (50+ Seiten): Fenstertitel zeigt den Fortschritt, Fenster bleibt bedienbar
+- [ ] Strg+Alt+O: Rahmen um Text in einem Bild, einem Video-Standbild und einer Schaltfläche ziehen, wird vorgelesen; Esc bricht ab
+- [ ] Mit zwei Bildschirmen: Ausschnitt auf dem zweiten Bildschirm
+- [ ] Neue Installation: Anleitung steht beim ersten Start im Fenster; Hilfe → Anleitung vorlesen
+
+## 7. Sonderfälle
 
 - [ ] Programm als Administrator starten (z. B. Editor), dort markieren: Vorleser meldet „Kein Text markiert“ statt sich aufzuhängen
 - [ ] Explorer neu starten (Task-Manager): Symbol im Infobereich kommt zurück

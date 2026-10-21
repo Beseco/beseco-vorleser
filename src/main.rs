@@ -5,18 +5,22 @@
 
 mod aivoices;
 mod config;
+mod documents;
 mod http;
 mod i18n;
 mod mouse;
 mod mp3;
+mod ocr;
 mod piper;
 mod selection;
 mod settings;
+mod snip;
 mod textprep;
 mod tray;
 mod tts;
 mod update;
 mod window;
+mod zip;
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -26,9 +30,7 @@ use windows::core::{w, HSTRING, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{
     GetLastError, ERROR_ALREADY_EXISTS, ERROR_SUCCESS, HWND, LPARAM, LRESULT, WPARAM,
 };
-use windows::Win32::Globalization::{
-    GetUserDefaultUILanguage, MultiByteToWideChar, CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS,
-};
+use windows::Win32::Globalization::GetUserDefaultUILanguage;
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Registry::{
@@ -46,7 +48,9 @@ use windows::Win32::UI::Controls::Dialogs::{
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_NOREPEAT,
 };
+use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{
+    SendMessageW, WM_COPYDATA,
     AllowSetForegroundWindow, AppendMenuW, CheckMenuRadioItem, CreateMenu, IDYES, MB_ICONQUESTION,
     MB_ICONWARNING, MB_YESNO, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu,
     DestroyWindow, DispatchMessageW, FindWindowW, GetMessageW, IsDialogMessageW,
@@ -76,6 +80,12 @@ const WM_UPDATE: u32 = WM_APP + 5;
 const WM_WAV_DONE: u32 = WM_APP + 6;
 /// Ergebnis einer von Hand gestarteten Update-Suche: `wparam` 0 = Fehler, 1 = aktuell, 2 = neuer.
 const WM_UPDATE_MANUAL: u32 = WM_APP + 7;
+/// Eine Datei ist gelesen; das Ergebnis liegt in `LOADED_FILE`.
+const WM_FILE_LOADED: u32 = WM_APP + 8;
+/// Fortschritt beim Lesen: `wparam` = Seite, `lparam` = Seitenzahl.
+const WM_FILE_PROGRESS: u32 = WM_APP + 9;
+/// Die Texterkennung eines Bildschirmausschnitts ist fertig; das Ergebnis liegt in `RECOGNIZED`.
+const WM_OCR_DONE: u32 = WM_APP + 10;
 /// Kennung der Update-Meldung im Infobereich.
 const BALLOON_UPDATE: u32 = 1;
 /// Klick auf eine Meldung im Infobereich (NIN_BALLOONUSERCLICK).
@@ -90,6 +100,7 @@ const ANY_PROCESS: u32 = u32::MAX;
 const HOTKEY_READ: i32 = 1;
 const HOTKEY_PAUSE: i32 = 2;
 const HOTKEY_MENU: i32 = 3;
+const HOTKEY_OCR: i32 = 4;
 
 const CMD_READ_SELECTION: u32 = 1;
 const CMD_READ_CLIPBOARD: u32 = 2;
@@ -120,6 +131,9 @@ const CMD_CHECK_UPDATE: u32 = 26;
 const CMD_REPORT: u32 = 27;
 const CMD_PREV: u32 = 28;
 const CMD_NEXT: u32 = 29;
+const CMD_SCREEN_OCR: u32 = 30;
+const CMD_GUIDE_SHOW: u32 = 31;
+const CMD_GUIDE_READ: u32 = 32;
 const CMD_RATE: u32 = 100;
 const CMD_VOICE: u32 = 1000;
 /// Sprache der Oberfläche: `CMD_LANGUAGE` = automatisch, danach eine Nummer je Sprache.
@@ -201,6 +215,12 @@ thread_local! {
     static PENDING_WAV: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
+/// Ergebnis des Hintergrund-Threads, der eine Datei liest bzw. einen Ausschnitt erkennt.
+static LOADED_FILE: std::sync::Mutex<Option<Result<String, String>>> = std::sync::Mutex::new(None);
+static RECOGNIZED: std::sync::Mutex<Option<Result<String, String>>> = std::sync::Mutex::new(None);
+/// Es wird gerade eine Datei gelesen.
+static LOADING: AtomicBool = AtomicBool::new(false);
+
 /// Solange ein Menü offen ist, wird kein zweites geöffnet.
 static MENU_OPEN: AtomicBool = AtomicBool::new(false);
 
@@ -255,6 +275,7 @@ impl App {
             (HOTKEY_READ, &self.cfg.hotkey_read),
             (HOTKEY_PAUSE, &self.cfg.hotkey_pause),
             (HOTKEY_MENU, &self.cfg.hotkey_menu),
+            (HOTKEY_OCR, &self.cfg.hotkey_ocr),
         ];
         let mut failed = Vec::new();
         for (id, text) in hotkeys {
@@ -286,6 +307,7 @@ impl App {
             hotkey_read: self.cfg.hotkey_read.clone(),
             hotkey_pause: self.cfg.hotkey_pause.clone(),
             hotkey_menu: self.cfg.hotkey_menu.clone(),
+            hotkey_ocr: self.cfg.hotkey_ocr.clone(),
             mouse_menu: self.cfg.mouse_menu.clone(),
             volume: self.cfg.volume,
             clean_text: self.cfg.clean_text,
@@ -300,6 +322,7 @@ impl App {
         self.cfg.hotkey_read = values.hotkey_read;
         self.cfg.hotkey_pause = values.hotkey_pause;
         self.cfg.hotkey_menu = values.hotkey_menu;
+        self.cfg.hotkey_ocr = values.hotkey_ocr;
         self.cfg.mouse_menu = values.mouse_menu;
         self.cfg.volume = values.volume;
         self.cfg.clean_text = values.clean_text;
@@ -312,7 +335,7 @@ impl App {
         }
         update::set_enabled(values.update_check);
         self.cfg.save();
-        for id in [HOTKEY_READ, HOTKEY_PAUSE, HOTKEY_MENU] {
+        for id in [HOTKEY_READ, HOTKEY_PAUSE, HOTKEY_MENU, HOTKEY_OCR] {
             unsafe {
                 let _ = UnregisterHotKey(Some(self.hwnd), id);
             }
@@ -538,8 +561,43 @@ impl App {
         }
     }
 
-    /// Holt Text und Leseposition vom letzten Mal zurück.
-    fn restore_session(&self) {
+    /// Die Anleitung mit den eingestellten Tastenkombinationen.
+    fn guide(&self) -> String {
+        let mut text = t("help.guide").to_string();
+        for (name, value) in [
+            ("{read}", &self.cfg.hotkey_read),
+            ("{pause}", &self.cfg.hotkey_pause),
+            ("{menu}", &self.cfg.hotkey_menu),
+            ("{ocr}", &self.cfg.hotkey_ocr),
+            ("{mouse}", &self.cfg.mouse_menu),
+        ] {
+            let shown = if value.trim().is_empty() { t("help.off").to_string() } else { i18n::hotkey(value) };
+            text = text.replace(name, &shown);
+        }
+        to_crlf(&text)
+    }
+
+    /// Zeigt die Anleitung im Fenster; mit `read` wird sie gleich vorgelesen.
+    fn show_guide(&mut self, read: bool) {
+        self.stop();
+        window::set_text(&self.guide());
+        window::show();
+        window::mark(0, 0);
+        if read {
+            self.speak_window();
+        }
+    }
+
+    /// Holt Text und Leseposition vom letzten Mal zurück; beim allerersten Start erscheint
+    /// stattdessen die Anleitung.
+    fn restore_session(&mut self) {
+        if !self.cfg.guide_shown && !config::is_read_only() {
+            self.cfg.guide_shown = true;
+            self.cfg.save();
+            window::set_text(&self.guide());
+            window::mark(0, 0);
+            return;
+        }
         if !self.cfg.remember_text || config::is_read_only() {
             return;
         }
@@ -646,6 +704,8 @@ impl App {
                 item(menu, CMD_READ_SELECTION, t("app.read_selected_text"), found, false);
             }
             item(menu, CMD_READ_CLIPBOARD, t("app.read_clipboard"), true, false);
+            let ocr = format!("{}\t{}", t("app.read_screen"), i18n::hotkey(&self.cfg.hotkey_ocr));
+            item(menu, CMD_SCREEN_OCR, &ocr, true, false);
             let pause = if self.state == State::Paused { t("app.resume") } else { t("app.pause") };
             item(menu, CMD_PAUSE, &format!("{pause}\t{}", i18n::hotkey(&self.cfg.hotkey_pause)), active, false);
             item(menu, CMD_STOP, t("app.stop"), active, false);
@@ -726,6 +786,8 @@ impl App {
             item(playback, base + CMD_NEXT, t("menu.next_sentence"), true, false);
             separator(playback);
             item(playback, base + CMD_READ_CLIPBOARD, t("menu.read_clipboard"), true, false);
+            let ocr = format!("{}\t{}", t("menu.read_screen"), i18n::hotkey(&self.cfg.hotkey_ocr));
+            item(playback, base + CMD_SCREEN_OCR, &ocr, true, false);
             separator(playback);
             let rates = self.build_rate_menu(base);
             let _ = AppendMenuW(playback, MF_POPUP, rates.0 as usize, &HSTRING::from(t("menu.speed")));
@@ -765,6 +827,9 @@ impl App {
             popup(t("menu.tools"), tools);
 
             let help = CreatePopupMenu().unwrap_or_default();
+            item(help, base + CMD_GUIDE_SHOW, t("menu.guide_show"), true, false);
+            item(help, base + CMD_GUIDE_READ, t("menu.guide_read"), true, false);
+            separator(help);
             item(help, base + CMD_MANUAL, t("menu.manual"), true, false);
             item(help, base + CMD_CHECK_UPDATE, t("menu.check_update"), true, false);
             item(help, base + CMD_REPORT, t("menu.report"), true, false);
@@ -822,6 +887,8 @@ impl App {
             CMD_OPEN => window::show(),
             CMD_UPDATE => open_url(update::RELEASES_URL),
             CMD_READ_WINDOW => self.speak_window(),
+            CMD_GUIDE_SHOW => self.show_guide(false),
+            CMD_GUIDE_READ => self.show_guide(true),
             CMD_PREV => self.navigate(false),
             CMD_NEXT => self.navigate(true),
             CMD_SAMPLE => self.speak_sample(),
@@ -960,6 +1027,7 @@ fn run(cmd: u32, selection: Option<String>) {
         CMD_MANUAL => open_url(if i18n::current() == "de" { MANUAL_URL } else { MANUAL_URL_EN }),
         CMD_REPORT => open_url(REPORT_URL),
         CMD_CHECK_UPDATE => check_update_now(),
+        CMD_SCREEN_OCR => screen_ocr(),
         _ => {
             with_app(|app| app.command(cmd, selection));
         }
@@ -1003,55 +1071,105 @@ fn on_manual_update(code: usize) {
     }
 }
 
-/// Liest eine Textdatei: UTF-8 oder UTF-16 mit Kennung, sonst UTF-8, sonst die Windows-Codepage.
-fn read_text_file(path: &str) -> Option<String> {
-    let bytes = std::fs::read(path).ok()?;
-    if let Some(rest) = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
-        return Some(String::from_utf8_lossy(rest).into_owned());
-    }
-    if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
-        let units: Vec<u16> = rest.chunks_exact(2).map(|p| u16::from_le_bytes([p[0], p[1]])).collect();
-        return Some(String::from_utf16_lossy(&units));
-    }
-    if let Ok(text) = String::from_utf8(bytes.clone()) {
-        return Some(text);
-    }
-    unsafe {
-        let len = MultiByteToWideChar(CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), &bytes, None);
-        let mut wide = vec![0u16; len.max(0) as usize];
-        MultiByteToWideChar(CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), &bytes, Some(&mut wide));
-        Some(String::from_utf16_lossy(&wide))
+/// Startet die Auswahl eines Bildschirmausschnitts; der Text darin wird erkannt und vorgelesen.
+fn screen_ocr() {
+    if !snip::is_open() {
+        snip::start(on_snip);
     }
 }
 
-/// Lädt eine Datei ins Textfeld (über Datei → Öffnen oder durch Hineinziehen).
+fn on_snip(selection: Option<snip::Selection>) {
+    let (Some((bgra, width, height)), Some(hwnd)) = (selection, with_app(|app| app.hwnd.0 as isize)) else { return };
+    std::thread::spawn(move || {
+        ocr::init_thread();
+        *RECOGNIZED.lock().unwrap() = Some(ocr::pixels(&bgra, width, height));
+        unsafe {
+            let _ = PostMessageW(Some(HWND(hwnd as *mut _)), WM_OCR_DONE, WPARAM(0), LPARAM(0));
+        }
+    });
+}
+
+fn on_ocr_done() {
+    let result = RECOGNIZED.lock().unwrap().take();
+    with_app(|app| match result {
+        Some(Ok(text)) if !text.trim().is_empty() => app.speak(Some(text.trim().to_string()), ""),
+        Some(Err(error)) => tray::balloon(app.hwnd, "Vorleser", &error),
+        _ => tray::balloon(app.hwnd, "Vorleser", t("app.no_text_recognized")),
+    });
+}
+
+/// Lädt eine Datei ins Textfeld (über Datei → Öffnen oder durch Hineinziehen). Gelesen wird
+/// im Hintergrund; PDFs und Bilder laufen über die Texterkennung und können dauern.
 fn load_file(path: String) {
     let owner = window::visible();
-    let is_text = std::path::Path::new(&path).extension().is_some_and(|e| e.eq_ignore_ascii_case("txt"));
-    let message = if !is_text {
+    let message = if !documents::is_supported(&path) && !path.to_lowercase().ends_with(".doc") {
         Some(t("app.only_text_files"))
+    } else if LOADING.swap(true, Ordering::Relaxed) {
+        Some(t("app.still_loading"))
     } else {
-        match read_text_file(&path) {
-            Some(text) => {
-                with_app(App::stop);
-                window::set_text(&to_crlf(&text));
-                window::show();
-                None
-            }
-            None => Some(t("app.file_unreadable")),
-        }
+        None
     };
     if let Some(message) = message {
         unsafe {
             MessageBoxW(owner, &HSTRING::from(message), APP_NAME, MB_ICONINFORMATION);
         }
+        return;
+    }
+    let Some(hwnd) = with_app(|app| app.hwnd.0 as isize) else { return };
+    window::set_title(Some(t("app.loading_title")));
+    std::thread::spawn(move || {
+        ocr::init_thread();
+        let post = |msg: u32, wparam: usize, lparam: isize| unsafe {
+            let _ = PostMessageW(Some(HWND(hwnd as *mut _)), msg, WPARAM(wparam), LPARAM(lparam));
+        };
+        let result = documents::extract(&path, |page, pages| {
+            post(WM_FILE_PROGRESS, page as usize, pages as isize);
+            true
+        });
+        *LOADED_FILE.lock().unwrap() = Some(result);
+        post(WM_FILE_LOADED, 0, 0);
+    });
+}
+
+fn on_file_loaded() {
+    LOADING.store(false, Ordering::Relaxed);
+    window::set_title(None);
+    match LOADED_FILE.lock().unwrap().take() {
+        Some(Ok(text)) => {
+            with_app(App::stop);
+            window::set_text(&to_crlf(&text));
+            window::show();
+            window::mark(0, 0);
+        }
+        Some(Err(error)) => unsafe {
+            MessageBoxW(window::visible(), &HSTRING::from(error), APP_NAME, MB_ICONINFORMATION);
+        },
+        None => {}
     }
 }
 
 fn open_file() {
     let mut file = [0u16; 1024];
-    // Filter: "Textdateien (*.txt)\0*.txt\0\0" in der Sprache der Oberfläche.
-    let filter: Vec<u16> = format!("{} (*.txt)\0*.txt\0\0", t("app.text_files")).encode_utf16().collect();
+    // Dateitypen für den Dialog, je Eintrag Name und Muster, getrennt durch Nullzeichen.
+    let all: Vec<String> = documents::EXTENSIONS.iter().map(|e| format!("*.{e}")).collect();
+    let all = all.join(";");
+    let types = [
+        (t("app.all_supported"), all.as_str()),
+        ("Word (*.docx)", "*.docx"),
+        ("OpenDocument (*.odt)", "*.odt"),
+        ("PDF (*.pdf)", "*.pdf"),
+        ("RTF (*.rtf)", "*.rtf"),
+        ("E-Book (*.epub)", "*.epub"),
+        ("HTML (*.html, *.htm)", "*.html;*.htm;*.xhtml"),
+        (t("app.images"), "*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff;*.gif"),
+        (t("app.text_files"), "*.txt;*.md;*.csv"),
+    ];
+    let mut filter = String::new();
+    for (name, pattern) in types {
+        filter.push_str(&format!("{name}\0{pattern}\0"));
+    }
+    filter.push('\0');
+    let filter: Vec<u16> = filter.encode_utf16().collect();
     let mut dialog = OPENFILENAMEW {
         lStructSize: std::mem::size_of::<OPENFILENAMEW>() as u32,
         hwndOwner: window::visible().unwrap_or_default(),
@@ -1269,6 +1387,7 @@ fn on_hotkey(hwnd: HWND, id: i32) {
             with_app(App::toggle_pause);
         }
         HOTKEY_MENU => show_selection_menu(hwnd),
+        HOTKEY_OCR => screen_ocr(),
         _ => {}
     }
 }
@@ -1294,6 +1413,14 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         },
         WM_MOUSE_MENU => show_selection_menu(hwnd),
         WM_SHOW_WINDOW => window::show(),
+        WM_COPYDATA => {
+            let data = unsafe { &*(lparam.0 as *const COPYDATASTRUCT) };
+            if data.dwData == COPYDATA_OPEN_FILE && !data.lpData.is_null() {
+                let units = unsafe { std::slice::from_raw_parts(data.lpData as *const u16, data.cbData as usize / 2) };
+                load_file(String::from_utf16_lossy(units));
+            }
+            return LRESULT(1);
+        }
         WM_UPDATE => {
             if wparam.0 == 1 {
                 on_update_found();
@@ -1306,6 +1433,12 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         }
         WM_WAV_DONE => on_wav_done(wparam.0 == 1),
         WM_UPDATE_MANUAL => on_manual_update(wparam.0),
+        WM_FILE_LOADED => on_file_loaded(),
+        WM_FILE_PROGRESS => {
+            let title = t("app.loading_page").replacen("{}", &wparam.0.to_string(), 1).replacen("{}", &lparam.0.to_string(), 1);
+            window::set_title(Some(&title));
+        }
+        WM_OCR_DONE => on_ocr_done(),
         WM_TTS => {
             with_app(|app| {
                 let progress = app.tts.poll();
@@ -1334,6 +1467,14 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     LRESULT(0)
 }
 
+/// Kennung von `WM_COPYDATA`, mit der eine zweite Instanz eine Datei zum Öffnen übergibt.
+const COPYDATA_OPEN_FILE: usize = 0x564F_524C;
+
+/// Die beim Start übergebene Datei (erstes Argument, das keine Option ist).
+fn file_argument() -> Option<String> {
+    std::env::args().skip(1).find(|arg| !arg.starts_with("--"))
+}
+
 fn main() {
     unsafe {
         // Nur eine Instanz; das Handle bleibt bis zum Prozessende offen.
@@ -1346,10 +1487,24 @@ fn main() {
         let name = if test { w!("Local\\Vorleser.Test") } else { w!("Local\\Vorleser.Instanz") };
         let _mutex = CreateMutexW(None, true, name);
         if GetLastError() == ERROR_ALREADY_EXISTS {
-            // Das Programm läuft schon: dessen Fenster zeigen statt ein zweites Mal zu starten.
+            // Das Programm läuft schon: dessen Fenster zeigen bzw. ihm die Datei übergeben,
+            // statt ein zweites Mal zu starten.
             if let Ok(running) = FindWindowW(MAIN_CLASS, APP_NAME) {
                 let _ = AllowSetForegroundWindow(ANY_PROCESS);
-                let _ = PostMessageW(Some(running), WM_SHOW_WINDOW, WPARAM(0), LPARAM(0));
+                match file_argument() {
+                    Some(path) => {
+                        let wide: Vec<u16> = path.encode_utf16().collect();
+                        let data = COPYDATASTRUCT {
+                            dwData: COPYDATA_OPEN_FILE,
+                            cbData: (wide.len() * 2) as u32,
+                            lpData: wide.as_ptr() as *mut _,
+                        };
+                        SendMessageW(running, WM_COPYDATA, Some(WPARAM(0)), Some(LPARAM(&data as *const _ as isize)));
+                    }
+                    None => {
+                        let _ = PostMessageW(Some(running), WM_SHOW_WINDOW, WPARAM(0), LPARAM(0));
+                    }
+                }
             }
             return;
         }
@@ -1421,6 +1576,10 @@ fn main() {
         // Von Hand gestartet öffnet sich das Fenster; der Autostart bleibt still im Infobereich.
         if !std::env::args().any(|arg| arg == ARG_TRAY) {
             window::show();
+        }
+        // „Öffnen mit Vorleser“ bzw. vorleser.exe <Datei>
+        if let Some(path) = file_argument() {
+            load_file(path);
         }
         // Ergänzt bei einem Autostart-Eintrag für genau diese Datei das Argument --tray (ältere
         // Versionen trugen es nicht ein). Einträge für andere Kopien bleiben unangetastet.
