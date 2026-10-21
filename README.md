@@ -25,6 +25,7 @@ Voraussetzung ist Windows 10 oder 11 (64 Bit).
 | Pause und Fortsetzen | Strg+Alt+P |
 | Vorleser-Menü an der Mausposition | Strg+Rechtsklick oder Strg+Alt+M |
 | Text vom Bildschirm erkennen und vorlesen (Rahmen aufziehen) | Strg+Alt+O |
+| Diktieren in das Programm im Vordergrund (mit Officeassistent) | Strg+Alt+D |
 | Fenster öffnen | Linksklick auf das Symbol im Infobereich |
 | Menü mit Stimme, Geschwindigkeit, Einstellungen | Rechtsklick auf das Symbol |
 
@@ -95,7 +96,9 @@ Alles Weitere stellst du unter **Assistent → KI-Einstellungen und KI-Check** e
 
 Der **KI-Check** im selben Fenster zeigt, was der eigene Rechner schafft (Prozessor, Arbeitsspeicher, Grafikkarte) und empfiehlt lokal, eigenen Server oder Cloud. „Verbindung testen“ prüft Adresse, Schlüssel und Modell mit einem kurzen Probe-Auftrag. Der Schlüssel wird mit dem Windows-Konto verschlüsselt gespeichert (DPAPI).
 
-**Diktieren** (F8 oder „● Diktieren“): Du sprichst, und der Text erscheint nach jeder kurzen Pause an der Schreibmarke im linken Feld. Die Spracherkennung (Whisper) läuft vollständig auf dem eigenen Rechner, ohne KI-Anbieter und ohne Internet; nur das Modell wird einmalig unter **Assistent → Diktieren einrichten** heruntergeladen (schnell 148 MB, genau 488 MB, sehr genau 574 MB; von github.com und huggingface.co).
+![Officeassistent im dunklen Modus](docs/officeassistent.png)
+
+**Diktieren** (F8 oder „Diktieren“): Du sprichst, und der Text erscheint nach jeder kurzen Pause an der Schreibmarke im linken Feld. Mit **Strg+Alt+D** diktierst du in jedes andere Programm, etwa Word oder Outlook: Der Text erscheint dort, wo die Schreibmarke steht, und eine kleine Leiste unten am Bildschirm zeigt Pegel und Zustand. Getippt wird nur in das Programm, in dem das Diktat begonnen hat; wechselst du zwischendurch, wartet der Text. „Korrigieren“ in der Leiste ersetzt den eben diktierten Text dort durch die korrigierte Fassung. Das Mikrofon wählst du unter **Assistent → Mikrofon**. Die Spracherkennung (Whisper) läuft vollständig auf dem eigenen Rechner, ohne KI-Anbieter und ohne Internet; nur das Modell wird einmalig unter **Assistent → Diktieren einrichten** heruntergeladen (schnell 148 MB, genau 488 MB, sehr genau 574 MB; von github.com und huggingface.co).
 
 **Korrigieren** (Umschalt+F8) überarbeitet den Text mit der eingestellten KI in der gewählten Stufe: nur Rechtschreibung und Zeichensetzung, Satzbau glätten, sauber umformulieren oder nach eigener Vorgabe (in den KI-Einstellungen, z. B. „als freundliche E-Mail formulieren“). Die korrigierte Fassung erscheint rechts, das Diktat links bleibt unverändert. Nach einem Diktat wird automatisch korrigiert, wenn eine KI eingerichtet ist.
 

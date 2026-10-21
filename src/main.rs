@@ -490,6 +490,8 @@ impl App {
             let hint = if dictation::best_installed().is_some() { t("assist.dict_hint") } else { t("assist.dict_not_set_up") };
             window::set_dictating(false, hint);
         }
+        let anywhere = if self.cfg.hotkey_dictate.trim().is_empty() { t("help.off").to_string() } else { i18n::hotkey(&self.cfg.hotkey_dictate) };
+        window::set_dict_hint(&t("assist.dict_anywhere").replace("{}", &anywhere));
     }
 
     fn set_correction_mode(&mut self, mode: ai::Correction) {
@@ -855,7 +857,21 @@ impl App {
             window::set_playback(state != State::Idle, state == State::Paused);
             self.refresh_menu_bar();
             self.update_player();
+            self.update_progress();
         }
+    }
+
+    /// Gerade gesprochener Satz und Zahl der Sätze im vorgelesenen Bereich.
+    fn sentence_progress(&self) -> Option<(usize, usize)> {
+        let follow = self.follow?;
+        let total = self.player_sentences.iter().filter(|s| **s < follow.end).count().max(1);
+        let current = self.player_sentences.iter().filter(|s| **s <= follow.pos).count().clamp(1, total);
+        Some((current, total))
+    }
+
+    /// „Satz 3 von 9“ und der Balken im Fenster.
+    fn update_progress(&self) {
+        window::set_progress(if self.state == State::Idle { None } else { self.sentence_progress() });
     }
 
     /// Zeigt den Mini-Player mit dem aktuellen Stand oder blendet ihn aus.
@@ -869,9 +885,7 @@ impl App {
             return;
         }
         let voice = self.current_voice().map_or(String::new(), |i| short_voice_name(&self.tts.voices()[i].name));
-        let progress = self.follow.map_or(String::new(), |follow| {
-            let total = self.player_sentences.iter().filter(|s| **s < follow.end).count().max(1);
-            let current = self.player_sentences.iter().filter(|s| **s <= follow.pos).count().clamp(1, total);
+        let progress = self.sentence_progress().map_or(String::new(), |(current, total)| {
             t("player.sentence").replacen("{}", &current.to_string(), 1).replacen("{}", &total.to_string(), 1)
         });
         let rates = RATES.iter().map(|(rate, key)| format!("{}  {}", speed_label(*rate), t(key))).collect();
@@ -923,11 +937,9 @@ impl App {
 
     /// Gleicht das Fenster mit den Einstellungen ab (z. B. nach Änderung über das Menü).
     fn sync_window(&self) {
-        let voice = self.current_voice().map_or(String::new(), |i| {
-            short_voice_name(&self.tts.voices()[i].name)
-        });
-        let rate = RATES.get(self.rate_index()).map_or("", |(_, key)| t(key));
-        window::set_voice_info(&format!("{voice} · {rate}"));
+        let voice = self.current_voice().map_or(String::new(), |i| short_voice_name(&self.tts.voices()[i].name));
+        window::set_voice(&voice);
+        window::set_speed(&speed_label(self.cfg.rate));
         window::set_playback(self.state != State::Idle, self.state == State::Paused);
         self.refresh_menu_bar();
     }
@@ -987,7 +999,6 @@ impl App {
         window::set_text(&text);
         let follow = Follow::new(0, text.encode_utf16().count() as u32, (0, 0));
         self.player_on = window::visible().is_none();
-        self.player_sentences = textprep::sentence_starts(&text.encode_utf16().collect::<Vec<u16>>());
         self.start(text, Some(follow));
         self.update_player();
     }
@@ -1139,7 +1150,12 @@ impl App {
         match self.tts.speak(&text) {
             Ok(()) => {
                 self.retry = Some(text);
+                self.player_sentences = follow
+                    .and_then(|f| window::source_of(f.pane))
+                    .map(|s| textprep::sentence_starts(&s.content))
+                    .unwrap_or_default();
                 self.follow = follow;
+                self.update_progress();
                 self.set_state(State::Speaking);
                 // Nach einem Satzsprung zeigt der Player gleich den neuen Satz.
                 self.update_player();
@@ -1157,8 +1173,11 @@ impl App {
             window::mark_in(follow.pane, follow.pos, follow.pos + len);
             sentence_changed = before != self.player_sentences.iter().filter(|s| **s <= follow.pos).count();
         }
-        if sentence_changed && self.player_on {
-            self.update_player();
+        if sentence_changed {
+            self.update_progress();
+            if self.player_on {
+                self.update_player();
+            }
         }
     }
 
@@ -1929,6 +1948,38 @@ fn speed_label(rate: i32) -> String {
     format!("{:.1}×", 3f32.powf(rate as f32 / 10.0)).replace('.', t("number.decimal"))
 }
 
+/// Stimme oder Geschwindigkeit unten im Fenster: Menü über der Schaltfläche.
+fn choose_from_bar(id: u32) {
+    use windows::Win32::UI::WindowsAndMessaging::{TrackPopupMenu, TPM_BOTTOMALIGN, TPM_LEFTALIGN, TPM_NONOTIFY, TPM_RETURNCMD};
+    let Some(anchor) = window::anchor(id) else { return };
+    let Some(menu) = with_app(|app| unsafe {
+        if id == window::ID_VOICE {
+            app.build_voice_menu(0)
+        } else {
+            let menu = CreatePopupMenu().unwrap_or_default();
+            for (i, (rate, key)) in RATES.iter().enumerate() {
+                let label = format!("{}\t{}", speed_label(*rate), t(key));
+                let _ = AppendMenuW(menu, MF_STRING, (CMD_RATE + i as u32) as usize, &HSTRING::from(label));
+            }
+            let id = CMD_RATE + app.rate_index() as u32;
+            let _ = CheckMenuRadioItem(menu, id, id, id, MF_BYCOMMAND.0);
+            menu
+        }
+    }) else {
+        return;
+    };
+    let Some(owner) = window::visible() else { return };
+    let cmd = unsafe {
+        let flags = TPM_RETURNCMD | TPM_NONOTIFY | TPM_BOTTOMALIGN | TPM_LEFTALIGN;
+        let chosen = TrackPopupMenu(menu, flags, anchor.left, anchor.top - 4, None, owner, None);
+        let _ = DestroyMenu(menu);
+        chosen.0 as u32
+    };
+    if cmd != 0 {
+        run(cmd, None);
+    }
+}
+
 /// Klick im Mini-Player.
 fn on_player_action(action: player::Action) {
     with_app(|app| match action {
@@ -2110,6 +2161,8 @@ fn on_window_command(id: u32, code: u32) {
             with_app(App::stop);
         }
         (window::ID_SETUP_AI, window::CLICKED) => open_ai_setup(),
+        (window::ID_VOICE, window::CLICKED) => choose_from_bar(window::ID_VOICE),
+        (window::ID_SPEED, window::CLICKED) => choose_from_bar(window::ID_SPEED),
         (window::ID_SUMMARIZE, window::CLICKED) => run(CMD_SUMMARIZE, None),
         (window::ID_DICTATE, window::CLICKED) => run(CMD_DICTATE, None),
         (window::ID_CORRECT, window::CLICKED) => run(CMD_CORRECT, None),

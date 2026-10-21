@@ -7,6 +7,10 @@ use crate::paint::{rgb, Color};
 
 /// Windows ist auf „Dunkel“ für Apps gestellt.
 pub fn dark() -> bool {
+    // Im Testmodus lässt sich das Farbschema vorgeben, ohne Windows umzustellen.
+    if let Some(theme) = std::env::var_os("VORLESER_TEST").and(std::env::var("VORLESER_THEME").ok()) {
+        return theme == "dark";
+    }
     let mut value = 1u32;
     let mut size = 4u32;
     let status = unsafe {

@@ -46,6 +46,9 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [x] Arbeitsbereich mit geteilter Ansicht, Zusammenfassen (kurz, Stichpunkte, ausführlich).
 - [ ] Antwort der KI während des Schreibens anzeigen (Streaming) und Abbrechen-Schaltfläche.
 - [x] Diktieren mit lokalem Whisper, KI-Korrektur in Stufen.
+- [x] Diktier-Pille, Diktieren in jedes Programm, Mikrofonauswahl.
+- [x] Mini-Player beim Vorlesen, neues Design hell/dunkel.
+- [ ] Schwebender „Vorlesen“-Knopf neben markiertem Text (aus dem Design-Entwurf).
 - [ ] Audiodatei → Abschrift → Protokoll.
 - [ ] Datenschutz-Modus (personenbezogene Daten lokal ersetzen).
 - [ ] Sprachbefehle („Beseco, lies vor“), nach Machbarkeitstest.

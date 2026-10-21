@@ -84,6 +84,13 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 - [ ] Nach dem Diktat mit eingerichteter KI: korrigierte Fassung erscheint rechts; ohne KI passiert nichts weiter
 - [ ] Umschalt+F8 in allen vier Stufen; eigene Vorgabe in den KI-Einstellungen eintragen und verwenden
 - [ ] Rechnergeschwindigkeit: Wartezeit nach jeder Pause mit „Genau“ und „Sehr genau“ (es wird immer das genaueste installierte Modell genutzt)
+- [ ] Assistent → Mikrofon: jedes Gerät einmal wählen; mit stummem Gerät erscheint „Kein Ton vom Mikrofon“
+- [ ] Strg+Alt+D in Word, Outlook und Editor (jeweils neues, leeres Dokument): Text kommt richtig an, Umlaute und Satzzeichen stimmen; Diktier-Pille zeigt das Programm
+- [ ] Während des Diktats in ein anderes Programm wechseln: dort wird nichts getippt, die Pille zeigt „Text wartet“; zurückwechseln: der Text kommt
+- [ ] „Korrigieren“ in der Pille ersetzt den diktierten Text im Programm
+- [ ] Markierten Text in Edge vorlesen, Fenster geschlossen: Mini-Player erscheint, Satz vor/zurück, Pause, Geschwindigkeit, Fenster öffnen, Stopp
+- [ ] Windows auf „Dunkel“ umstellen: Fenster, Menüleiste, Menüs und Player wechseln mit
+- [ ] Nur mit der Tastatur: Tab erreicht alle Knöpfe, der Fokus ist sichtbar; ein Bildschirmleser liest die Knöpfe vor
 
 ## 8. Sonderfälle
 

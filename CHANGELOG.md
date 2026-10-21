@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic
 
 ## 0.5.0 – unveröffentlicht
 
+- Neues Design: Textblatt in Lesegröße, unten eine Wiedergabe-Leiste mit großem Vorlesen/Pause-Knopf, Satz zurück/vor, „Satz 3 von 9“ mit Fortschrittslinie, Stimme und Geschwindigkeit („1,2×“) zum Anklicken; hell oder dunkel wie in Windows eingestellt (auch Titel- und Menüleiste)
+- Officeassistent als Seitenleiste mit den Registern Zusammenfassen, Diktieren und Korrigieren; Art und Stufe als Knöpfe, Ergebnis mit „Übernehmen“, „Kopieren“ und „Vorlesen“
+- Neu: Diktier-Pille, eine kleine schwebende Leiste mit Pegel, Zustand und Zielprogramm, Korrigieren und Schließen
+- Neu: Diktieren in jedes Programm (Strg+Alt+D): der Text erscheint dort an der Schreibmarke; getippt wird nur in das Programm, in dem das Diktat begonnen hat. „Korrigieren“ ersetzt dort den diktierten Text durch die korrigierte Fassung
+- Neu: Mini-Player beim Vorlesen aus anderen Programmen: Satz zurück/vor, Pause, Geschwindigkeit, Fenster öffnen, Stopp
+- Neu: Mikrofon wählbar (Assistent → Mikrofon)
+
 - Neu: Beseco Officeassistent, optional unter Extras oder im Installer einschaltbar; ausgeschaltet ändert sich nichts
 - Arbeitsbereich mit geteilter Ansicht: links der Text, rechts die Zusammenfassung, die gleich vorgelesen wird
 - Zusammenfassen (F9) kurz, in Stichpunkten oder ausführlich; lange Texte werden in Teilen verarbeitet
