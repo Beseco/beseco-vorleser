@@ -49,7 +49,8 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [x] Diktier-Pille, Diktieren in jedes Programm, Mikrofonauswahl.
 - [x] Mini-Player beim Vorlesen, neues Design hell/dunkel.
 - [ ] Schwebender „Vorlesen“-Knopf neben markiertem Text (aus dem Design-Entwurf).
-- [ ] Audiodatei → Abschrift → Protokoll.
+- [x] Audiodatei → Abschrift → Protokoll.
+- [ ] Sprecher unterscheiden in der Abschrift (wer sagt was).
 - [ ] Datenschutz-Modus (personenbezogene Daten lokal ersetzen).
 - [ ] Sprachbefehle („Beseco, lies vor“), nach Machbarkeitstest.
 - [ ] **Stimmenliste im Fenster nach Sprache gruppieren** (im Menü schon vorhanden) und Online-Stimmen kennzeichnen.

@@ -2,6 +2,12 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.2 – unveröffentlicht
+
+- Neu: Aufnahme zu Protokoll (Assistent → Aufnahme zu Protokoll …, oder die Datei einfach ins Fenster ziehen): MP3, M4A, WAV, WMA, FLAC und Ton aus MP4-Videos werden lokal mit Whisper abgeschrieben, mit Zeitmarken; mit KI entsteht daraus gleich ein Protokoll mit Teilnehmern, Themen, Beschlüssen, Aufgaben und offenen Punkten
+- „Protokoll“ als vierte Art beim Zusammenfassen, auch für eingefügte Abschriften
+- Fortschritt im Fenstertitel, Abbrechen über Assistent → Abschrift abbrechen
+
 ## 0.5.1 – 2026-10-22
 
 - Neues Design: Textblatt in Lesegröße, unten eine Wiedergabe-Leiste mit großem Vorlesen/Pause-Knopf, Satz zurück/vor, „Satz 3 von 9“ mit Fortschrittslinie, Stimme und Geschwindigkeit („1,2×“) zum Anklicken; hell oder dunkel wie in Windows eingestellt (auch Titel- und Menüleiste)

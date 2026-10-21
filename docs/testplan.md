@@ -92,6 +92,8 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 - [ ] Fenster schließen: unten erscheint die Mini-Pille; Maus darauf: Mikrofon und Kopf; Kopf liest markierten Text vor (Player erscheint, Pille verschwindet, danach wieder da); Mikrofon diktiert ins Programm vorn; Rechtsklick: öffnen bzw. ausblenden
 - [ ] Extras → Mini-Pille aus: beim Schließen nur noch das Symbol im Infobereich
 - [ ] Diktier-Pille: ✕ beendet, ✓ beendet und korrigiert (mit KI); Hinweis darüber unter der Maus
+- [ ] Aufnahme zu Protokoll mit einer echten Besprechung (MP3 vom Handy, M4A, Teams-Aufzeichnung als MP4): Abschrift mit Zeitmarken, Protokoll rechts; Dauer bei 30 bis 60 Minuten notieren; Abbrechen
+- [ ] Aufnahme ohne KI: nur die Abschrift; ohne Officeassistent: Hinweis
 - [ ] Windows auf „Dunkel“ umstellen: Fenster, Menüleiste, Menüs und Player wechseln mit
 - [ ] Nur mit der Tastatur: Tab erreicht alle Knöpfe, der Fokus ist sichtbar; ein Bildschirmleser liest die Knöpfe vor
 

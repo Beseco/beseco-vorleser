@@ -4,6 +4,7 @@
 #![windows_subsystem = "windows"]
 
 mod ai;
+mod audio;
 mod aicheck;
 mod aisettings;
 mod aisetup;
@@ -113,6 +114,10 @@ const WM_DICT_TEXT: u32 = WM_APP + 14;
 const WM_DICT_DONE: u32 = WM_APP + 15;
 /// Einrichtungsassistent der KI öffnen (nach dem Einschalten im Installer).
 const WM_OPEN_AI_SETUP: u32 = WM_APP + 16;
+/// Abschrift einer Aufnahme: Fortschritt in Prozent (`wparam`).
+const WM_TRANSCRIBE_PROGRESS: u32 = WM_APP + 17;
+/// Abschrift fertig, Ergebnis in `TRANSCRIPT`.
+const WM_TRANSCRIBE_DONE: u32 = WM_APP + 18;
 /// Kennung der Update-Meldung im Infobereich.
 const BALLOON_UPDATE: u32 = 1;
 /// Klick auf eine Meldung im Infobereich (NIN_BALLOONUSERCLICK).
@@ -171,6 +176,7 @@ const CMD_CORRECT: u32 = 38;
 const CMD_DICT_SETUP: u32 = 39;
 const CMD_AI_SETUP: u32 = 40;
 const CMD_PILL: u32 = 41;
+const CMD_TRANSCRIBE: u32 = 42;
 /// Korrekturstufe: `CMD_CORRECTION_MODE` + Nummer.
 const CMD_CORRECTION_MODE: u32 = 3600;
 /// Mikrofon: `CMD_MICROPHONE` (Windows-Standard) bzw. + 1 + Geräte-Nummer.
@@ -291,6 +297,13 @@ static AI_CORRECTING: AtomicBool = AtomicBool::new(false);
 /// Erkannter Text des Diktats, der noch ins Fenster muss.
 static DICT_TEXTS: std::sync::Mutex<std::collections::VecDeque<String>> = std::sync::Mutex::new(std::collections::VecDeque::new());
 static DICT_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// Die laufende Zusammenfassung ist ein Protokoll (wird nicht gleich vorgelesen).
+static AI_MINUTES: AtomicBool = AtomicBool::new(false);
+/// Eine Aufnahme wird gerade abgeschrieben; `TRANSCRIBE_CANCEL` bricht ab.
+static TRANSCRIBING: AtomicBool = AtomicBool::new(false);
+static TRANSCRIBE_CANCEL: AtomicBool = AtomicBool::new(false);
+/// Ergebnis der Abschrift: Dateiname, Dauer in Sekunden und Abschnitte (Anfang, Text).
+static TRANSCRIPT: std::sync::Mutex<Option<Result<(String, f64, Vec<(f64, String)>), String>>> = std::sync::Mutex::new(None);
 /// Die laufende Korrektur gilt einem Diktat in einem anderen Programm.
 static AI_FOR_PROGRAM: AtomicBool = AtomicBool::new(false);
 /// Name in der Diktier-Pille, wenn ins eigene Fenster diktiert wird.
@@ -791,6 +804,7 @@ impl App {
         AI_CORRECTING.store(false, Ordering::Relaxed);
         let text = self.prepare(text);
         let mode = ai::Summary::from_code(&self.cfg.summary_mode);
+        AI_MINUTES.store(mode == ai::Summary::Minutes, Ordering::Relaxed);
         let hwnd = self.hwnd.0 as isize;
         window::set_ai_busy(true);
         window::set_title(Some(t("app.ai_working")));
@@ -818,6 +832,11 @@ impl App {
                 window::set_result_label("assist.corrected");
                 window::set_text_in(window::Pane::Result, &to_crlf(&result));
                 dictbar::set_state(dictbar::State::Finished);
+            }
+            Some(Ok(minutes)) if AI_MINUTES.swap(false, Ordering::Relaxed) => {
+                // Ein Protokoll ist zum Lesen und Weitergeben da, nicht zum Vorlesen.
+                window::set_result_label("assist.minutes");
+                window::set_text_in(window::Pane::Result, &to_crlf(&minutes));
             }
             Some(Ok(summary)) => {
                 self.stop();
@@ -1390,6 +1409,8 @@ impl App {
                 }
                 let _ = AppendMenuW(assistant, MF_POPUP, modes.0 as usize, &HSTRING::from(t("menu.summary_mode")));
                 item(assistant, base + CMD_READ_RESULT, t("menu.read_result"), ready, false);
+                let transcribing = TRANSCRIBING.load(Ordering::Relaxed);
+                item(assistant, base + CMD_TRANSCRIBE, if transcribing { t("menu.transcribe_cancel") } else { t("menu.transcribe") }, true, false);
                 separator(assistant);
                 let dictating = self.dictation.is_some();
                 item(assistant, base + CMD_DICTATE, if dictating { t("menu.dictate_stop") } else { t("menu.dictate") }, true, dictating);
@@ -1671,6 +1692,13 @@ fn run(cmd: u32, selection: Option<String>) {
         CMD_SCREEN_OCR => screen_ocr(),
         CMD_AI_SETTINGS => open_ai_settings(),
         CMD_AI_SETUP => open_ai_setup(),
+        CMD_TRANSCRIBE => {
+            if TRANSCRIBING.load(Ordering::Relaxed) {
+                TRANSCRIBE_CANCEL.store(true, Ordering::Relaxed);
+            } else if let Some(path) = choose_recording() {
+                transcribe(path);
+            }
+        }
         CMD_PILL => {
             with_app(|app| {
                 app.cfg.close_to_pill = !app.cfg.close_to_pill;
@@ -1773,6 +1801,11 @@ fn on_ocr_done() {
 /// Lädt eine Datei ins Textfeld (über Datei → Öffnen oder durch Hineinziehen). Gelesen wird
 /// im Hintergrund; PDFs und Bilder laufen über die Texterkennung und können dauern.
 fn load_file(path: String) {
+    // Aufnahmen werden abgeschrieben (Officeassistent).
+    if audio::is_audio(&path) {
+        transcribe(path);
+        return;
+    }
     let owner = window::visible();
     let message = if !documents::is_supported(&path) && !path.to_lowercase().ends_with(".doc") {
         Some(t("app.only_text_files"))
@@ -1835,6 +1868,7 @@ fn open_file() {
         ("HTML (*.html, *.htm)", "*.html;*.htm;*.xhtml"),
         (t("app.images"), "*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff;*.gif"),
         (t("app.text_files"), "*.txt;*.md;*.csv"),
+        (t("app.recordings"), "*.mp3;*.m4a;*.aac;*.wav;*.wma;*.flac;*.ogg;*.opus;*.mp4;*.m4v;*.webm"),
     ];
     let mut filter = String::new();
     for (name, pattern) in types {
@@ -1854,6 +1888,115 @@ fn open_file() {
     if unsafe { GetOpenFileNameW(&mut dialog) }.as_bool() {
         let len = file.iter().position(|&unit| unit == 0).unwrap_or(file.len());
         load_file(String::from_utf16_lossy(&file[..len]));
+    }
+}
+
+/// Dateiauswahl für eine Aufnahme.
+fn choose_recording() -> Option<String> {
+    let mut file = [0u16; 1024];
+    let all: Vec<String> = audio::EXTENSIONS.iter().map(|e| format!("*.{e}")).collect();
+    let filter = format!("{}\0{}\0\0", t("app.recordings"), all.join(";"));
+    let filter: Vec<u16> = filter.encode_utf16().collect();
+    let mut dialog = OPENFILENAMEW {
+        lStructSize: std::mem::size_of::<OPENFILENAMEW>() as u32,
+        hwndOwner: window::visible().unwrap_or_default(),
+        lpstrFilter: PCWSTR(filter.as_ptr()),
+        lpstrFile: PWSTR(file.as_mut_ptr()),
+        nMaxFile: file.len() as u32,
+        Flags: OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST,
+        ..Default::default()
+    };
+    unsafe { GetOpenFileNameW(&mut dialog) }.as_bool().then(|| {
+        let len = file.iter().position(|&unit| unit == 0).unwrap_or(file.len());
+        String::from_utf16_lossy(&file[..len])
+    })
+}
+
+/// Schreibt eine Aufnahme im Hintergrund ab; danach entsteht mit KI das Protokoll.
+fn transcribe(path: String) {
+    let owner = window::visible();
+    let message = |text: &str| unsafe {
+        MessageBoxW(owner, &HSTRING::from(text), APP_NAME, MB_ICONINFORMATION);
+    };
+    if with_app(|app| app.cfg.assistant) != Some(true) {
+        message(t("audio.needs_assistant"));
+        return;
+    }
+    let Some(model) = dictation::best_installed() else {
+        open_dict_setup();
+        return;
+    };
+    if TRANSCRIBING.swap(true, Ordering::Relaxed) {
+        message(t("audio.busy"));
+        return;
+    }
+    TRANSCRIBE_CANCEL.store(false, Ordering::Relaxed);
+    let Some(hwnd) = with_app(|app| app.hwnd.0 as isize) else { return };
+    with_app(|app| app.refresh_menu_bar());
+    window::set_title(Some(&t("audio.reading").replace("{}", "0")));
+    let language = i18n::current().to_string();
+    std::thread::spawn(move || {
+        unsafe {
+            let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED);
+        }
+        let post = |msg: u32, wparam: usize| unsafe {
+            let _ = PostMessageW(Some(HWND(hwnd as *mut _)), msg, WPARAM(wparam), LPARAM(0));
+        };
+        let cancelled = || TRANSCRIBE_CANCEL.load(Ordering::Relaxed);
+        let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        // Entpacken zählt bis 5 %, das Erkennen den Rest.
+        let result = audio::decode(&path, |done, total| {
+            if total > 0.0 {
+                post(WM_TRANSCRIBE_PROGRESS, (done / total * 5.0) as usize);
+            }
+            !cancelled()
+        })
+        .and_then(|samples| {
+            let duration = samples.len() as f64 / audio::RATE as f64;
+            let lines = dictation::transcribe_recording(&samples, model, &language, |done, total| {
+                post(WM_TRANSCRIBE_PROGRESS, 5 + (done / total.max(1.0) * 95.0) as usize);
+                !cancelled()
+            })?;
+            Ok((name, duration, lines))
+        });
+        *TRANSCRIPT.lock().unwrap() = Some(result);
+        post(WM_TRANSCRIBE_DONE, 0);
+    });
+}
+
+fn on_transcribe_done() {
+    TRANSCRIBING.store(false, Ordering::Relaxed);
+    window::set_title(None);
+    with_app(|app| app.refresh_menu_bar());
+    match TRANSCRIPT.lock().unwrap().take() {
+        Some(Ok((name, duration, lines))) => {
+            if lines.is_empty() {
+                unsafe {
+                    MessageBoxW(window::visible(), &HSTRING::from(t("audio.no_speech")), APP_NAME, MB_ICONINFORMATION);
+                }
+                return;
+            }
+            let header = t("audio.header").replacen("{}", &name, 1).replacen("{}", &audio::timestamp(duration), 1);
+            let mut text = format!("{header}\r\n\r\n");
+            for (start, line) in &lines {
+                text.push_str(&format!("[{}] {line}\r\n", audio::timestamp(*start)));
+            }
+            with_app(App::stop);
+            window::set_text(&text);
+            window::show();
+            window::mark(0, 0);
+            // Mit KI gleich das Protokoll dazu.
+            with_app(|app| {
+                if app.provider().is_ready() {
+                    app.set_summary_mode(ai::Summary::Minutes);
+                    app.summarize();
+                }
+            });
+        }
+        Some(Err(error)) if error != t("err.cancelled") => unsafe {
+            MessageBoxW(window::visible(), &HSTRING::from(error), APP_NAME, MB_ICONWARNING);
+        },
+        _ => {}
     }
 }
 
@@ -1886,6 +2029,7 @@ fn summary_label(mode: ai::Summary) -> &'static str {
         ai::Summary::Short => t("summary.short"),
         ai::Summary::Bullets => t("summary.bullets"),
         ai::Summary::Detailed => t("summary.detailed"),
+        ai::Summary::Minutes => t("summary.minutes"),
     }
 }
 
@@ -2327,6 +2471,10 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         WM_DICT_DONE => {
             with_app(App::on_dict_done);
         }
+        WM_TRANSCRIBE_PROGRESS => {
+            window::set_title(Some(&t("audio.progress").replace("{}", &wparam.0.min(100).to_string())));
+        }
+        WM_TRANSCRIBE_DONE => on_transcribe_done(),
         WM_OPEN_AI_SETUP => {
             window::show();
             open_ai_setup();

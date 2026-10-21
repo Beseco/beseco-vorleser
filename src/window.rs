@@ -555,7 +555,12 @@ fn update_tab(c: &Controls) {
         }
     }
     set_label(c.chips_label, if tab == Tab::Summary { t("assist.kind") } else { t("assist.level") });
-    set_label(c.result_label, if tab == Tab::Correct { t("assist.corrected") } else { t("assist.result") });
+    let result = match tab {
+        Tab::Correct => "assist.corrected",
+        _ if RESULT_KIND.with(|k| k.get()) == "assist.minutes" => "assist.minutes",
+        _ => "assist.result",
+    };
+    set_label(c.result_label, t(result));
     show(c.summarize, tab == Tab::Summary);
     show(c.correct, tab == Tab::Correct);
     for control in [c.result_label, c.result, c.read_result, c.copy, c.apply] {

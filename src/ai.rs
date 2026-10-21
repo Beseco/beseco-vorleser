@@ -62,16 +62,19 @@ pub enum Summary {
     Short,
     Bullets,
     Detailed,
+    /// Protokoll einer Besprechung (aus einer Abschrift).
+    Minutes,
 }
 
 impl Summary {
-    pub const ALL: [Summary; 3] = [Summary::Short, Summary::Bullets, Summary::Detailed];
+    pub const ALL: [Summary; 4] = [Summary::Short, Summary::Bullets, Summary::Detailed, Summary::Minutes];
 
     pub fn code(self) -> &'static str {
         match self {
             Summary::Short => "short",
             Summary::Bullets => "bullets",
             Summary::Detailed => "detailed",
+            Summary::Minutes => "minutes",
         }
     }
 
@@ -84,6 +87,7 @@ impl Summary {
             Summary::Short => "Summarize the text in 3 to 5 sentences.",
             Summary::Bullets => "Summarize the text as a list of the most important points, one point per line, each line starting with \"• \".",
             Summary::Detailed => "Write a detailed summary of the text in several paragraphs that keeps all important facts, names, numbers and conclusions.",
+            Summary::Minutes => "The text is the transcript of a recorded meeting or conversation; times in square brackets are positions in the recording. Write the minutes: first a short title line, then the sections Participants (only if names are mentioned), Topics, Decisions, Action items and Open questions. Put each section heading on its own line followed by a colon, and below it one entry per line starting with \"• \". For action items write who, what and by when, as far as mentioned. In German, name the sections Teilnehmer, Themen, Beschlüsse, Aufgaben and Offene Punkte. Leave out sections without content. Use only what the transcript says; never invent names, dates or decisions. Speech recognition may have misheard words; correct obvious mistakes from the context.",
         }
     }
 }

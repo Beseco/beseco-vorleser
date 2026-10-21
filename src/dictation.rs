@@ -228,6 +228,30 @@ fn wav_bytes(samples: &[i16]) -> Vec<u8> {
     out
 }
 
+/// Schreibt eine ganze Aufnahme ab (16 kHz Mono). `progress` erhält erkannte und gesamte
+/// Sekunden und bricht mit `false` ab. Liefert je Abschnitt Anfang (Sekunden) und Text.
+pub fn transcribe_recording(
+    samples: &[i16],
+    model: &Model,
+    language: &str,
+    mut progress: impl FnMut(f64, f64) -> bool,
+) -> Result<Vec<(f64, String)>, String> {
+    let server = Server::start(model, language)?;
+    let total = samples.len() as f64 / RATE as f64;
+    let mut lines = Vec::new();
+    for (start, end) in crate::audio::sections(samples) {
+        if !progress(start as f64 / RATE as f64, total) {
+            return Err(t("err.cancelled").to_string());
+        }
+        let text = server.transcribe(&samples[start..end])?;
+        if !text.is_empty() {
+            lines.push((start as f64 / RATE as f64, text));
+        }
+    }
+    progress(total, total);
+    Ok(lines)
+}
+
 /// Teilt laufendes Audio an Sprechpausen in Abschnitte.
 pub struct Splitter {
     frame: Vec<i16>,
