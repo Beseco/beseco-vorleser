@@ -2,7 +2,7 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## 0.5.0 – unveröffentlicht
+## 0.5.1 – unveröffentlicht
 
 - Neues Design: Textblatt in Lesegröße, unten eine Wiedergabe-Leiste mit großem Vorlesen/Pause-Knopf, Satz zurück/vor, „Satz 3 von 9“ mit Fortschrittslinie, Stimme und Geschwindigkeit („1,2×“) zum Anklicken; hell oder dunkel wie in Windows eingestellt (auch Titel- und Menüleiste)
 - Officeassistent als Seitenleiste mit den Registern Zusammenfassen, Diktieren und Korrigieren; Art und Stufe als Knöpfe, Ergebnis mit „Übernehmen“, „Kopieren“ und „Vorlesen“
@@ -11,6 +11,8 @@ Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic
 - Neu: Diktieren in jedes Programm (Strg+Alt+D): der Text erscheint dort an der Schreibmarke; getippt wird nur in das Programm, in dem das Diktat begonnen hat. „Korrigieren“ ersetzt dort den diktierten Text durch die korrigierte Fassung
 - Neu: Mini-Player beim Vorlesen aus anderen Programmen: Satz zurück/vor, Pause, Geschwindigkeit, Fenster öffnen, Stopp
 - Neu: Mikrofon wählbar (Assistent → Mikrofon)
+
+## 0.5.0 – unveröffentlicht
 
 - Neu: Beseco Officeassistent, optional unter Extras oder im Installer einschaltbar; ausgeschaltet ändert sich nichts
 - Arbeitsbereich mit geteilter Ansicht: links der Text, rechts die Zusammenfassung, die gleich vorgelesen wird
