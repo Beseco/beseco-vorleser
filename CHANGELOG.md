@@ -2,6 +2,10 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.8 – 2026-10-22
+
+- KI: Ist der Anbieter kurz ausgelastet („Zu viele Anfragen“, HTTP 429) oder hat er einen kurzzeitigen Serverfehler, versucht der Vorleser es nach 2, 5 und 10 Sekunden selbst erneut; der Fenstertitel zeigt die Wartezeit, Abbrechen geht jederzeit
+
 ## 0.5.7 – 2026-10-22
 
 - Mini-Pille und Mini-Player erscheinen auch, wenn das Vorleser-Fenster nur minimiert wird (nicht nur beim Schließen)

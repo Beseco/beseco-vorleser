@@ -4,6 +4,8 @@
 //!
 //! Aufrufe blockieren und sind für einen Hintergrund-Thread gedacht.
 
+use std::cell::RefCell;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use windows::Win32::Foundation::{LocalFree, HLOCAL};
@@ -142,6 +144,53 @@ impl Correction {
 /// Grundregeln für alle Antworten: Sprache des Textes, nur Klartext (wird vorgelesen).
 const BASE_RULES: &str = "Answer in the same language as the text. Write plain text only, without Markdown (no **, no #, no tables), because the answer is read aloud. Do not add an introduction like \"Here is the summary\".";
 
+/// Ein gescheiterter Versuch: HTTP-Status (falls es einen gab) und Meldung.
+struct Failure {
+    status: Option<u16>,
+    message: String,
+}
+
+impl Failure {
+    fn other(message: String) -> Failure {
+        Failure { status: None, message }
+    }
+}
+
+/// Wartezeiten bei „zu viele Anfragen“ (429) und kurzzeitigen Serverfehlern; danach gilt der Fehler.
+const RETRY_WAITS: [u64; 3] = [2, 5, 10];
+
+/// Versucht `attempt` erneut, solange der Anbieter nur kurz überlastet ist. `wait` wartet die
+/// angegebene Zeit und meldet mit `false`, dass abgebrochen wurde.
+fn retrying(mut attempt: impl FnMut() -> Result<String, Failure>, mut wait: impl FnMut(std::time::Duration) -> bool) -> Result<String, String> {
+    for seconds in RETRY_WAITS {
+        match attempt() {
+            Err(Failure { status: Some(429 | 500 | 502 | 503 | 504 | 529), .. }) => {
+                if !wait(std::time::Duration::from_secs(seconds)) {
+                    return Err(t("err.cancelled").to_string());
+                }
+            }
+            other => return other.map_err(|f| f.message),
+        }
+    }
+    attempt().map_err(|f| f.message)
+}
+
+/// Sekunden bis zum nächsten Versuch, solange auf einen ausgelasteten Anbieter gewartet wird (sonst 0).
+pub static RETRY_WAIT: AtomicU64 = AtomicU64::new(0);
+
+/// Wartet in kleinen Schritten und fragt dabei, ob abgebrochen wurde.
+fn pause(wait: std::time::Duration, on_text: &mut dyn FnMut(&str) -> bool) -> bool {
+    let end = Instant::now() + wait;
+    let mut go_on = true;
+    while go_on && Instant::now() < end {
+        RETRY_WAIT.store((end - Instant::now()).as_secs() + 1, Ordering::Relaxed);
+        go_on = on_text("");
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+    RETRY_WAIT.store(0, Ordering::Relaxed);
+    go_on
+}
+
 /// Längere Texte werden in Teilen dieser Größe vorverdichtet (passt auch in kleine Modelle).
 const CHUNK: usize = 12_000;
 
@@ -223,7 +272,12 @@ impl Provider {
 
     /// Wie [`Provider::chat`], liest die Antwort aber Stück für Stück: `on_text` erhält den bisher
     /// geschriebenen Text und bricht mit `false` ab. Server ohne Streaming liefern alles auf einmal.
-    pub fn chat_stream(&self, system: &str, user: &str, mut on_text: impl FnMut(&str) -> bool) -> Result<String, String> {
+    pub fn chat_stream(&self, system: &str, user: &str, on_text: impl FnMut(&str) -> bool) -> Result<String, String> {
+        let on_text = RefCell::new(on_text);
+        retrying(|| self.stream_once(system, user, &mut *on_text.borrow_mut()), |wait| pause(wait, &mut *on_text.borrow_mut()))
+    }
+
+    fn stream_once(&self, system: &str, user: &str, on_text: &mut dyn FnMut(&str) -> bool) -> Result<String, Failure> {
         let body = self.body(system, user, true);
         let url = format!("{}/chat/completions", self.base());
         let request = Request { method: "POST", url: &url, headers: self.headers(), body: Some(body.as_bytes()), timeout: 600_000 };
@@ -250,16 +304,18 @@ impl Provider {
                 }
             }
             true
-        })?;
+        })
+        .map_err(Failure::other)?;
         if cancelled {
-            return Err(t("err.cancelled").to_string());
+            return Err(Failure::other(t("err.cancelled").to_string()));
         }
         if status != 200 {
-            return Err(Self::api_error(status, &raw));
+            return Err(Failure { status: Some(status), message: Self::api_error(status, &raw) });
         }
         if text.is_empty() {
-            let value = json::parse(&raw).ok_or_else(|| t("ai.err_answer").to_string())?;
-            text = value.path(&["choices", "0", "message", "content"]).and_then(Value::as_str).ok_or_else(|| t("ai.err_answer").to_string())?.to_string();
+            let answer_error = || Failure::other(t("ai.err_answer").to_string());
+            let value = json::parse(&raw).ok_or_else(answer_error)?;
+            text = value.path(&["choices", "0", "message", "content"]).and_then(Value::as_str).ok_or_else(answer_error)?.to_string();
             on_text(&text);
         }
         Ok(clean_answer(&text))
@@ -267,6 +323,13 @@ impl Provider {
 
     /// Eine Anfrage an das Modell: Anweisung (`system`) und Inhalt (`user`).
     pub fn chat(&self, system: &str, user: &str) -> Result<String, String> {
+        retrying(|| self.chat_once(system, user), |wait| {
+            std::thread::sleep(wait);
+            true
+        })
+    }
+
+    fn chat_once(&self, system: &str, user: &str) -> Result<String, Failure> {
         let body = self.body(system, user, false);
         let url = format!("{}/chat/completions", self.base());
         let request = Request {
@@ -277,15 +340,13 @@ impl Provider {
             // Lokale Modelle ohne Grafikkarte brauchen für lange Texte mehrere Minuten.
             timeout: 600_000,
         };
-        let (status, answer) = http::fetch(&request)?;
+        let (status, answer) = http::fetch(&request).map_err(Failure::other)?;
         if status != 200 {
-            return Err(Self::api_error(status, &answer));
+            return Err(Failure { status: Some(status), message: Self::api_error(status, &answer) });
         }
-        let value = json::parse(&answer).ok_or_else(|| t("ai.err_answer").to_string())?;
-        let content = value
-            .path(&["choices", "0", "message", "content"])
-            .and_then(Value::as_str)
-            .ok_or_else(|| t("ai.err_answer").to_string())?;
+        let answer_error = || Failure::other(t("ai.err_answer").to_string());
+        let value = json::parse(&answer).ok_or_else(answer_error)?;
+        let content = value.path(&["choices", "0", "message", "content"]).and_then(Value::as_str).ok_or_else(answer_error)?;
         Ok(clean_answer(content))
     }
 
@@ -445,6 +506,34 @@ pub fn unprotect(stored: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retries_busy_providers() {
+        let mut calls = 0;
+        let result = retrying(
+            || {
+                calls += 1;
+                if calls < 3 { Err(Failure { status: Some(429), message: "busy".into() }) } else { Ok("fertig".into()) }
+            },
+            |_| true,
+        );
+        assert_eq!(result.as_deref(), Ok("fertig"));
+        assert_eq!(calls, 3);
+        // Ein falscher Schlüssel wird nicht wiederholt.
+        let mut calls = 0;
+        let result = retrying(
+            || {
+                calls += 1;
+                Err(Failure { status: Some(401), message: "key".into() })
+            },
+            |_| true,
+        );
+        assert_eq!(result, Err("key".to_string()));
+        assert_eq!(calls, 1);
+        // Abbrechen während des Wartens.
+        let result = retrying(|| Err(Failure { status: Some(503), message: "x".into() }), |_| false);
+        assert_eq!(result, Err(t("err.cancelled").to_string()));
+    }
 
     /// Echtes Ollama mit qwen3.5:4b: Antwort in Stücken, Abbrechen nach wenigen Stücken.
     /// `cargo test streams_from_ollama -- --ignored --nocapture`

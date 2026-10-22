@@ -307,12 +307,19 @@ static DICT_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None
 /// „Abbrechen“ während die KI schreibt.
 static AI_CANCEL: AtomicBool = AtomicBool::new(false);
 /// Bisher geschriebener Text der KI (für die Anzeige beim Schreiben).
+/// Im Fenstertitel steht gerade der Hinweis auf einen erneuten Versuch.
+static AI_RETRY_SHOWN: AtomicBool = AtomicBool::new(false);
 static AI_PARTIAL: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
 /// Liefert zum Streaming der KI: merkt sich den Text, meldet ihn höchstens alle 120 ms ans
 /// Fenster und sagt, ob weitergeschrieben werden soll.
 fn ai_streamer(hwnd: isize, show: bool) -> impl FnMut(&str) -> bool {
     let mut last = std::time::Instant::now() - std::time::Duration::from_secs(1);
     move |text: &str| {
+        if text.is_empty() && ai::RETRY_WAIT.load(Ordering::Relaxed) > 0 {
+            unsafe {
+                let _ = PostMessageW(Some(HWND(hwnd as *mut _)), WM_AI_DELTA, WPARAM(1), LPARAM(0));
+            }
+        }
         if show && !text.is_empty() && last.elapsed() >= std::time::Duration::from_millis(120) {
             last = std::time::Instant::now();
             *AI_PARTIAL.lock().unwrap() = text.to_string();
@@ -2617,7 +2624,18 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             window::set_title(Some(&t("audio.progress").replace("{}", &wparam.0.min(100).to_string())));
         }
         WM_TRANSCRIBE_DONE => on_transcribe_done(),
+        WM_AI_DELTA if wparam.0 == 1 => {
+            // Der Anbieter ist ausgelastet; der Vorleser wartet und versucht es dann erneut.
+            let seconds = ai::RETRY_WAIT.load(Ordering::Relaxed);
+            if AI_BUSY.load(Ordering::Relaxed) && seconds > 0 {
+                AI_RETRY_SHOWN.store(true, Ordering::Relaxed);
+                window::set_title(Some(&t("app.ai_retry").replace("{}", &seconds.to_string())));
+            }
+        }
         WM_AI_DELTA => {
+            if AI_RETRY_SHOWN.swap(false, Ordering::Relaxed) {
+                window::set_title(Some(t(if AI_CORRECTING.load(Ordering::Relaxed) { "app.ai_correcting" } else { "app.ai_working" })));
+            }
             if AI_BUSY.load(Ordering::Relaxed) && !AI_FOR_PROGRAM.load(Ordering::Relaxed) {
                 window::set_result_live(&to_crlf(&ai::clean_answer(&AI_PARTIAL.lock().unwrap())));
             }
