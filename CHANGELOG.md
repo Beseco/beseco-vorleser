@@ -2,6 +2,10 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.9 – 2026-10-22
+
+- Neues Programmsymbol: der Vorleser-Igel mit Kopfhörern (Infobereich, Fenster, Installer); Logo und Maskottchen liegen in `docs/brand`
+
 ## 0.5.8 – 2026-10-22
 
 - KI: Ist der Anbieter kurz ausgelastet („Zu viele Anfragen“, HTTP 429) oder hat er einen kurzzeitigen Serverfehler, versucht der Vorleser es nach 2, 5 und 10 Sekunden selbst erneut; der Fenstertitel zeigt die Wartezeit, Abbrechen geht jederzeit

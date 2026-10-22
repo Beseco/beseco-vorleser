@@ -1,5 +1,7 @@
 # Vorleser
 
+<img src="docs/brand/igel.png" alt="Beseco Vorleser – the hedgehog with headphones" width="160" align="right">
+
 [Deutsche Fassung](README.md)
 
 Vorleser ("reader" in German) reads selected text aloud in any Windows program: select text, press **Ctrl+Alt+V**, listen. It lives as a small icon in the notification area, uses very little memory and speaks with the voices Windows already ships.

@@ -1,5 +1,7 @@
 # Vorleser
 
+<img src="docs/brand/igel.png" alt="Beseco Vorleser – der Igel mit Kopfhörern" width="160" align="right">
+
 [English version](README.en.md)
 
 Vorleser liest markierten Text in jedem Windows-Programm vor: Text markieren, **Strg+Alt+V** drücken, zuhören. Das Programm sitzt als kleines Symbol im Infobereich, braucht kaum Speicher und nutzt die Stimmen, die Windows schon mitbringt.
