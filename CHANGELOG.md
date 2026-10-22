@@ -2,26 +2,26 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## 0.5.6 – unveröffentlicht
+## 0.5.6 – 2026-10-22
 
 - Mini-Pille: wandert mit auf den Bildschirm, auf dem gerade gearbeitet wird; lässt sich mit der Maus an eine andere Stelle ziehen und bleibt dort (Rechtsklick → Position zurücksetzen); eingeklappt besser zu sehen (heller Rand, blauer Punkt)
 
-## 0.5.5 – unveröffentlicht
+### Aus 0.5.5 (nicht einzeln veröffentlicht): Stimme passend zur Sprache
 
 - Neu: Stimme passend zur Sprache: englischer Text wird mit einer englischen Stimme gelesen, deutscher mit einer deutschen (erkannt werden Deutsch, Englisch, Französisch, Spanisch, Italienisch und Niederländisch). Genommen wird die zuletzt für diese Sprache gewählte Stimme, sonst eine vorhandene, KI-Stimmen zuerst; danach gilt wieder die eingestellte Stimme. Abschaltbar in den Einstellungen
 
-## 0.5.4 – unveröffentlicht
+### Aus 0.5.4 (nicht einzeln veröffentlicht): KI schreibt live
 
 - Die KI schreibt live: Zusammenfassung, Protokoll und Korrektur erscheinen rechts Wort für Wort, während sie entstehen
 - Während die KI arbeitet, wird „Zusammenfassen“ bzw. „Korrigieren“ zu „Abbrechen“; das bis dahin Geschriebene bleibt stehen
 
-## 0.5.3 – unveröffentlicht
+### Aus 0.5.3 (nicht einzeln veröffentlicht): PDFs
 
 - PDFs mit Textebene werden direkt gelesen: viel schneller und zeichengenau (Umlaute, Zahlen, Fachbegriffe); gescannte Seiten gehen weiter über die Texterkennung
 - Kopf- und Fußzeilen in PDFs werden übersprungen: Zeilen, die oben oder unten auf vielen Seiten an derselben Stelle wiederkehren, und Seitenzahlen („Seite 3 von 12“, „- 3 -“); abschaltbar in den Einstellungen
 - Auf Wunsch prüft zusätzlich die KI die Ränder der Seiten (Einstellungen, Officeassistent); dabei gehen nur die ersten und letzten drei Zeilen jeder Seite an die KI, bei einem Cloud-Anbieter erst nach Rückfrage
 
-## 0.5.2 – unveröffentlicht
+### Aus 0.5.2 (nicht einzeln veröffentlicht): Aufnahme zu Protokoll
 
 - Neu: Aufnahme zu Protokoll (Assistent → Aufnahme zu Protokoll …, oder die Datei einfach ins Fenster ziehen): MP3, M4A, WAV, WMA, FLAC und Ton aus MP4-Videos werden lokal mit Whisper abgeschrieben, mit Zeitmarken; mit KI entsteht daraus gleich ein Protokoll mit Teilnehmern, Themen, Beschlüssen, Aufgaben und offenen Punkten
 - „Protokoll“ als vierte Art beim Zusammenfassen, auch für eingefügte Abschriften
