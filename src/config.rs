@@ -71,6 +71,10 @@ pub struct Config {
     /// Beim Schließen des Fensters bleibt eine Mini-Pille am Bildschirmrand (sonst nur das
     /// Symbol im Infobereich).
     pub close_to_pill: bool,
+    /// Kopf- und Fußzeilen in PDFs weglassen.
+    pub skip_page_edges: bool,
+    /// Zusätzlich die KI nach Kopf- und Fußzeilen fragen (Officeassistent).
+    pub page_edges_ai: bool,
 }
 
 impl Default for Config {
@@ -105,6 +109,8 @@ impl Default for Config {
             dict_auto_correct: true,
             microphone: String::new(),
             close_to_pill: true,
+            skip_page_edges: true,
+            page_edges_ai: false,
         }
     }
 }
@@ -149,6 +155,8 @@ impl Config {
                 "dict_auto_correct" => cfg.dict_auto_correct = value != "0",
                 "microphone" => cfg.microphone = value.to_string(),
                 "close_to_pill" => cfg.close_to_pill = value != "0",
+                "skip_page_edges" => cfg.skip_page_edges = value != "0",
+                "page_edges_ai" => cfg.page_edges_ai = value != "0",
                 _ => {}
             }
         }
@@ -164,7 +172,7 @@ impl Config {
              update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n\
              remember_text={}\r\nresume_pos={}\r\nguide_shown={}\r\n\
              assistant={}\r\nai_kind={}\r\nai_url={}\r\nai_key={}\r\nai_model={}\r\nsummary_mode={}\r\n\
-             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\nmicrophone={}\r\nclose_to_pill={}\r\n",
+             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\nmicrophone={}\r\nclose_to_pill={}\r\nskip_page_edges={}\r\npage_edges_ai={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
@@ -193,7 +201,9 @@ impl Config {
             self.correction_custom,
             self.dict_auto_correct as u8,
             self.microphone,
-            self.close_to_pill as u8
+            self.close_to_pill as u8,
+            self.skip_page_edges as u8,
+            self.page_edges_ai as u8
         )
     }
 
@@ -379,6 +389,8 @@ mod tests {
             dict_auto_correct: false,
             microphone: "Mikrofon (USB Audio)".into(),
             close_to_pill: false,
+            skip_page_edges: false,
+            page_edges_ai: true,
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }

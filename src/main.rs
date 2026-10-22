@@ -23,6 +23,7 @@ mod mp3;
 mod ocr;
 mod ollama;
 mod paint;
+mod pdf;
 mod piper;
 mod player;
 mod selection;
@@ -347,6 +348,7 @@ impl App {
         // Der Testlauf bleibt stumm.
         tts.set_volume(if TEST_MODE.load(Ordering::Relaxed) { 0 } else { cfg.volume });
         let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_waiting: Vec::new(), player_on: false, player_sentences: Vec::new() };
+        documents::SKIP_PAGE_EDGES.store(app.cfg.skip_page_edges, Ordering::Relaxed);
         app.add_icon();
         app.register_hotkeys();
         app.fill_window();
@@ -426,6 +428,8 @@ impl App {
             language: self.cfg.language.clone(),
             proxy: self.cfg.proxy.clone(),
             close_to_pill: self.cfg.close_to_pill,
+            skip_page_edges: self.cfg.skip_page_edges,
+            page_edges_ai: self.cfg.page_edges_ai,
         }
     }
 
@@ -441,6 +445,9 @@ impl App {
         self.cfg.update_check = values.update_check;
         self.cfg.remember_text = values.remember_text;
         self.cfg.close_to_pill = values.close_to_pill;
+        self.cfg.skip_page_edges = values.skip_page_edges;
+        self.cfg.page_edges_ai = values.page_edges_ai;
+        documents::SKIP_PAGE_EDGES.store(values.skip_page_edges, Ordering::Relaxed);
         self.cfg.proxy = values.proxy;
         http::set_proxy(&self.cfg.proxy);
         if values.language != self.cfg.language {
@@ -1821,19 +1828,53 @@ fn load_file(path: String) {
         return;
     }
     let Some(hwnd) = with_app(|app| app.hwnd.0 as isize) else { return };
+    let edges_ai = path.to_lowercase().ends_with(".pdf").then(page_edges_provider).flatten();
     window::set_title(Some(t("app.loading_title")));
     std::thread::spawn(move || {
         ocr::init_thread();
         let post = |msg: u32, wparam: usize, lparam: isize| unsafe {
             let _ = PostMessageW(Some(HWND(hwnd as *mut _)), msg, WPARAM(wparam), LPARAM(lparam));
         };
-        let result = documents::extract(&path, |page, pages| {
+        let progress = |page: u32, pages: u32| {
             post(WM_FILE_PROGRESS, page as usize, pages as isize);
             true
-        });
+        };
+        let result = match edges_ai {
+            // PDF mit KI-Prüfung: erst die schnelle Erkennung, dann fragt die KI nach dem Rest.
+            Some(provider) => documents::pdf_pages(&path, progress).map(|mut pages| {
+                if documents::SKIP_PAGE_EDGES.load(Ordering::Relaxed) {
+                    documents::strip_edges(&mut pages);
+                }
+                if pages.len() >= 2 {
+                    if let Ok(lines) = provider.page_edges(&documents::page_edges(&pages, 3)) {
+                        documents::remove_lines(&mut pages, &lines, 3);
+                    }
+                }
+                documents::join_pages(&pages)
+            }),
+            None => documents::extract(&path, progress),
+        }
+        .and_then(|text| if text.trim().is_empty() { Err(t("err.no_text_in_file").to_string()) } else { Ok(text) });
         *LOADED_FILE.lock().unwrap() = Some(result);
         post(WM_FILE_LOADED, 0, 0);
     });
+}
+
+/// Soll die KI beim Öffnen einer PDF Kopf- und Fußzeilen suchen? Bei einem Cloud-Anbieter nur
+/// nach Rückfrage, weil dabei die Ränder jeder Seite übertragen werden.
+fn page_edges_provider() -> Option<ai::Provider> {
+    let provider = with_app(|app| (app.cfg.assistant && app.cfg.page_edges_ai).then(|| app.provider()))??;
+    if !provider.is_ready() {
+        return None;
+    }
+    if provider.kind == ai::Kind::OpenAi {
+        let question = HSTRING::from(t("app.page_edges_question").replace("{}", &provider.url));
+        let answer = unsafe { MessageBoxW(window::visible(), &question, APP_NAME, MB_YESNO | MB_ICONQUESTION) };
+        if answer != IDYES {
+            return None;
+        }
+    }
+    Some(provider)
 }
 
 fn on_file_loaded() {

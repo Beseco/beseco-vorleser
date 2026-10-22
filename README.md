@@ -38,6 +38,7 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 - **Systemweit:** funktioniert in Browser, Office, PDF-Readern, Editoren und den meisten anderen Programmen
 - **Fenster zum Einfügen:** Text hineinkopieren und vorlesen; Stimme und Geschwindigkeit im Menü „Stimme“ oder unter Extras → Einstellungen (mit Hörprobe)
 - **Dateien vorlesen:** Word (DOCX), OpenDocument (ODT), RTF, PDF, EPUB, HTML, Textdateien und Bilder öffnen, über Datei → Öffnen, durch Hineinziehen ins Fenster oder „Öffnen mit“ im Explorer
+- **PDFs:** mit Textebene direkt und zeichengenau gelesen, gescannte Seiten per Texterkennung; Kopf- und Fußzeilen sowie Seitenzahlen werden übersprungen (auf Wunsch zusätzlich von der KI geprüft, bei Cloud-Anbietern nur nach Rückfrage)
 - **Texterkennung (OCR):** Text, der sich nicht markieren lässt, etwa in Bildern, gescannten PDFs oder Programmen ohne Textauswahl, per Rahmen auf dem Bildschirm erkennen und vorlesen. Dafür nutzt Vorleser die Texterkennung von Windows, offline und ohne Zusatzsoftware.
 - **Anleitung zum Anhören:** erscheint beim ersten Start im Textfeld und lässt sich unter Hilfe jederzeit anzeigen oder vorlesen
 - **Mitlesen:** das gerade gesprochene Wort wird im Fenster markiert

@@ -82,16 +82,24 @@ pub fn image_file(path: &str) -> Result<String, String> {
 
 /// Text aus einer PDF-Datei, Seite für Seite über die Texterkennung. `progress` erhält die
 /// aktuelle Seite und die Seitenzahl und bricht mit `false` ab.
-pub fn pdf_file(path: &str, mut progress: impl FnMut(u32, u32) -> bool) -> Result<String, String> {
+#[cfg(test)]
+pub fn pdf_file(path: &str, progress: impl FnMut(u32, u32) -> bool) -> Result<String, String> {
+    let pages = pdf_pages(path, None, progress)?;
+    Ok(pages.iter().map(|(_, text)| format!("{text}\n")).collect())
+}
+
+/// Erkennt die Seiten `which` (Index ab 0; `None` = alle) einer PDF per Texterkennung.
+pub fn pdf_pages(path: &str, which: Option<&[u32]>, mut progress: impl FnMut(u32, u32) -> bool) -> Result<Vec<(u32, String)>, String> {
     let engine = engine()?;
     let file = StorageFile::GetFileFromPathAsync(&HSTRING::from(path)).map_err(error)?.join().map_err(error)?;
     let document = PdfDocument::LoadFromFileAsync(&file)
         .and_then(|operation| operation.join())
         .map_err(|_| t("err.pdf_unreadable").to_string())?;
-    let pages = document.PageCount().map_err(error)?;
-    let mut text = String::new();
-    for index in 0..pages {
-        if !progress(index + 1, pages) {
+    let count = document.PageCount().map_err(error)?;
+    let indices: Vec<u32> = which.map_or_else(|| (0..count).collect(), |w| w.iter().copied().filter(|i| *i < count).collect());
+    let mut result = Vec::new();
+    for (done, &index) in indices.iter().enumerate() {
+        if !progress(done as u32 + 1, indices.len() as u32) {
             return Err(t("err.cancelled").to_string());
         }
         let page = document.GetPage(index).map_err(error)?;
@@ -101,11 +109,9 @@ pub fn pdf_file(path: &str, mut progress: impl FnMut(u32, u32) -> bool) -> Resul
         page.RenderWithOptionsToStreamAsync(&stream, &options).map_err(error)?.join().map_err(error)?;
         let decoder = BitmapDecoder::CreateAsync(&stream).map_err(error)?.join().map_err(error)?;
         let bitmap = decoder.GetSoftwareBitmapAsync().map_err(error)?.join().map_err(error)?;
-        text.push_str(&recognize(&engine, &bitmap)?);
-        // Leerzeile zwischen den Seiten, damit die Bereinigung sie als Absatz behandelt.
-        text.push('\n');
+        result.push((index, recognize(&engine, &bitmap)?));
     }
-    Ok(text)
+    Ok(result)
 }
 
 /// Text aus Bildpunkten im Format BGRA (4 Bytes je Punkt, Zeile für Zeile von oben).

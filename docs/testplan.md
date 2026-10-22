@@ -94,6 +94,8 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 - [ ] Diktier-Pille: ✕ beendet, ✓ beendet und korrigiert (mit KI); Hinweis darüber unter der Maus
 - [ ] Aufnahme zu Protokoll mit einer echten Besprechung (MP3 vom Handy, M4A, Teams-Aufzeichnung als MP4): Abschrift mit Zeitmarken, Protokoll rechts; Dauer bei 30 bis 60 Minuten notieren; Abbrechen
 - [ ] Aufnahme ohne KI: nur die Abschrift; ohne Officeassistent: Hinweis
+- [ ] PDFs aus Word, aus dem Browser und vom Scanner öffnen: Text richtig (Umlaute, Leerzeichen), Kopf- und Fußzeilen und Seitenzahlen fehlen, Überschriften und Absätze bleiben; zweispaltige PDF in sinnvoller Reihenfolge
+- [ ] Einstellung „Kopf- und Fußzeilen weglassen“ aus: alles wird gelesen; „von der KI prüfen lassen“ mit Ollama (keine Frage) und mit IONOS (Rückfrage, Nein = ohne KI)
 - [ ] Windows auf „Dunkel“ umstellen: Fenster, Menüleiste, Menüs und Player wechseln mit
 - [ ] Nur mit der Tastatur: Tab erreicht alle Knöpfe, der Fokus ist sichtbar; ein Bildschirmleser liest die Knöpfe vor
 

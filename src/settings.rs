@@ -82,6 +82,8 @@ pub struct Values {
     pub remember_text: bool,
     pub language: String,
     pub close_to_pill: bool,
+    pub skip_page_edges: bool,
+    pub page_edges_ai: bool,
 }
 
 /// Stimmenauswahl oben im Fenster. Sie wirkt sofort (damit die Hörprobe passt); „Abbrechen“
@@ -111,6 +113,8 @@ struct Controls {
     proxy: HWND,
     remember: HWND,
     pill: HWND,
+    edges: HWND,
+    edges_ai: HWND,
     language: HWND,
     font: HFONT,
 }
@@ -153,7 +157,7 @@ pub fn open(owner: Option<HWND>, values: Values, voices: Voices, on_save: fn(Val
         let dpi = GetDpiForSystem();
         let px = |value: i32| value * dpi as i32 / 96;
         let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
-        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(648) };
+        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(720) };
         let _ = AdjustWindowRectExForDpi(&mut frame, style, false, WS_EX_CONTROLPARENT, dpi);
         let Ok(window) = CreateWindowExW(
             WS_EX_CONTROLPARENT,
@@ -269,10 +273,22 @@ pub fn open(owner: Option<HWND>, values: Values, voices: Voices, on_save: fn(Val
             tab | BS_AUTOCHECKBOX as u32,
             0, label_x, OFFSET + 38 + 12 * row, 438, 24,
         );
-        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, OFFSET + 518, 100, 30);
-        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, OFFSET + 518, 98, 30);
+        let edges = child(
+            w!("BUTTON"),
+            t("settings.skip_page_edges"),
+            tab | BS_AUTOCHECKBOX as u32,
+            0, label_x, OFFSET + 34 + 13 * row, 438, 24,
+        );
+        let edges_ai = child(
+            w!("BUTTON"),
+            t("settings.page_edges_ai"),
+            tab | BS_AUTOCHECKBOX as u32,
+            0, label_x + 22, OFFSET + 30 + 14 * row, 416, 24,
+        );
+        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, OFFSET + 590, 100, 30);
+        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, OFFSET + 590, 98, 30);
 
-        let c = Controls { window, voice, rate, hotkeys, mouse, volume, clean, update, language, proxy, remember, pill, font };
+        let c = Controls { window, voice, rate, hotkeys, mouse, volume, clean, update, language, proxy, remember, pill, edges, edges_ai, font };
         fill(&c, &values);
         fill_voices(&c, &voices.items, voices.selected);
         for label in &voices.rates {
@@ -371,6 +387,8 @@ unsafe fn fill(c: &Controls, values: &Values) {
     SendMessageW(c.update, BM_SETCHECK, Some(WPARAM(values.update_check as usize)), None);
     SendMessageW(c.remember, BM_SETCHECK, Some(WPARAM(values.remember_text as usize)), None);
     SendMessageW(c.pill, BM_SETCHECK, Some(WPARAM(values.close_to_pill as usize)), None);
+    SendMessageW(c.edges, BM_SETCHECK, Some(WPARAM(values.skip_page_edges as usize)), None);
+    SendMessageW(c.edges_ai, BM_SETCHECK, Some(WPARAM(values.page_edges_ai as usize)), None);
     let mut current = 0;
     for (i, (label, value)) in language_options().iter().enumerate() {
         let label = HSTRING::from(label.as_str());
@@ -432,6 +450,8 @@ unsafe fn save(c: &Controls) {
         update_check: SendMessageW(c.update, BM_GETCHECK, None, None).0 == 1,
         remember_text: SendMessageW(c.remember, BM_GETCHECK, None, None).0 == 1,
         close_to_pill: SendMessageW(c.pill, BM_GETCHECK, None, None).0 == 1,
+        skip_page_edges: SendMessageW(c.edges, BM_GETCHECK, None, None).0 == 1,
+        page_edges_ai: SendMessageW(c.edges_ai, BM_GETCHECK, None, None).0 == 1,
         proxy: {
             let mut buffer = [0u16; 512];
             let len = GetWindowTextW(c.proxy, &mut buffer) as usize;

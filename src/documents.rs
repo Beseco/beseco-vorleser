@@ -2,9 +2,15 @@
 //! PDF und Bilder. PDF und Bilder laufen über die Texterkennung von Windows ([`crate::ocr`]),
 //! dadurch gehen auch gescannte Dokumente.
 
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::i18n::t;
+use crate::pdf::Line;
+
+/// Kopf- und Fußzeilen (wiederkehrende Zeilen, Seitenzahlen) in PDFs weglassen.
+pub static SKIP_PAGE_EDGES: AtomicBool = AtomicBool::new(true);
 use crate::zip::Zip;
 
 /// Dateiendungen, die Vorleser öffnen kann.
@@ -29,7 +35,13 @@ pub fn extract(path: &str, progress: impl FnMut(u32, u32) -> bool) -> Result<Str
     let ext = extension(path);
     let read = || std::fs::read(path).map_err(|_| t("app.file_unreadable").to_string());
     let text = match ext.as_str() {
-        "pdf" => tidy(&crate::ocr::pdf_file(path, progress)?),
+        "pdf" => {
+            let mut pages = pdf_pages(path, progress)?;
+            if SKIP_PAGE_EDGES.load(Ordering::Relaxed) {
+                strip_edges(&mut pages);
+            }
+            join_pages(&pages)
+        }
         e if IMAGES.contains(&e) => tidy(&crate::ocr::image_file(path)?),
         "docx" => docx(&read()?)?,
         "odt" => odt(&read()?)?,
@@ -60,7 +72,178 @@ pub fn decode(bytes: &[u8]) -> String {
     }
 }
 
-fn windows_1252(byte: u8) -> char {
+/// Seiten einer PDF als Zeilen: aus der Textebene, wo es eine gibt, sonst per Texterkennung
+/// (Scans). `progress` erhält Seite und Seitenzahl der Texterkennung.
+pub fn pdf_pages(path: &str, progress: impl FnMut(u32, u32) -> bool) -> Result<Vec<Vec<Line>>, String> {
+    let data = std::fs::read(path).map_err(|_| t("app.file_unreadable").to_string())?;
+    let parsed = crate::pdf::extract(&data);
+    let missing: Option<Vec<u32>> = match &parsed {
+        Some(pages) => Some(pages.iter().enumerate().filter(|(_, p)| !p.readable).map(|(i, _)| i as u32).collect()),
+        None => None,
+    };
+    let mut pages: Vec<Vec<Line>> = parsed.map(|pages| pages.into_iter().map(|p| p.lines).collect()).unwrap_or_default();
+    if missing.as_ref().is_some_and(|m| m.is_empty()) {
+        return Ok(pages);
+    }
+    let recognized = crate::ocr::pdf_pages(path, missing.as_deref(), progress)?;
+    for (index, text) in recognized {
+        // Ohne Lage auf der Seite: die Reihenfolge der Zeilen steht für die Höhe.
+        let rows: Vec<&str> = text.lines().collect();
+        let lines = rows
+            .iter()
+            .enumerate()
+            .map(|(i, row)| Line { text: row.trim().to_string(), top: i as f32 / rows.len().max(2).saturating_sub(1) as f32 })
+            .collect();
+        let index = index as usize;
+        if index < pages.len() {
+            pages[index] = lines;
+        } else {
+            pages.push(lines);
+        }
+    }
+    Ok(pages)
+}
+
+/// Vergleichsform einer Zeile: klein, Ziffern als „#“, Leerraum zusammengefasst.
+fn edge_key(text: &str) -> String {
+    let mut out = String::new();
+    let mut last_digit = false;
+    for ch in text.trim().to_lowercase().chars() {
+        if ch.is_ascii_digit() {
+            if !last_digit {
+                out.push('#');
+            }
+            last_digit = true;
+            continue;
+        }
+        last_digit = false;
+        if ch.is_whitespace() {
+            if !out.ends_with(' ') {
+                out.push(' ');
+            }
+        } else {
+            out.push(ch);
+        }
+    }
+    out.trim().to_string()
+}
+
+/// Eine Seitenzahl wie „7“, „- 7 -“, „Seite 7 von 12“, „Page 7 of 12“, „7/12“.
+fn is_page_number(text: &str) -> bool {
+    let key = edge_key(text);
+    let core: String = key.chars().filter(|c| !matches!(c, '-' | '–' | '—' | '|' | '·' | '.' | '(' | ')' | '[' | ']' | ' ')).collect();
+    matches!(core.as_str(), "#" | "seite#" | "seite#von#" | "page#" | "page#of#" | "#/#" | "s#" | "#von#" | "#of#")
+}
+
+/// Lässt Kopf- und Fußzeilen weg: Zeilen ganz oben oder unten, die auf vielen Seiten (bis auf
+/// Ziffern) gleich wiederkehren, und Seitenzahlen. Liefert die Zahl der entfernten Zeilen.
+pub fn strip_edges(pages: &mut [Vec<Line>]) -> usize {
+    let in_edge = |line: &Line| !line.text.is_empty() && (line.top < 0.12 || line.top > 0.9);
+    // Echte Kopf- und Fußzeilen stehen auf jeder Seite an derselben Stelle.
+    let key = |line: &Line| format!("{}@{}", edge_key(&line.text), (line.top * 50.0).round());
+    let mut seen: HashMap<String, usize> = HashMap::new();
+    for page in pages.iter() {
+        let mut keys: Vec<String> = page.iter().filter(|l| in_edge(l)).map(key).collect();
+        keys.sort();
+        keys.dedup();
+        for key in keys {
+            *seen.entry(key).or_default() += 1;
+        }
+    }
+    let needed = match pages.len() {
+        0 | 1 => usize::MAX,
+        2 => 2,
+        n => (n * 2 / 5).max(2),
+    };
+    let mut removed = 0;
+    for page in pages.iter_mut() {
+        let before = page.len();
+        page.retain(|line| !(in_edge(line) && (seen.get(&key(line)).is_some_and(|n| *n >= needed) || is_page_number(&line.text))));
+        removed += before - page.len();
+        // Leere Zeilen am Rand der Seite fallen mit weg.
+        while page.first().is_some_and(|l| l.text.is_empty()) {
+            page.remove(0);
+        }
+        while page.last().is_some_and(|l| l.text.is_empty()) {
+            page.pop();
+        }
+    }
+    removed
+}
+
+/// Ränder jeder Seite für die KI: die ersten und letzten `count` Zeilen.
+pub fn page_edges(pages: &[Vec<Line>], count: usize) -> Vec<(Vec<String>, Vec<String>)> {
+    pages
+        .iter()
+        .map(|page| {
+            // Nach der Lage auf der Seite, nicht nach der Reihenfolge im Inhalt (manche Programme
+            // schreiben Kopf- und Fußzeilen zuletzt).
+            let mut filled: Vec<&Line> = page.iter().filter(|l| !l.text.is_empty()).collect();
+            filled.sort_by(|a, b| a.top.total_cmp(&b.top));
+            let head = filled.iter().take(count).map(|l| l.text.clone()).collect();
+            let tail = filled.iter().rev().take(count).rev().map(|l| l.text.clone()).collect();
+            (head, tail)
+        })
+        .collect()
+}
+
+/// Entfernt Zeilen, die die KI als Kopf- oder Fußzeile erkannt hat. Zur Sicherheit nur am Rand
+/// der Seiten und nur, wenn die Zeile ganz außen steht oder sich auf mehreren Seiten
+/// wiederholt (so bleiben Titel und Kapitelüberschriften erhalten, die die KI verwechselt).
+pub fn remove_lines(pages: &mut [Vec<Line>], lines: &[String], count: usize) -> usize {
+    let keys: Vec<String> = lines.iter().map(|l| edge_key(l)).filter(|k| !k.is_empty()).collect();
+    // Ränder einer Seite (nach der Lage) und die beiden äußersten Zeilen.
+    let edges_of = |page: &Vec<Line>| -> (Vec<usize>, [Option<usize>; 2]) {
+        let mut filled: Vec<usize> = page.iter().enumerate().filter(|(_, l)| !l.text.is_empty()).map(|(i, _)| i).collect();
+        filled.sort_by(|a, b| page[*a].top.total_cmp(&page[*b].top));
+        let edge = filled.iter().take(count).chain(filled.iter().rev().take(count)).copied().collect();
+        (edge, [filled.first().copied(), filled.last().copied()])
+    };
+    let mut repeats: HashMap<String, usize> = HashMap::new();
+    for page in pages.iter() {
+        let mut seen: Vec<String> = edges_of(page).0.iter().map(|i| edge_key(&page[*i].text)).collect();
+        seen.sort();
+        seen.dedup();
+        for key in seen {
+            *repeats.entry(key).or_default() += 1;
+        }
+    }
+    let mut removed = 0;
+    for page in pages.iter_mut() {
+        let (edge, outermost) = edges_of(page);
+        let mut drop: Vec<usize> = edge
+            .iter()
+            .copied()
+            .filter(|i| {
+                let key = edge_key(&page[*i].text);
+                keys.contains(&key) && (outermost.contains(&Some(*i)) || repeats.get(&key).is_some_and(|n| *n >= 2))
+            })
+            .collect();
+        drop.sort_unstable();
+        drop.dedup();
+        for i in drop.into_iter().rev() {
+            page.remove(i);
+            removed += 1;
+        }
+    }
+    removed
+}
+
+/// Setzt die Seiten zu Text zusammen.
+pub fn join_pages(pages: &[Vec<Line>]) -> String {
+    let mut text = String::new();
+    for page in pages {
+        for line in page {
+            text.push_str(&line.text);
+            text.push('\n');
+        }
+        // Absätze gehen oft über die Seite weiter; die Bereinigung fügt Zeilen ohnehin zusammen.
+        text.push('\n');
+    }
+    tidy(&text)
+}
+
+pub(crate) fn windows_1252(byte: u8) -> char {
     // 0x80–0x9F weichen von Latin-1 ab (u. a. €, Anführungszeichen, Gedankenstrich).
     const HIGH: [char; 32] = [
         '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž', '\u{8f}', '\u{90}', '‘', '’',
@@ -463,6 +646,39 @@ pub fn rtf(source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Die lokale KI sucht Kopf- und Fußzeilen: `VORLESER_PDF=<Datei>`, Ollama mit qwen3.5:4b,
+    /// dann `cargo test ai_finds_page_edges -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn ai_finds_page_edges() {
+        let data = std::fs::read(std::env::var("VORLESER_PDF").unwrap()).unwrap();
+        let mut pages: Vec<Vec<Line>> = crate::pdf::extract(&data).unwrap().into_iter().map(|p| p.lines).collect();
+        let provider = crate::ai::Provider { kind: crate::ai::Kind::Ollama, url: "http://localhost:11434".into(), key: String::new(), model: "qwen3.5:4b".into() };
+        let start = std::time::Instant::now();
+        let lines = provider.page_edges(&page_edges(&pages, 3)).unwrap();
+        println!("KI nach {:?}: {lines:?}", start.elapsed());
+        let removed = remove_lines(&mut pages, &lines, 3);
+        let text = join_pages(&pages);
+        println!("{removed} Zeilen entfernt, Datum noch drin: {}, Adresse noch drin: {}", text.contains("22.10.26"), text.contains("file:///"));
+        println!("Absätze \"Zuständig ist das Team\": {}", text.matches("Zuständig ist das Team").count());
+    }
+
+    #[test]
+    fn strips_headers_footers_and_page_numbers() {
+        let pdf = crate::pdf::tests::sample_pdf(&[
+            vec!["Beseco GmbH – Angebot 2026", "Erster Absatz der ersten Seite.", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Seite 1 von 3"],
+            vec!["Beseco GmbH – Angebot 2026", "Mitte der Arbeit auf Seite zwei.", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Seite 2 von 3"],
+            vec!["Beseco GmbH – Angebot 2026", "Schluss auf der letzten Seite.", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Seite 3 von 3"],
+        ]);
+        let mut pages: Vec<Vec<Line>> = crate::pdf::extract(&pdf).unwrap().into_iter().map(|p| p.lines).collect();
+        assert_eq!(strip_edges(&mut pages), 6);
+        let text = join_pages(&pages);
+        assert!(text.contains("Erster Absatz") && text.contains("Schluss auf"), "{text}");
+        assert!(!text.contains("Beseco GmbH") && !text.contains("Seite 1 von 3"), "{text}");
+        assert!(is_page_number("- 12 -") && is_page_number("Page 3 of 10") && is_page_number("7/12"));
+        assert!(!is_page_number("12 Monate Garantie"));
+    }
     use crate::zip::build;
 
     #[test]

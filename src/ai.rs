@@ -248,6 +248,27 @@ impl Provider {
         Ok((start.elapsed().as_millis(), answer))
     }
 
+    /// Findet unter den Rändern der Seiten (je erste und letzte Zeilen) Kopf- und Fußzeilen und
+    /// Seitenzahlen. Liefert die betroffenen Zeilen wörtlich.
+    pub fn page_edges(&self, edges: &[(Vec<String>, Vec<String>)]) -> Result<Vec<String>, String> {
+        let mut listing = String::new();
+        for (i, (head, tail)) in edges.iter().enumerate().take(40) {
+            for line in head {
+                listing.push_str(&format!("Page {} top: {line}\n", i + 1));
+            }
+            for line in tail {
+                listing.push_str(&format!("Page {} bottom: {line}\n", i + 1));
+            }
+        }
+        let system = "You find running headers, running footers and page numbers in a document. You get the top and bottom lines of each page. \
+            Running headers and footers repeat on most pages, often with a changing page number or date: for example document or company names, dates, file names, paths or web addresses, \
+            \"Page 3 of 12\", \"- 3 -\" or \"Seite 3\". Document titles, chapter titles and normal sentences are body text, not headers. \
+            Reply with every line that is a running header, running footer or page number, one per line, copied exactly without the \"Page n top/bottom:\" prefix. \
+            Reply with nothing else. If there are none, reply with NONE.";
+        let answer = self.chat(system, &listing)?;
+        Ok(answer.lines().map(|l| l.trim().trim_start_matches("• ").to_string()).filter(|l| !l.is_empty() && l != "NONE").collect())
+    }
+
     /// Überarbeitet einen diktierten Text in der Stufe `mode`.
     pub fn correct(&self, text: &str, mode: Correction, custom: &str) -> Result<String, String> {
         let system = format!(

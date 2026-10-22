@@ -2,6 +2,12 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.3 – unveröffentlicht
+
+- PDFs mit Textebene werden direkt gelesen: viel schneller und zeichengenau (Umlaute, Zahlen, Fachbegriffe); gescannte Seiten gehen weiter über die Texterkennung
+- Kopf- und Fußzeilen in PDFs werden übersprungen: Zeilen, die oben oder unten auf vielen Seiten an derselben Stelle wiederkehren, und Seitenzahlen („Seite 3 von 12“, „- 3 -“); abschaltbar in den Einstellungen
+- Auf Wunsch prüft zusätzlich die KI die Ränder der Seiten (Einstellungen, Officeassistent); dabei gehen nur die ersten und letzten drei Zeilen jeder Seite an die KI, bei einem Cloud-Anbieter erst nach Rückfrage
+
 ## 0.5.2 – unveröffentlicht
 
 - Neu: Aufnahme zu Protokoll (Assistent → Aufnahme zu Protokoll …, oder die Datei einfach ins Fenster ziehen): MP3, M4A, WAV, WMA, FLAC und Ton aus MP4-Videos werden lokal mit Whisper abgeschrieben, mit Zeitmarken; mit KI entsteht daraus gleich ein Protokoll mit Teilnehmern, Themen, Beschlüssen, Aufgaben und offenen Punkten

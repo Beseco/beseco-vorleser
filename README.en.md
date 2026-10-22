@@ -38,6 +38,7 @@ Windows does not let a program add an entry to the regular right-click menu of o
 
 - **System-wide:** works in browsers, Office, PDF readers, editors and most other programs
 - **Read files:** opens Word (DOCX), OpenDocument (ODT), RTF, PDF, EPUB, HTML, text files and images via File → Open, drag and drop or "Open with" in Explorer
+- **PDFs:** text layers are read directly and exactly, scanned pages via text recognition; headers, footers and page numbers are skipped (optionally also checked by the AI, with cloud providers only after asking)
 - **Text recognition (OCR):** recognize and read text you cannot select, such as in images, scanned PDFs or programs without text selection, by dragging a frame on the screen. Uses the built-in Windows text recognition, offline and without extra software.
 - **Spoken guide:** appears in the text field on first start and can be shown or read aloud from Help at any time
 - **Paste window:** paste any text and compare voices with a sample sentence
