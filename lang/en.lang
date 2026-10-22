@@ -289,6 +289,7 @@ pill.hide = Hide the pill
 pill.hint = {} dictate · {} read aloud
 pill.open = Open Vorleser
 pill.read = Read the selected text aloud
+pill.reset_position = Reset position (bottom centre)
 player.paused = Paused
 player.sentence = Sentence {} of {}
 rate.fast = Fast

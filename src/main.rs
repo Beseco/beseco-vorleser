@@ -504,7 +504,8 @@ impl App {
         }
         let key = |value: &str| if value.trim().is_empty() { t("help.off").to_string() } else { i18n::hotkey(value) };
         let hint = t("pill.hint").replacen("{}", &key(&self.cfg.hotkey_dictate), 1).replacen("{}", &key(&self.cfg.hotkey_read), 1);
-        minipill::show(&hint, on_pill_action);
+        let position = self.cfg.pill_position.split_once(',').and_then(|(x, y)| Some((x.trim().parse().ok()?, y.trim().parse().ok()?)));
+        minipill::show(&hint, position, on_pill_action);
     }
 
     /// Der Installer kann den Officeassistenten vorab einschalten (einmalig). `true`, wenn er
@@ -2303,6 +2304,19 @@ fn on_pill_action(action: minipill::Action) {
         minipill::Action::Dictate => dictate_anywhere(),
         minipill::Action::Read => read_selection(),
         minipill::Action::OpenWindow => window::show(),
+        minipill::Action::Moved(x, y) => {
+            with_app(|app| {
+                app.cfg.pill_position = format!("{x},{y}");
+                app.cfg.save();
+            });
+        }
+        minipill::Action::ResetPosition => {
+            with_app(|app| {
+                app.cfg.pill_position.clear();
+                app.cfg.save();
+                app.update_pill();
+            });
+        }
         minipill::Action::Hide => {
             with_app(|app| {
                 app.cfg.close_to_pill = false;

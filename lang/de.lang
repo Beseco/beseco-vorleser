@@ -288,6 +288,7 @@ pill.hide = Pille ausblenden
 pill.hint = {} diktieren · {} vorlesen
 pill.open = Vorleser öffnen
 pill.read = Markierten Text vorlesen
+pill.reset_position = Position zurücksetzen (unten in der Mitte)
 player.paused = Pausiert
 player.sentence = Satz {} von {}
 rate.fast = Schnell

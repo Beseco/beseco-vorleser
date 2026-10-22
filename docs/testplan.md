@@ -90,6 +90,7 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 - [ ] „Korrigieren“ in der Pille ersetzt den diktierten Text im Programm
 - [ ] Markierten Text in Edge vorlesen, Fenster geschlossen: Mini-Player erscheint, Satz vor/zurück, Pause, Geschwindigkeit, Fenster öffnen, Stopp
 - [ ] Fenster schließen: unten erscheint die Mini-Pille; Maus darauf: Mikrofon und Kopf; Kopf liest markierten Text vor (Player erscheint, Pille verschwindet, danach wieder da); Mikrofon diktiert ins Programm vorn; Rechtsklick: öffnen bzw. ausblenden
+- [ ] Zwei Bildschirme: Pille erscheint auf dem Bildschirm mit dem Fenster im Vordergrund und wechselt mit; Pille wegziehen, Vorleser neu starten: sie ist wieder dort; Rechtsklick → Position zurücksetzen
 - [ ] Extras → Mini-Pille aus: beim Schließen nur noch das Symbol im Infobereich
 - [ ] Diktier-Pille: ✕ beendet, ✓ beendet und korrigiert (mit KI); Hinweis darüber unter der Maus
 - [ ] Aufnahme zu Protokoll mit einer echten Besprechung (MP3 vom Handy, M4A, Teams-Aufzeichnung als MP4): Abschrift mit Zeitmarken, Protokoll rechts; Dauer bei 30 bis 60 Minuten notieren; Abbrechen

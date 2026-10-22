@@ -79,6 +79,8 @@ pub struct Config {
     pub auto_language: bool,
     /// Zuletzt gewählte Stimme je Sprache: „7=Stimmen-ID|9=Stimmen-ID“ (primäre Sprachkennung).
     pub language_voices: String,
+    /// Selbst gewählte Stelle der Mini-Pille „x,y“ (Pixel); leer = unten mittig, mitwandernd.
+    pub pill_position: String,
 }
 
 impl Default for Config {
@@ -117,6 +119,7 @@ impl Default for Config {
             page_edges_ai: false,
             auto_language: true,
             language_voices: String::new(),
+            pill_position: String::new(),
         }
     }
 }
@@ -165,6 +168,7 @@ impl Config {
                 "page_edges_ai" => cfg.page_edges_ai = value != "0",
                 "auto_language" => cfg.auto_language = value != "0",
                 "language_voices" => cfg.language_voices = value.to_string(),
+                "pill_position" => cfg.pill_position = value.to_string(),
                 _ => {}
             }
         }
@@ -180,7 +184,7 @@ impl Config {
              update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n\
              remember_text={}\r\nresume_pos={}\r\nguide_shown={}\r\n\
              assistant={}\r\nai_kind={}\r\nai_url={}\r\nai_key={}\r\nai_model={}\r\nsummary_mode={}\r\n\
-             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\nmicrophone={}\r\nclose_to_pill={}\r\nskip_page_edges={}\r\npage_edges_ai={}\r\nauto_language={}\r\nlanguage_voices={}\r\n",
+             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\nmicrophone={}\r\nclose_to_pill={}\r\nskip_page_edges={}\r\npage_edges_ai={}\r\nauto_language={}\r\nlanguage_voices={}\r\npill_position={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
@@ -213,7 +217,8 @@ impl Config {
             self.skip_page_edges as u8,
             self.page_edges_ai as u8,
             self.auto_language as u8,
-            self.language_voices
+            self.language_voices,
+            self.pill_position
         )
     }
 
@@ -403,6 +408,7 @@ mod tests {
             page_edges_ai: true,
             auto_language: false,
             language_voices: "9=piper:en_US-lessac-high".into(),
+            pill_position: "1600,900".into(),
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }
