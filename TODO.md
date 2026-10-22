@@ -33,7 +33,7 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [x] **Weitere Dateiformate:** DOCX, ODT, RTF, EPUB, HTML, PDF, Bilder.
 - [x] **Texterkennung (OCR)** für Bildschirmausschnitte, Bilder und PDFs (Windows-Texterkennung).
 - [x] **Anleitung** beim ersten Start und im Hilfe-Menü.
-- [ ] PDF mit Textebene direkt auslesen statt über die Texterkennung (schneller, exakter bei kleiner Schrift).
+- [x] PDF mit Textebene direkt auslesen statt über die Texterkennung; Kopf- und Fußzeilen überspringen.
 
 ## Beseco Officeassistent (optionale Erweiterung)
 
@@ -53,7 +53,6 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [ ] Sprecher unterscheiden in der Abschrift (wer sagt was).
 - [ ] Datenschutz-Modus (personenbezogene Daten lokal ersetzen).
 - [ ] Sprachbefehle („Beseco, lies vor“), nach Machbarkeitstest.
-- [ ] **Stimmenliste im Fenster nach Sprache gruppieren** (im Menü schon vorhanden) und Online-Stimmen kennzeichnen.
 
 ## Oberfläche und Barrierefreiheit
 
@@ -62,7 +61,7 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [ ] Weitere Sprachen (Übersetzungen von Muttersprachlern).
 
 - [x] Englische Oberfläche (folgt Windows, umschaltbar; das Fenster übernimmt die neue Sprache nach einem Neustart).
-- [ ] Dunkelmodus.
+- [x] Dunkelmodus (folgt Windows).
 - [x] Lautstärke einstellbar.
 - [ ] Ausgabegerät wählbar.
 - [ ] Vollständige Tastaturbedienung und Test mit Bildschirmleser (Zielgruppe: Sehschwäche, Legasthenie).
