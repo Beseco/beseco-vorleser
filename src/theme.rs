@@ -1,15 +1,34 @@
-//! Farben der Oberfläche, hell oder dunkel wie in Windows eingestellt.
+//! Farben der Oberfläche: hell oder dunkel, wie in Windows eingestellt oder fest gewählt.
+
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use windows::core::w;
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
 
 use crate::paint::{rgb, Color};
 
-/// Windows ist auf „Dunkel“ für Apps gestellt.
+/// Gewähltes Design: 0 = wie Windows, 1 = hell, 2 = dunkel.
+static CHOICE: AtomicU8 = AtomicU8::new(0);
+
+/// Werte für die Einstellung `theme`.
+pub const CHOICES: [&str; 3] = ["auto", "light", "dark"];
+
+/// Legt das Design fest („auto“, „light“ oder „dark“; Unbekanntes gilt als „auto“).
+pub fn set_choice(choice: &str) {
+    let index = CHOICES.iter().position(|c| *c == choice).unwrap_or(0);
+    CHOICE.store(index as u8, Ordering::Relaxed);
+}
+
+/// Die Oberfläche ist dunkel: fest gewählt oder weil Windows auf „Dunkel“ für Apps steht.
 pub fn dark() -> bool {
     // Im Testmodus lässt sich das Farbschema vorgeben, ohne Windows umzustellen.
     if let Some(theme) = std::env::var_os("VORLESER_TEST").and(std::env::var("VORLESER_THEME").ok()) {
         return theme == "dark";
+    }
+    match CHOICE.load(Ordering::Relaxed) {
+        1 => return false,
+        2 => return true,
+        _ => {}
     }
     let mut value = 1u32;
     let mut size = 4u32;

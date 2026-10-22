@@ -20,6 +20,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
 };
 
+use crate::theme;
 use crate::config::{
     format_hotkey, parse_hotkey, parse_mouse_trigger, MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN,
 };
@@ -60,6 +61,9 @@ const MOUSE_OPTIONS: [(&str, &str); 5] = [
     ("mouse.ctrl_alt", "Strg+Alt+Rechtsklick"),
 ];
 
+/// Anzeige der Werte von `theme::CHOICES`.
+const THEME_LABELS: [&str; 3] = ["settings.theme_auto", "settings.theme_light", "settings.theme_dark"];
+
 /// Anzeige und Wert für `language`: „automatisch“ und alle verfügbaren Sprachen.
 fn language_options() -> Vec<(String, String)> {
     let mut options = vec![(t("menu.language_auto").replace('&', ""), i18n::AUTO.to_string())];
@@ -85,6 +89,7 @@ pub struct Values {
     pub skip_page_edges: bool,
     pub page_edges_ai: bool,
     pub auto_language: bool,
+    pub theme: String,
 }
 
 /// Stimmenauswahl oben im Fenster. Sie wirkt sofort (damit die Hörprobe passt); „Abbrechen“
@@ -118,6 +123,7 @@ struct Controls {
     edges_ai: HWND,
     auto_language: HWND,
     language: HWND,
+    theme: HWND,
     font: HFONT,
 }
 
@@ -159,7 +165,7 @@ pub fn open(owner: Option<HWND>, values: Values, voices: Voices, on_save: fn(Val
         let dpi = GetDpiForSystem();
         let px = |value: i32| value * dpi as i32 / 96;
         let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
-        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(756) };
+        let mut frame = RECT { left: 0, top: 0, right: px(470), bottom: px(792) };
         let _ = AdjustWindowRectExForDpi(&mut frame, style, false, WS_EX_CONTROLPARENT, dpi);
         let Ok(window) = CreateWindowExW(
             WS_EX_CONTROLPARENT,
@@ -226,19 +232,21 @@ pub fn open(owner: Option<HWND>, values: Values, voices: Voices, on_save: fn(Val
         label(t("settings.menu_by_mouse"), 5);
         label(t("settings.volume"), 6);
         label("Sprache / Language:", 7);
-        label(t("settings.proxy"), 8);
+        label(t("settings.theme"), 8);
+        label(t("settings.proxy"), 9);
         // Die Reihenfolge der Erzeugung ist die Tab-Reihenfolge.
         let hotkeys = [hotkey(0), hotkey(1), hotkey(2), hotkey(3), hotkey(4)];
         let mouse = child(w!("COMBOBOX"), "", list, 0, field_x, OFFSET + 44 + 5 * row, field_width, 300);
         let volume = child(w!("msctls_trackbar32"), "", tab | TBS_AUTOTICKS, 0, field_x - 8, OFFSET + 42 + 6 * row, field_width + 16, 30);
         let language = child(w!("COMBOBOX"), "", list, 0, field_x, OFFSET + 44 + 7 * row, field_width, 300);
+        let theme = child(w!("COMBOBOX"), "", list, 0, field_x, OFFSET + 44 + 8 * row, field_width, 300);
         let proxy = CreateWindowExW(
             WS_EX_CLIENTEDGE,
             w!("EDIT"),
             &HSTRING::from(values.proxy.as_str()),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(ES_AUTOHSCROLL as u32),
             px(field_x),
-            px(OFFSET + 44 + 8 * row),
+            px(OFFSET + 44 + 9 * row),
             px(field_width),
             px(26),
             Some(window),
@@ -255,48 +263,48 @@ pub fn open(owner: Option<HWND>, values: Values, voices: Voices, on_save: fn(Val
             w!("BUTTON"),
             t("settings.clean_up_text_before"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, OFFSET + 46 + 9 * row, 438, 24,
+            0, label_x, OFFSET + 46 + 10 * row, 438, 24,
         );
         let update = child(
             w!("BUTTON"),
             t("settings.check_github_for_new"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, OFFSET + 46 + 10 * row, 438, 24,
+            0, label_x, OFFSET + 46 + 11 * row, 438, 24,
         );
         let remember = child(
             w!("BUTTON"),
             t("settings.remember_text"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, OFFSET + 42 + 11 * row, 438, 24,
+            0, label_x, OFFSET + 42 + 12 * row, 438, 24,
         );
         let pill = child(
             w!("BUTTON"),
             t("settings.close_to_pill"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, OFFSET + 38 + 12 * row, 438, 24,
+            0, label_x, OFFSET + 38 + 13 * row, 438, 24,
         );
         let edges = child(
             w!("BUTTON"),
             t("settings.skip_page_edges"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, OFFSET + 34 + 13 * row, 438, 24,
+            0, label_x, OFFSET + 34 + 14 * row, 438, 24,
         );
         let edges_ai = child(
             w!("BUTTON"),
             t("settings.page_edges_ai"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x + 22, OFFSET + 30 + 14 * row, 416, 24,
+            0, label_x + 22, OFFSET + 30 + 15 * row, 416, 24,
         );
         let auto_language = child(
             w!("BUTTON"),
             t("settings.auto_language"),
             tab | BS_AUTOCHECKBOX as u32,
-            0, label_x, OFFSET + 26 + 15 * row, 438, 24,
+            0, label_x, OFFSET + 26 + 16 * row, 438, 24,
         );
-        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, OFFSET + 626, 100, 30);
-        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, OFFSET + 626, 98, 30);
+        child(w!("BUTTON"), t("settings.save"), tab | BS_DEFPUSHBUTTON as u32, ID_SAVE, 248, OFFSET + 662, 100, 30);
+        child(w!("BUTTON"), t("settings.cancel"), tab, ID_CANCEL, 356, OFFSET + 662, 98, 30);
 
-        let c = Controls { window, voice, rate, hotkeys, mouse, volume, clean, update, language, proxy, remember, pill, edges, edges_ai, auto_language, font };
+        let c = Controls { window, voice, rate, hotkeys, mouse, volume, clean, update, language, proxy, remember, pill, edges, edges_ai, auto_language, theme, font };
         fill(&c, &values);
         fill_voices(&c, &voices.items, voices.selected);
         for label in &voices.rates {
@@ -407,6 +415,12 @@ unsafe fn fill(c: &Controls, values: &Values) {
         }
     }
     SendMessageW(c.language, CB_SETCURSEL, Some(WPARAM(current)), None);
+    for key in THEME_LABELS {
+        let label = HSTRING::from(t(key));
+        SendMessageW(c.theme, CB_ADDSTRING, None, Some(LPARAM(label.as_ptr() as isize)));
+    }
+    let current = theme::CHOICES.iter().position(|c| *c == values.theme).unwrap_or(0);
+    SendMessageW(c.theme, CB_SETCURSEL, Some(WPARAM(current)), None);
 }
 
 /// Liest ein Tastenkombinations-Feld; `Err`, wenn die gedrückte Taste nicht unterstützt wird.
@@ -466,6 +480,10 @@ unsafe fn save(c: &Controls) {
             let mut buffer = [0u16; 512];
             let len = GetWindowTextW(c.proxy, &mut buffer) as usize;
             String::from_utf16_lossy(&buffer[..len]).trim().to_string()
+        },
+        theme: {
+            let row = SendMessageW(c.theme, CB_GETCURSEL, None, None).0;
+            theme::CHOICES.get(row as usize).map_or(original.theme.clone(), |value| value.to_string())
         },
         language: {
             let row = SendMessageW(c.language, CB_GETCURSEL, None, None).0;

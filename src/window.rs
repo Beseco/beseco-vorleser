@@ -469,6 +469,19 @@ unsafe fn apply_look(c: &Controls) {
     let _ = InvalidateRect(Some(c.window), None, true);
 }
 
+/// Färbt das Fenster neu, wenn sich hell/dunkel geändert hat (in Windows oder in den Einstellungen).
+pub fn refresh_look() {
+    let Some(c) = controls() else { return };
+    if palette().dark != theme::dark() {
+        unsafe {
+            apply_look(&c);
+            for child in c.children() {
+                let _ = InvalidateRect(Some(child), None, true);
+            }
+        }
+    }
+}
+
 /// Setzt alle Beschriftungen in der eingestellten Sprache (beim Anlegen und nach einem Wechsel).
 pub fn relabel() {
     let Some(c) = controls() else { return };
@@ -1547,13 +1560,8 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 return result;
             }
             WM_SETTINGCHANGE => {
-                // Wechsel zwischen hellem und dunklem Modus.
-                if palette().dark != theme::dark() {
-                    apply_look(&c);
-                    for child in c.children() {
-                        let _ = InvalidateRect(Some(child), None, true);
-                    }
-                }
+                // Wechsel zwischen hellem und dunklem Modus in Windows.
+                refresh_look();
                 return DefWindowProcW(hwnd, msg, wparam, lparam);
             }
             WM_SETFOCUS => {

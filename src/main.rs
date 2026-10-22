@@ -465,6 +465,7 @@ impl App {
             skip_page_edges: self.cfg.skip_page_edges,
             page_edges_ai: self.cfg.page_edges_ai,
             auto_language: self.cfg.auto_language,
+            theme: self.cfg.theme.clone(),
         }
     }
 
@@ -483,6 +484,12 @@ impl App {
         self.cfg.skip_page_edges = values.skip_page_edges;
         self.cfg.page_edges_ai = values.page_edges_ai;
         self.cfg.auto_language = values.auto_language;
+        if values.theme != self.cfg.theme {
+            theme::set_choice(&values.theme);
+            window::refresh_look();
+            self.update_player();
+        }
+        self.cfg.theme = values.theme;
         documents::SKIP_PAGE_EDGES.store(values.skip_page_edges, Ordering::Relaxed);
         self.cfg.proxy = values.proxy;
         http::set_proxy(&self.cfg.proxy);
@@ -2752,8 +2759,10 @@ fn main() {
 
         // Die Sprache muss feststehen, bevor das Fenster seine Beschriftungen bekommt.
         // Im Testlauf lässt sich die Sprache über VORLESER_LANG vorgeben (für Screenshots).
-        let language = std::env::var("VORLESER_LANG").ok().filter(|_| test).unwrap_or(Config::load().language);
+        let saved = Config::load();
+        let language = std::env::var("VORLESER_LANG").ok().filter(|_| test).unwrap_or(saved.language);
         i18n::init(&language);
+        theme::set_choice(&saved.theme);
         window::enable_visual_styles();
         let dialog = window::create(tray::load_icon(), on_window_command, load_file).unwrap_or_default();
         // Tastenkürzel des Fensters; Strg+Z, X, C und V erledigt das Textfeld selbst.

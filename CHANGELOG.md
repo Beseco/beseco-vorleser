@@ -2,7 +2,11 @@
 
 Alle nennenswerten Änderungen an Hedgie (bis 0.5 „Vorleser“). Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## 0.6.1 – 2026-10-22
+## 0.6.2 – 2026-10-23
+
+- Neu: Design wählbar unter Extras → Einstellungen → Design: „Wie Windows“, „Hell“ oder „Dunkel“; wirkt sofort, ohne Neustart
+
+### Aus 0.6.1 (nicht einzeln veröffentlicht): Name überall
 
 - Windows zeigt nach dem Update auch bei „Öffnen mit“, in der Lautstärkemischung und in den Benachrichtigungseinstellungen „Hedgie“ statt „Vorleser“
 - Bilder auf der Projektseite zeigen Hedgie mit dem Igel-Symbol
