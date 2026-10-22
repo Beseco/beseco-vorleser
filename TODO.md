@@ -44,7 +44,7 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [ ] Lokal ganz ohne Ollama: Sprachmodell mit eigener Laufzeit (llama.cpp) wie bei Whisper.
 - [ ] Beseco-Konto als Anbieter (Anmeldung, Kontingente).
 - [x] Arbeitsbereich mit geteilter Ansicht, Zusammenfassen (kurz, Stichpunkte, ausführlich).
-- [ ] Antwort der KI während des Schreibens anzeigen (Streaming) und Abbrechen-Schaltfläche.
+- [x] Antwort der KI während des Schreibens anzeigen (Streaming) und Abbrechen-Schaltfläche.
 - [x] Diktieren mit lokalem Whisper, KI-Korrektur in Stufen.
 - [x] Diktier-Pille, Diktieren in jedes Programm, Mikrofonauswahl.
 - [x] Mini-Player beim Vorlesen, neues Design hell/dunkel.

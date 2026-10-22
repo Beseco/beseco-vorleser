@@ -208,18 +208,66 @@ impl Provider {
         Ok(models)
     }
 
-    /// Eine Anfrage an das Modell: Anweisung (`system`) und Inhalt (`user`).
-    pub fn chat(&self, system: &str, user: &str) -> Result<String, String> {
+    fn body(&self, system: &str, user: &str, stream: bool) -> String {
         // Denkende Modelle (qwen3.5 u. a.) schreiben sonst erst seitenweise Überlegungen: auf einem
         // PC ohne Grafikkarte Minuten statt Sekunden. Ollama nimmt den Wert auch bei anderen
         // Modellen an; Cloud-Anbieter bekommen ihn nicht, manche lehnen unbekannte Werte ab.
         let reasoning = if self.kind == Kind::Ollama { ",\"reasoning_effort\":\"none\"" } else { "" };
-        let body = format!(
-            "{{\"model\":{},\"temperature\":0.3,\"stream\":false{reasoning},\"messages\":[{{\"role\":\"system\",\"content\":{}}},{{\"role\":\"user\",\"content\":{}}}]}}",
+        format!(
+            "{{\"model\":{},\"temperature\":0.3,\"stream\":{stream}{reasoning},\"messages\":[{{\"role\":\"system\",\"content\":{}}},{{\"role\":\"user\",\"content\":{}}}]}}",
             json::string(self.model.trim()),
             json::string(system),
             json::string(user)
-        );
+        )
+    }
+
+    /// Wie [`Provider::chat`], liest die Antwort aber Stück für Stück: `on_text` erhält den bisher
+    /// geschriebenen Text und bricht mit `false` ab. Server ohne Streaming liefern alles auf einmal.
+    pub fn chat_stream(&self, system: &str, user: &str, mut on_text: impl FnMut(&str) -> bool) -> Result<String, String> {
+        let body = self.body(system, user, true);
+        let url = format!("{}/chat/completions", self.base());
+        let request = Request { method: "POST", url: &url, headers: self.headers(), body: Some(body.as_bytes()), timeout: 600_000 };
+        let mut text = String::new();
+        let mut raw = String::new();
+        let mut cancelled = false;
+        let status = http::stream(&request, |line| {
+            let payload = line.strip_prefix("data:").map(str::trim);
+            match payload {
+                Some("[DONE]") => return false,
+                Some(json_text) => {
+                    if let Some(piece) = json::parse(json_text).and_then(|v| v.path(&["choices", "0", "delta", "content"]).and_then(Value::as_str).map(str::to_string)) {
+                        text.push_str(&piece);
+                        if !on_text(&text) {
+                            cancelled = true;
+                            return false;
+                        }
+                    }
+                }
+                // Keine Server-Sent Events: die ganze Antwort (oder ein Fehler) als JSON.
+                None => {
+                    raw.push_str(line);
+                    raw.push('\n');
+                }
+            }
+            true
+        })?;
+        if cancelled {
+            return Err(t("err.cancelled").to_string());
+        }
+        if status != 200 {
+            return Err(Self::api_error(status, &raw));
+        }
+        if text.is_empty() {
+            let value = json::parse(&raw).ok_or_else(|| t("ai.err_answer").to_string())?;
+            text = value.path(&["choices", "0", "message", "content"]).and_then(Value::as_str).ok_or_else(|| t("ai.err_answer").to_string())?.to_string();
+            on_text(&text);
+        }
+        Ok(clean_answer(&text))
+    }
+
+    /// Eine Anfrage an das Modell: Anweisung (`system`) und Inhalt (`user`).
+    pub fn chat(&self, system: &str, user: &str) -> Result<String, String> {
+        let body = self.body(system, user, false);
         let url = format!("{}/chat/completions", self.base());
         let request = Request {
             method: "POST",
@@ -269,37 +317,41 @@ impl Provider {
         Ok(answer.lines().map(|l| l.trim().trim_start_matches("• ").to_string()).filter(|l| !l.is_empty() && l != "NONE").collect())
     }
 
-    /// Überarbeitet einen diktierten Text in der Stufe `mode`.
-    pub fn correct(&self, text: &str, mode: Correction, custom: &str) -> Result<String, String> {
+    /// Überarbeitet einen diktierten Text in der Stufe `mode`; `on_text` wie bei
+    /// [`Provider::chat_stream`].
+    pub fn correct(&self, text: &str, mode: Correction, custom: &str, on_text: impl FnMut(&str) -> bool) -> Result<String, String> {
         let system = format!(
             "You edit text that was dictated and converted by speech recognition. {} {} Output only the edited text.",
             mode.instruction(custom),
             BASE_RULES
         );
-        self.chat(&system, text)
+        self.chat_stream(&system, text, on_text)
     }
 
     /// Fasst `text` zusammen. Lange Texte werden zuerst teilweise verdichtet; `progress` erhält
     /// den gerade bearbeiteten Teil und die Zahl der Schritte.
-    pub fn summarize(&self, text: &str, mode: Summary, mut progress: impl FnMut(usize, usize)) -> Result<String, String> {
+    /// `on_text` erhält die entstehende Zusammenfassung (nur im letzten Schritt) und bricht mit
+    /// `false` ab; auch die Zwischenschritte prüfen es.
+    pub fn summarize(&self, text: &str, mode: Summary, mut progress: impl FnMut(usize, usize), mut on_text: impl FnMut(&str) -> bool) -> Result<String, String> {
         let parts = chunks(text, CHUNK);
         let system = format!("You summarize texts. {} {}", mode.instruction(), BASE_RULES);
         if parts.len() <= 1 {
             progress(1, 1);
-            return self.chat(&system, text);
+            return self.chat_stream(&system, text, on_text);
         }
         let steps = parts.len() + 1;
         let mut notes = Vec::new();
         for (i, part) in parts.iter().enumerate() {
             progress(i + 1, steps);
-            let note = self.chat(
+            let note = self.chat_stream(
                 &format!("You extract the key content of one part of a longer text: all important facts, names, numbers and statements, as compact notes. {BASE_RULES}"),
                 part,
+                |_| on_text(""),
             )?;
             notes.push(note);
         }
         progress(steps, steps);
-        self.chat(&format!("{system} The text consists of notes on consecutive parts of one document."), &notes.join("\n\n"))
+        self.chat_stream(&format!("{system} The text consists of notes on consecutive parts of one document."), &notes.join("\n\n"), on_text)
     }
 }
 
@@ -394,6 +446,32 @@ pub fn unprotect(stored: &str) -> String {
 mod tests {
     use super::*;
 
+    /// Echtes Ollama mit qwen3.5:4b: Antwort in Stücken, Abbrechen nach wenigen Stücken.
+    /// `cargo test streams_from_ollama -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn streams_from_ollama() {
+        let provider = Provider { kind: Kind::Ollama, url: "http://localhost:11434".into(), key: String::new(), model: "qwen3.5:4b".into() };
+        let start = Instant::now();
+        let mut updates = Vec::new();
+        let text = provider
+            .chat_stream("Answer in German.", "Nenne drei Sehenswürdigkeiten in Freising, je ein Satz.", |t| {
+                updates.push((start.elapsed().as_millis(), t.chars().count()));
+                true
+            })
+            .unwrap();
+        println!("{} Stücke, erstes nach {} ms, fertig nach {} ms", updates.len(), updates[0].0, start.elapsed().as_millis());
+        println!("{text}");
+        assert!(updates.len() > 5);
+        let mut count = 0;
+        let cancelled = provider.chat_stream("Answer in German.", "Erzähle eine lange Geschichte über Freising.", |_| {
+            count += 1;
+            count < 4
+        });
+        println!("Abbrechen: {cancelled:?} nach {count} Stücken");
+        assert!(cancelled.is_err());
+    }
+
     #[test]
     fn builds_correction_instructions() {
         assert!(Correction::Spelling.instruction("").contains("Keep the wording"));
@@ -445,6 +523,6 @@ mod tests {
         let provider = Provider { kind: Kind::from_code(&env("VORLESER_AI")), url: env("VORLESER_AI_URL"), key: env("VORLESER_AI_KEY"), model: env("VORLESER_AI_MODEL") };
         println!("Modelle: {:?}", provider.models());
         println!("Test: {:?}", provider.test());
-        println!("Zusammenfassung: {:?}", provider.summarize("Der Vorleser ist ein kleines Programm für Windows. Es liest markierten Text vor. Neu ist der Officeassistent, der Texte mit KI zusammenfasst.", Summary::Short, |_, _| {}));
+        println!("Zusammenfassung: {:?}", provider.summarize("Der Vorleser ist ein kleines Programm für Windows. Es liest markierten Text vor. Neu ist der Officeassistent, der Texte mit KI zusammenfasst.", Summary::Short, |_, _| {}, |_| true));
     }
 }

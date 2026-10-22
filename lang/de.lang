@@ -112,6 +112,7 @@ app.vorleser_reading = Vorleser – liest vor
 app.vorleser_reads_selected_text = Vorleser – {} liest markierten Text vor
 app.windows_speech_output_sapi = Die Windows-Sprachausgabe (SAPI) konnte nicht gestartet werden.
 assist.apply = Übernehmen
+assist.cancel = Abbrechen
 assist.cloud = Cloud
 assist.copy = Kopieren
 assist.correct = Korrigieren

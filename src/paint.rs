@@ -68,6 +68,7 @@ impl Color {
 
 /// Ausrichtung von Text im Rechteck.
 #[derive(Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 pub enum Align {
     Left,
     Center,
@@ -76,6 +77,7 @@ pub enum Align {
 
 /// Gezeichnete Symbole, alle als Linien und Flächen ohne Schriftart.
 #[derive(Clone, Copy, PartialEq, Debug)]
+#[allow(dead_code)]
 pub enum Icon {
     Mic,
     Stop,
@@ -324,21 +326,6 @@ impl Canvas<'_> {
         let wide: Vec<u16> = text.encode_utf16().collect();
         unsafe {
             self.rt.DrawText(&wide, &format, &rect(x, y, w, h), &brush, D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
-        }
-    }
-
-    /// Breite eines einzeiligen Textes.
-    pub fn text_width(&self, text: &str, size: f32, bold: bool) -> f32 {
-        let Some(format) = self.format(size, bold, Align::Left) else { return 0.0 };
-        let wide: Vec<u16> = text.encode_utf16().collect();
-        unsafe {
-            let Ok(layout) = self.f.dwrite.CreateTextLayout(&wide, &format, 10_000.0, 100.0) else { return 0.0 };
-            let mut metrics = DWRITE_TEXT_METRICS::default();
-            if layout.GetMetrics(&mut metrics).is_ok() {
-                metrics.widthIncludingTrailingWhitespace
-            } else {
-                0.0
-            }
         }
     }
 }

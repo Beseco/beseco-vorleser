@@ -119,6 +119,8 @@ const WM_OPEN_AI_SETUP: u32 = WM_APP + 16;
 const WM_TRANSCRIBE_PROGRESS: u32 = WM_APP + 17;
 /// Abschrift fertig, Ergebnis in `TRANSCRIPT`.
 const WM_TRANSCRIBE_DONE: u32 = WM_APP + 18;
+/// Die KI hat weitergeschrieben; der bisherige Text steht in `AI_PARTIAL`.
+const WM_AI_DELTA: u32 = WM_APP + 19;
 /// Kennung der Update-Meldung im Infobereich.
 const BALLOON_UPDATE: u32 = 1;
 /// Klick auf eine Meldung im Infobereich (NIN_BALLOONUSERCLICK).
@@ -298,6 +300,25 @@ static AI_CORRECTING: AtomicBool = AtomicBool::new(false);
 /// Erkannter Text des Diktats, der noch ins Fenster muss.
 static DICT_TEXTS: std::sync::Mutex<std::collections::VecDeque<String>> = std::sync::Mutex::new(std::collections::VecDeque::new());
 static DICT_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// „Abbrechen“ während die KI schreibt.
+static AI_CANCEL: AtomicBool = AtomicBool::new(false);
+/// Bisher geschriebener Text der KI (für die Anzeige beim Schreiben).
+static AI_PARTIAL: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+/// Liefert zum Streaming der KI: merkt sich den Text, meldet ihn höchstens alle 120 ms ans
+/// Fenster und sagt, ob weitergeschrieben werden soll.
+fn ai_streamer(hwnd: isize, show: bool) -> impl FnMut(&str) -> bool {
+    let mut last = std::time::Instant::now() - std::time::Duration::from_secs(1);
+    move |text: &str| {
+        if show && !text.is_empty() && last.elapsed() >= std::time::Duration::from_millis(120) {
+            last = std::time::Instant::now();
+            *AI_PARTIAL.lock().unwrap() = text.to_string();
+            unsafe {
+                let _ = PostMessageW(Some(HWND(hwnd as *mut _)), WM_AI_DELTA, WPARAM(0), LPARAM(0));
+            }
+        }
+        !AI_CANCEL.load(Ordering::Relaxed)
+    }
+}
 /// Die laufende Zusammenfassung ist ein Protokoll (wird nicht gleich vorgelesen).
 static AI_MINUTES: AtomicBool = AtomicBool::new(false);
 /// Eine Aufnahme wird gerade abgeschrieben; `TRANSCRIBE_CANCEL` bricht ab.
@@ -721,7 +742,7 @@ impl App {
         let custom = self.cfg.correction_custom.clone();
         let hwnd = self.hwnd.0 as isize;
         std::thread::spawn(move || {
-            *AI_RESULT.lock().unwrap() = Some(provider.correct(&text, mode, &custom));
+            *AI_RESULT.lock().unwrap() = Some(provider.correct(&text, mode, &custom, ai_streamer(hwnd, false)));
             unsafe {
                 let _ = PostMessageW(Some(HWND(hwnd as *mut _)), WM_AI_DONE, WPARAM(0), LPARAM(0));
             }
@@ -760,13 +781,16 @@ impl App {
             return true;
         }
         AI_CORRECTING.store(true, Ordering::Relaxed);
+        AI_CANCEL.store(false, Ordering::Relaxed);
         let mode = ai::Correction::from_code(&self.cfg.correction_mode);
         let custom = self.cfg.correction_custom.clone();
         let hwnd = self.hwnd.0 as isize;
         window::set_ai_busy(true);
         window::set_title(Some(t("app.ai_correcting")));
+        window::set_result_label("assist.corrected");
+        window::set_result_live("");
         std::thread::spawn(move || {
-            *AI_RESULT.lock().unwrap() = Some(provider.correct(&text, mode, &custom));
+            *AI_RESULT.lock().unwrap() = Some(provider.correct(&text, mode, &custom, ai_streamer(hwnd, true)));
             unsafe {
                 let _ = PostMessageW(Some(HWND(hwnd as *mut _)), WM_AI_DONE, WPARAM(0), LPARAM(0));
             }
@@ -812,14 +836,17 @@ impl App {
         let text = self.prepare(text);
         let mode = ai::Summary::from_code(&self.cfg.summary_mode);
         AI_MINUTES.store(mode == ai::Summary::Minutes, Ordering::Relaxed);
+        AI_CANCEL.store(false, Ordering::Relaxed);
         let hwnd = self.hwnd.0 as isize;
         window::set_ai_busy(true);
         window::set_title(Some(t("app.ai_working")));
+        window::set_result_label(if mode == ai::Summary::Minutes { "assist.minutes" } else { "assist.result" });
+        window::set_result_live("");
         std::thread::spawn(move || {
             let post = |msg: u32, wparam: usize, lparam: isize| unsafe {
                 let _ = PostMessageW(Some(HWND(hwnd as *mut _)), msg, WPARAM(wparam), LPARAM(lparam));
             };
-            let result = provider.summarize(&text, mode, |step, steps| post(WM_AI_PROGRESS, step, steps as isize));
+            let result = provider.summarize(&text, mode, |step, steps| post(WM_AI_PROGRESS, step, steps as isize), ai_streamer(hwnd, true));
             *AI_RESULT.lock().unwrap() = Some(result);
             post(WM_AI_DONE, 0, 0);
         });
@@ -850,6 +877,12 @@ impl App {
                 window::set_result_label("assist.result");
                 window::set_text_in(window::Pane::Result, &to_crlf(&summary));
                 self.speak_pane(window::Pane::Result);
+            }
+            // Abgebrochen: das bis dahin Geschriebene bleibt stehen.
+            Some(Err(error)) if error == t("err.cancelled") => {
+                AI_FOR_PROGRAM.store(false, Ordering::Relaxed);
+                AI_MINUTES.store(false, Ordering::Relaxed);
+                dictbar::set_state(dictbar::State::Finished);
             }
             Some(Err(error)) => {
                 AI_FOR_PROGRAM.store(false, Ordering::Relaxed);
@@ -1719,6 +1752,7 @@ fn run(cmd: u32, selection: Option<String>) {
                 open_ai_setup();
             }
         }
+        CMD_SUMMARIZE | CMD_CORRECT if AI_BUSY.load(Ordering::Relaxed) => AI_CANCEL.store(true, Ordering::Relaxed),
         CMD_SUMMARIZE => {
             if with_app(App::summarize) == Some(false) {
                 open_ai_setup();
@@ -2516,6 +2550,11 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             window::set_title(Some(&t("audio.progress").replace("{}", &wparam.0.min(100).to_string())));
         }
         WM_TRANSCRIBE_DONE => on_transcribe_done(),
+        WM_AI_DELTA => {
+            if AI_BUSY.load(Ordering::Relaxed) && !AI_FOR_PROGRAM.load(Ordering::Relaxed) {
+                window::set_result_live(&to_crlf(&ai::clean_answer(&AI_PARTIAL.lock().unwrap())));
+            }
+        }
         WM_OPEN_AI_SETUP => {
             window::show();
             open_ai_setup();

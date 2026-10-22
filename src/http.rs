@@ -16,7 +16,7 @@ use windows::core::{w, HSTRING, PCWSTR};
 use crate::i18n::t;
 use windows::Win32::Networking::WinHttp::{
     WinHttpCloseHandle, WinHttpConnect, WinHttpGetProxyForUrl, WinHttpOpen, WinHttpOpenRequest,
-    WinHttpQueryAuthSchemes, WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse,
+    WinHttpQueryAuthSchemes, WinHttpQueryDataAvailable, WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse,
     WinHttpSendRequest, WinHttpSetCredentials, WinHttpSetOption, WinHttpSetTimeouts,
     INTERNET_DEFAULT_HTTPS_PORT, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_ACCESS_TYPE_NAMED_PROXY,
     WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_AUTH_SCHEME_NEGOTIATE, WINHTTP_AUTH_SCHEME_NTLM,
@@ -267,7 +267,15 @@ pub fn stream(request: &Request, mut on_line: impl FnMut(&str) -> bool) -> Resul
     let mut pending = Vec::new();
     let mut chunk = [0u8; 16384];
     loop {
-        let n = read(&response, &mut chunk).ok_or_else(|| t("err.connection_lost").to_string())?;
+        // Nur lesen, was schon da ist: sonst wartet Windows, bis der Puffer voll ist, und die
+        // Stücke kämen erst am Ende an.
+        let mut available = 0u32;
+        unsafe { WinHttpQueryDataAvailable(response.request.0, &mut available) }.map_err(|_| t("err.connection_lost").to_string())?;
+        if available == 0 {
+            break;
+        }
+        let want = (available as usize).min(chunk.len());
+        let n = read(&response, &mut chunk[..want]).ok_or_else(|| t("err.connection_lost").to_string())?;
         if n == 0 {
             break;
         }

@@ -113,6 +113,7 @@ app.vorleser_reading = Vorleser – reading
 app.vorleser_reads_selected_text = Vorleser – {} reads selected text
 app.windows_speech_output_sapi = Windows speech output (SAPI) could not be started.
 assist.apply = Use
+assist.cancel = Cancel
 assist.cloud = Cloud
 assist.copy = Copy
 assist.correct = Correct

@@ -2,6 +2,11 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.4 – unveröffentlicht
+
+- Die KI schreibt live: Zusammenfassung, Protokoll und Korrektur erscheinen rechts Wort für Wort, während sie entstehen
+- Während die KI arbeitet, wird „Zusammenfassen“ bzw. „Korrigieren“ zu „Abbrechen“; das bis dahin Geschriebene bleibt stehen
+
 ## 0.5.3 – unveröffentlicht
 
 - PDFs mit Textebene werden direkt gelesen: viel schneller und zeichengenau (Umlaute, Zahlen, Fachbegriffe); gescannte Seiten gehen weiter über die Texterkennung

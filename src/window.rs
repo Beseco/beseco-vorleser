@@ -606,10 +606,14 @@ pub fn set_ai_ready(ready: bool) {
 
 fn show_ai_state(c: &Controls) {
     let ready = AI_READY.with(|r| r.get());
-    let usable = ready && !AI_BUSY.with(|b| b.get());
+    let busy = AI_BUSY.with(|b| b.get());
+    // Während die KI schreibt, bricht derselbe Knopf ab.
+    set_label(c.summarize, if busy { t("assist.cancel") } else { t("assist.summarize") });
+    set_label(c.correct, if busy { t("assist.cancel") } else { t("assist.correct") });
     unsafe {
         for control in [c.summarize, c.correct] {
-            let _ = EnableWindow(control, usable);
+            let _ = EnableWindow(control, ready);
+            let _ = InvalidateRect(Some(control), None, false);
         }
         for control in c.chips.iter().chain([&c.read_result, &c.copy, &c.apply]) {
             let _ = EnableWindow(*control, ready);
@@ -764,6 +768,19 @@ pub fn set_ai_busy(busy: bool) {
     AI_BUSY.with(|b| b.set(busy));
     if let Some(c) = controls() {
         show_ai_state(&c);
+    }
+}
+
+/// Zeigt die entstehende Antwort der KI rechts und rollt ans Ende.
+pub fn set_result_live(text: &str) {
+    if let Some(c) = controls() {
+        let text = HSTRING::from(text);
+        unsafe {
+            let _ = SetWindowTextW(c.result, &text);
+            let len = GetWindowTextLengthW(c.result) as usize;
+            SendMessageW(c.result, EM_SETSEL, Some(WPARAM(len)), Some(LPARAM(len as isize)));
+            SendMessageW(c.result, EM_SCROLLCARET, None, None);
+        }
     }
 }
 
@@ -1268,9 +1285,10 @@ unsafe fn draw_button(c: &Controls, item: &DRAWITEMSTRUCT) {
             }
             Kind::Primary => {
                 let recording = hwnd == c.dictate && DICTATING.with(|d| d.get());
-                let fill = if disabled { p.raised } else if recording { p.record } else { p.accent };
+                let cancelling = (hwnd == c.summarize || hwnd == c.correct) && AI_BUSY.with(|b| b.get());
+                let fill = if disabled { p.raised } else if recording || cancelling { p.record } else { p.accent };
                 canvas.fill_round(0.0, 0.0, w, h, 10.0, press(fill));
-                let color = if disabled { p.muted } else if recording { paint::rgb(0xFFFFFF) } else { p.on_accent };
+                let color = if disabled { p.muted } else if recording || cancelling { paint::rgb(0xFFFFFF) } else { p.on_accent };
                 if hwnd == c.dictate {
                     let label_w = paint::measure(&text, 14.0, true);
                     let start = (w - label_w - 28.0) / 2.0;
