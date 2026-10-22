@@ -2,6 +2,10 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.7 – 2026-10-22
+
+- Mini-Pille und Mini-Player erscheinen auch, wenn das Vorleser-Fenster nur minimiert wird (nicht nur beim Schließen)
+
 ## 0.5.6 – 2026-10-22
 
 - Mini-Pille: wandert mit auf den Bildschirm, auf dem gerade gearbeitet wird; lässt sich mit der Maus an eine andere Stelle ziehen und bleibt dort (Rechtsklick → Position zurücksetzen); eingeklappt besser zu sehen (heller Rand, blauer Punkt)

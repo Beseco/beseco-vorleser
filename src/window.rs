@@ -834,6 +834,11 @@ pub fn visible() -> Option<HWND> {
     unsafe { IsWindowVisible(c.window).as_bool().then_some(c.window) }
 }
 
+/// Ist das Fenster offen und nicht minimiert? (Sonst übernehmen Mini-Pille und Mini-Player.)
+pub fn is_open() -> bool {
+    controls().is_some_and(|c| unsafe { IsWindowVisible(c.window).as_bool() && !IsIconic(c.window).as_bool() })
+}
+
 /// Zeigt das Fenster und holt es nach vorn.
 pub fn show() {
     let Some(c) = controls() else { return };
@@ -1498,6 +1503,8 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     unsafe {
         match msg {
             WM_SIZE => {
+                // Minimieren und Wiederherstellen zählt wie Schließen und Öffnen (Mini-Pille).
+                let _ = PostMessageW(Some(hwnd), WM_VISIBILITY, WPARAM(0), LPARAM(0));
                 layout(&c);
                 let _ = InvalidateRect(Some(hwnd), None, true);
             }

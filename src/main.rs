@@ -497,7 +497,7 @@ impl App {
     /// Mini-Pille am Bildschirmrand: sichtbar, solange das Fenster zu ist und weder Diktat noch
     /// Mini-Player laufen (wenn so eingestellt).
     fn update_pill(&self) {
-        let show = self.cfg.close_to_pill && window::visible().is_none() && !dictbar::visible() && !player::visible();
+        let show = self.cfg.close_to_pill && !window::is_open() && !dictbar::visible() && !player::visible();
         if !show {
             minipill::hide();
             return;
@@ -965,7 +965,7 @@ impl App {
         if !self.player_on {
             return;
         }
-        if self.state == State::Idle || window::visible().is_some() {
+        if self.state == State::Idle || window::is_open() {
             self.player_on = false;
             player::hide();
             self.update_pill();
@@ -1092,7 +1092,7 @@ impl App {
         // geschlossenem Fenster begleitet ihn der Mini-Player.
         window::set_text(&text);
         let follow = Follow::new(0, text.encode_utf16().count() as u32, (0, 0));
-        self.player_on = window::visible().is_none();
+        self.player_on = !window::is_open();
         self.start(text, Some(follow));
         self.update_player();
     }
