@@ -58,8 +58,8 @@ thread_local! {
 const WIDTH: f32 = 380.0;
 const HEIGHT: f32 = 124.0;
 /// Eingeklappt: nur ein Strich.
-const SMALL_W: f32 = 46.0;
-const SMALL_H: f32 = 10.0;
+const SMALL_W: f32 = 64.0;
+const SMALL_H: f32 = 14.0;
 /// Aufgeklappt: zwei runde Knöpfe.
 const BIG_W: f32 = 104.0;
 const BIG_H: f32 = 44.0;
@@ -165,9 +165,11 @@ fn draw(c: &Canvas, pill: &Pill) {
     let p = theme::glass();
     let (x, y, w, h) = body(pill.expanded);
     if !pill.expanded {
-        c.shadow(x, y, w, h, h / 2.0, 4.0, 0.3);
+        // Auf jedem Hintergrund gut zu sehen: heller Rand und ein Punkt in Akzentfarbe.
+        c.shadow(x, y, w, h, h / 2.0, 4.0, 0.35);
         c.fill_round(x, y, w, h, h / 2.0, p.ground);
-        c.stroke_round(x, y, w, h, h / 2.0, p.border.alpha(0.9), 1.0);
+        c.stroke_round(x, y, w, h, h / 2.0, paint::rgb(0xC9CDD3).alpha(0.9), 1.2);
+        c.circle(x + w / 2.0, y + h / 2.0, 2.6, p.accent);
         return;
     }
     // Hinweis darüber: was der Knopf unter der Maus tut, sonst die Tastenkombinationen.
