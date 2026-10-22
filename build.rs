@@ -34,9 +34,9 @@ BEGIN
     BLOCK "040704B0"
     BEGIN
       VALUE "CompanyName", "beseco - Beubl IT Systems"
-      VALUE "FileDescription", "Vorleser"
+      VALUE "FileDescription", "Hedgie"
       VALUE "FileVersion", "{version}"
-      VALUE "ProductName", "Vorleser"
+      VALUE "ProductName", "Hedgie"
       VALUE "ProductVersion", "{version}"
       VALUE "LegalCopyright", "Florian Beubl, beseco - Beubl IT Systems"
       VALUE "OriginalFilename", "vorleser.exe"

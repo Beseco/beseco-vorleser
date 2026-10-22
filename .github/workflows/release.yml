@@ -49,7 +49,7 @@ jobs:
           $version = $tag.TrimStart('v')
           $log = Get-Content CHANGELOG.md -Raw
           $section = [regex]::Match($log, "(?ms)^## $([regex]::Escape($version))\b[^\n]*\n(.*?)(?=^## |\z)").Groups[1].Value.Trim()
-          if (-not $section) { $section = "Vorleser $version" }
+          if (-not $section) { $section = "Hedgie $version" }
           $notes = "$section`n`nDer Installer ist nicht signiert; Windows SmartScreen fragt deshalb einmal nach (Weitere Informationen, dann Trotzdem ausführen)."
           Set-Content notes.md $notes -Encoding utf8
           gh release view $tag *> $null
@@ -57,5 +57,5 @@ jobs:
             gh release upload $tag (Get-ChildItem dist/*).FullName --clobber
             gh release edit $tag --notes-file notes.md
           } else {
-            gh release create $tag (Get-ChildItem dist/*).FullName --title "Vorleser $version" --notes-file notes.md
+            gh release create $tag (Get-ChildItem dist/*).FullName --title "Hedgie $version" --notes-file notes.md
           }

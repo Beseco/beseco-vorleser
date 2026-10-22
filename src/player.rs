@@ -162,7 +162,7 @@ fn create() -> Option<HWND> {
         CreateWindowExW(
             WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
             class.lpszClassName,
-            w!("Vorleser – Wiedergabe"),
+            w!("Hedgie – Wiedergabe"),
             WS_POPUP,
             0,
             0,

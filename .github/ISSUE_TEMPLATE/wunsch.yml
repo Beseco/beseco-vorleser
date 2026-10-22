@@ -1,5 +1,5 @@
 name: Wunsch / Feature request
-description: Eine Idee, was Vorleser zusätzlich können sollte. / An idea for something new.
+description: Eine Idee, was Hedgie zusätzlich können sollte. / An idea for something new.
 labels: ["Wunsch"]
 body:
   - type: textarea

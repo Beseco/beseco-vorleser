@@ -278,7 +278,7 @@ fn remove_selected(c: &Controls) {
     let voice = &MODELS[index];
     let question = HSTRING::from(t("dict.remove_question"));
     unsafe {
-        if MessageBoxW(Some(c.window), &question, w!("Vorleser"), MB_YESNO | MB_ICONQUESTION) != IDYES {
+        if MessageBoxW(Some(c.window), &question, w!("Hedgie"), MB_YESNO | MB_ICONQUESTION) != IDYES {
             return;
         }
     }

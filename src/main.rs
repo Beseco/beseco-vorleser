@@ -83,7 +83,9 @@ use config::Config;
 use i18n::t;
 use tts::Tts;
 
-const APP_NAME: PCWSTR = w!("Vorleser");
+const APP_NAME: PCWSTR = w!("Hedgie");
+/// Name des Autostart-Eintrags; bleibt aus der Zeit als „Vorleser“, damit vorhandene Einträge gelten.
+const RUN_VALUE: PCWSTR = w!("Vorleser");
 const RUN_KEY: PCWSTR = w!(r"Software\Microsoft\Windows\CurrentVersion\Run");
 
 const WM_TRAY: u32 = WM_APP + 1;
@@ -340,7 +342,7 @@ static TRANSCRIPT: std::sync::Mutex<Option<Result<(String, f64, Vec<(f64, String
 /// Die laufende Korrektur gilt einem Diktat in einem anderen Programm.
 static AI_FOR_PROGRAM: AtomicBool = AtomicBool::new(false);
 /// Name in der Diktier-Pille, wenn ins eigene Fenster diktiert wird.
-const APP_NAME_TEXT: &str = "Vorleser";
+const APP_NAME_TEXT: &str = "Hedgie";
 
 /// Wohin ein Diktat schreibt.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -719,7 +721,7 @@ impl App {
         self.show_assistant();
         dictbar::set_state(if self.flush_dictation() { dictbar::State::Finished } else { dictbar::State::Waiting });
         if let Some(error) = DICT_ERROR.lock().unwrap().take() {
-            tray::balloon(self.hwnd, "Vorleser", &error);
+            tray::balloon(self.hwnd, APP_NAME_TEXT, &error);
         }
         let got_text = DICT_GOT_TEXT.swap(false, Ordering::Relaxed);
         if std::mem::take(&mut self.dict_correct_pending) {
@@ -768,7 +770,7 @@ impl App {
     fn replace_in_program(&mut self, corrected: &str) {
         let DictTarget::Program(target) = self.dict_target else { return };
         if typing::foreground().0 as isize != target || !self.dict_waiting.is_empty() {
-            tray::balloon(self.hwnd, "Vorleser", t("dictbar.not_replaced"));
+            tray::balloon(self.hwnd, APP_NAME_TEXT, t("dictbar.not_replaced"));
             return;
         }
         let corrected = corrected.trim();
@@ -784,11 +786,11 @@ impl App {
     fn correct(&mut self) -> bool {
         let provider = self.provider();
         if !provider.is_ready() {
-            tray::balloon(self.hwnd, "Vorleser", t("app.ai_not_ready"));
+            tray::balloon(self.hwnd, APP_NAME_TEXT, t("app.ai_not_ready"));
             return false;
         }
         let Some(text) = window::text() else {
-            tray::balloon(self.hwnd, "Vorleser", t("app.text_field_empty"));
+            tray::balloon(self.hwnd, APP_NAME_TEXT, t("app.text_field_empty"));
             return true;
         };
         if AI_BUSY.swap(true, Ordering::Relaxed) {
@@ -836,11 +838,11 @@ impl App {
     fn summarize(&mut self) -> bool {
         let provider = self.provider();
         if !provider.is_ready() {
-            tray::balloon(self.hwnd, "Vorleser", t("app.ai_not_ready"));
+            tray::balloon(self.hwnd, APP_NAME_TEXT, t("app.ai_not_ready"));
             return false;
         }
         let Some(text) = window::text() else {
-            tray::balloon(self.hwnd, "Vorleser", t("app.text_field_empty"));
+            tray::balloon(self.hwnd, APP_NAME_TEXT, t("app.text_field_empty"));
             return true;
         };
         if AI_BUSY.swap(true, Ordering::Relaxed) {
@@ -1056,7 +1058,7 @@ impl App {
                 self.cfg.voice = id;
                 self.cfg.save();
             } else {
-                tray::balloon(self.hwnd, "Vorleser", t("app.voice_cannot_used"));
+                tray::balloon(self.hwnd, APP_NAME_TEXT, t("app.voice_cannot_used"));
             }
         }
         self.sync_window();
@@ -1090,7 +1092,7 @@ impl App {
     /// nichts vorzulesen gibt. Ist das Fenster offen, erscheint der Text dort zum Mitlesen.
     fn speak(&mut self, text: Option<String>, hint: &str) {
         let Some(text) = text else {
-            tray::balloon(self.hwnd, "Vorleser", hint);
+            tray::balloon(self.hwnd, APP_NAME_TEXT, hint);
             return;
         };
         self.end_follow();
@@ -1137,7 +1139,7 @@ impl App {
             (text, Follow::new(0, len, (0, 0)))
         };
         if text.trim().is_empty() {
-            tray::balloon(self.hwnd, "Vorleser", t("app.text_field_empty"));
+            tray::balloon(self.hwnd, APP_NAME_TEXT, t("app.text_field_empty"));
             return;
         }
         self.start(text, Some(follow.in_pane(pane)));
@@ -1300,7 +1302,7 @@ impl App {
                 // Nach einem Satzsprung zeigt der Player gleich den neuen Satz.
                 self.update_player();
             }
-            Err(_) => tray::balloon(self.hwnd, "Vorleser", t("app.speech_output_failed")),
+            Err(_) => tray::balloon(self.hwnd, APP_NAME_TEXT, t("app.speech_output_failed")),
         }
     }
 
@@ -1344,7 +1346,7 @@ impl App {
                 return;
             }
             let hint = t("app.voice_could_not_speak");
-            tray::balloon(self.hwnd, "Vorleser", hint);
+            tray::balloon(self.hwnd, APP_NAME_TEXT, hint);
         }
         self.end_follow();
         self.restore_voice();
@@ -1689,7 +1691,7 @@ unsafe fn item(menu: HMENU, id: u32, text: &str, enabled: bool, checked: bool) {
 
 fn autostart_enabled() -> bool {
     unsafe {
-        RegGetValueW(HKEY_CURRENT_USER, RUN_KEY, APP_NAME, RRF_RT_REG_SZ, None, None, None)
+        RegGetValueW(HKEY_CURRENT_USER, RUN_KEY, RUN_VALUE, RRF_RT_REG_SZ, None, None, None)
             == ERROR_SUCCESS
     }
 }
@@ -1702,7 +1704,7 @@ fn autostart_command() -> Option<String> {
         let status = RegGetValueW(
             HKEY_CURRENT_USER,
             RUN_KEY,
-            APP_NAME,
+            RUN_VALUE,
             RRF_RT_REG_SZ,
             None,
             Some(buffer.as_mut_ptr() as *mut _),
@@ -1719,7 +1721,7 @@ fn autostart_command() -> Option<String> {
 fn set_autostart(enable: bool) {
     unsafe {
         if !enable {
-            let _ = RegDeleteKeyValueW(HKEY_CURRENT_USER, RUN_KEY, APP_NAME);
+            let _ = RegDeleteKeyValueW(HKEY_CURRENT_USER, RUN_KEY, RUN_VALUE);
             return;
         }
         let Ok(exe) = std::env::current_exe() else { return };
@@ -1728,7 +1730,7 @@ fn set_autostart(enable: bool) {
         let _ = RegSetKeyValueW(
             HKEY_CURRENT_USER,
             RUN_KEY,
-            APP_NAME,
+            RUN_VALUE,
             REG_SZ.0,
             Some(value.as_ptr() as *const _),
             bytes,
@@ -1895,8 +1897,8 @@ fn on_ocr_done() {
     let result = RECOGNIZED.lock().unwrap().take();
     with_app(|app| match result {
         Some(Ok(text)) if !text.trim().is_empty() => app.speak(Some(text.trim().to_string()), ""),
-        Some(Err(error)) => tray::balloon(app.hwnd, "Vorleser", &error),
-        _ => tray::balloon(app.hwnd, "Vorleser", t("app.no_text_recognized")),
+        Some(Err(error)) => tray::balloon(app.hwnd, APP_NAME_TEXT, &error),
+        _ => tray::balloon(app.hwnd, APP_NAME_TEXT, t("app.no_text_recognized")),
     });
 }
 
@@ -2398,7 +2400,7 @@ fn save_audio() {
         return;
     };
     let mut file = [0u16; 520];
-    for (slot, unit) in file.iter_mut().zip("Vorleser.mp3".encode_utf16()) {
+    for (slot, unit) in file.iter_mut().zip("Hedgie.mp3".encode_utf16()) {
         *slot = unit;
     }
     let mut dialog = OPENFILENAMEW {
@@ -2482,7 +2484,7 @@ fn on_update_found() {
 /// Version und Hersteller. Läuft als eigenes Meldungsfenster, deshalb außerhalb von `with_app`.
 fn show_about() {
     let body = t("app.reads_selected_text_aloud");
-    let text = HSTRING::from(format!("Vorleser {}\n{body}", env!("CARGO_PKG_VERSION")));
+    let text = HSTRING::from(format!("Hedgie {}\n{body}", env!("CARGO_PKG_VERSION")));
     let title = HSTRING::from(t("app.about_vorleser_2"));
     unsafe {
         MessageBoxW(window::visible(), &text, &title, MB_ICONINFORMATION | MB_SETFOREGROUND);

@@ -317,7 +317,7 @@ pub fn create(icon: HICON, on_command: fn(u32, u32), on_drop: fn(String)) -> Opt
         let window = CreateWindowExW(
             WS_EX_CONTROLPARENT | WS_EX_ACCEPTFILES,
             class.lpszClassName,
-            w!("Vorleser"),
+            w!("Hedgie"),
             WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -860,7 +860,7 @@ pub fn hide() {
 /// Fenstertitel, z. B. während eine Audiodatei geschrieben wird; `None` = „Vorleser“.
 pub fn set_title(title: Option<&str>) {
     if let Some(c) = controls() {
-        set_label(c.window, title.unwrap_or("Vorleser"));
+        set_label(c.window, title.unwrap_or("Hedgie"));
     }
 }
 

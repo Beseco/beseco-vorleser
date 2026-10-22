@@ -284,7 +284,7 @@ fn remove_selected(c: &Controls) {
     let voice = &CATALOG[index];
     let question = HSTRING::from(t("ai.remove_ai_voice"));
     unsafe {
-        if MessageBoxW(Some(c.window), &question, w!("Vorleser"), MB_YESNO | MB_ICONQUESTION) != IDYES {
+        if MessageBoxW(Some(c.window), &question, w!("Hedgie"), MB_YESNO | MB_ICONQUESTION) != IDYES {
             return;
         }
     }

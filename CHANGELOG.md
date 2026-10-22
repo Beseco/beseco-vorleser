@@ -1,8 +1,13 @@
 # Änderungsprotokoll
 
-Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
+Alle nennenswerten Änderungen an Hedgie (bis 0.5 „Vorleser“). Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## 0.5.9 – 2026-10-22
+## 0.6.0 – 2026-10-22
+
+- **Aus Vorleser wird Hedgie.** Das Programm kann inzwischen mehr als vorlesen: diktieren, korrigieren, zusammenfassen und Besprechungen protokollieren. Der neue Name gehört zum Igel mit Kopfhörern, dem neuen Programmsymbol
+- Einstellungen, KI-Zugang, heruntergeladene Stimmen und Autostart bleiben beim Update erhalten; die alte Verknüpfung „Vorleser“ im Startmenü wird durch „Hedgie“ ersetzt
+
+### Aus 0.5.9 (nicht einzeln veröffentlicht): neues Symbol
 
 - Neues Programmsymbol: der Vorleser-Igel mit Kopfhörern (Infobereich, Fenster, Installer); Logo und Maskottchen liegen in `docs/brand`
 

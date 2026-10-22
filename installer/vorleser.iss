@@ -1,4 +1,4 @@
-; Installer fuer Vorleser (Inno Setup 6). Gebaut wird ueber release.ps1, das Version und
+; Installer fuer Hedgie, frueher Vorleser (Inno Setup 6). Gebaut wird ueber release.ps1, das Version und
 ; Quelldatei uebergibt. Diese Datei bleibt bewusst reines ASCII (keine Umlaute), damit die
 ; Zeichenkodierung keine Rolle spielt.
 
@@ -12,9 +12,9 @@
 [Setup]
 ; Die AppId darf sich nie aendern, sonst erkennt ein Update die vorhandene Installation nicht.
 AppId={{8E2B6C4A-5D1F-4B7A-9C3E-2F6A1D0B7E54}
-AppName=Vorleser
+AppName=Hedgie
 AppVersion={#AppVersion}
-AppVerName=Vorleser {#AppVersion}
+AppVerName=Hedgie {#AppVersion}
 AppPublisher=beseco - Beubl IT Systems
 AppPublisherURL=https://beseco.com
 AppSupportURL=https://beseco.com
@@ -23,14 +23,14 @@ VersionInfoVersion={#AppVersion}
 VersionInfoCompany=beseco - Beubl IT Systems
 ; Installation nur fuer den angemeldeten Benutzer, ohne Administratorrechte.
 PrivilegesRequired=lowest
-DefaultDirName={autopf}\Vorleser
+DefaultDirName={autopf}\Hedgie
 DisableProgramGroupPage=yes
 DisableDirPage=auto
 OutputDir=..\dist
-OutputBaseFilename=Vorleser-Setup-{#AppVersion}
+OutputBaseFilename=Hedgie-Setup-{#AppVersion}
 SetupIconFile=..\res\vorleser.ico
 UninstallDisplayIcon={app}\vorleser.exe
-UninstallDisplayName=Vorleser
+UninstallDisplayName=Hedgie
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -44,10 +44,10 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [CustomMessages]
-german.Autostart=Vorleser mit Windows starten
-english.Autostart=Start Vorleser with Windows
-german.StartNow=Vorleser jetzt starten
-english.StartNow=Start Vorleser now
+german.Autostart=Hedgie mit Windows starten
+english.Autostart=Start Hedgie with Windows
+german.StartNow=Hedgie jetzt starten
+english.StartNow=Start Hedgie now
 german.Assistant=Beseco Officeassistent einschalten (KI und Diktieren; beim ersten Start hilft ein Assistent beim Einrichten, spaeter unter Extras umschaltbar)
 english.Assistant=Turn on Beseco Office Assistant (AI and dictation; a wizard helps with the setup on first start, can be changed later under Tools)
 
@@ -60,16 +60,21 @@ Name: "assistant"; Description: "{cm:Assistant}"; Flags: unchecked
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "vorleser.exe"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
+[InstallDelete]
+; Verknuepfungen aus der Zeit, als das Programm noch "Vorleser" hiess.
+Type: files; Name: "{autoprograms}\Vorleser.lnk"
+Type: files; Name: "{autodesktop}\Vorleser.lnk"
+
 [Icons]
-Name: "{autoprograms}\Vorleser"; Filename: "{app}\vorleser.exe"
-Name: "{autodesktop}\Vorleser"; Filename: "{app}\vorleser.exe"; Tasks: desktopicon
+Name: "{autoprograms}\Hedgie"; Filename: "{app}\vorleser.exe"
+Name: "{autodesktop}\Hedgie"; Filename: "{app}\vorleser.exe"; Tasks: desktopicon
 
 [Registry]
 ; Derselbe Eintrag, den das Programm ueber "Mit Windows starten" selbst setzt.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Vorleser"; ValueData: """{app}\vorleser.exe"" --tray"; Tasks: autostart
 
 ; "Oeffnen mit" im Explorer: Vorleser erscheint fuer diese Dateitypen in der Auswahl.
-Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "Vorleser"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "Hedgie"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\shell\open\command"; ValueType: string; ValueData: """{app}\vorleser.exe"" ""%1"""
 Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".txt"; ValueData: ""
 Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".docx"; ValueData: ""

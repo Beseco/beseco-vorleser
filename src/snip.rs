@@ -82,7 +82,7 @@ pub fn start(on_done: fn(Option<Selection>)) {
         let Ok(window) = CreateWindowExW(
             WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
             w!("VorleserAusschnitt"),
-            w!("Vorleser"),
+            w!("Hedgie"),
             WS_POPUP,
             origin.0,
             origin.1,

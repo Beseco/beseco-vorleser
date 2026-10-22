@@ -436,7 +436,7 @@ unsafe fn save(c: &Controls) {
             Ok(text) => hotkeys.push(text),
             Err(()) => {
                 let text = t("settings.key_not_supported_possible");
-                MessageBoxW(Some(c.window), &HSTRING::from(text), w!("Vorleser"), MB_ICONWARNING);
+                MessageBoxW(Some(c.window), &HSTRING::from(text), w!("Hedgie"), MB_ICONWARNING);
                 let _ = SetFocus(Some(*control));
                 return;
             }

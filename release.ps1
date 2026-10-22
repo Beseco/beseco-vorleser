@@ -1,4 +1,4 @@
-# Baut die Veröffentlichung:  dist\Vorleser-Setup-<Version>.exe  und  dist\Vorleser-<Version>-portable.zip
+# Baut die Veröffentlichung:  dist\Hedgie-Setup-<Version>.exe  und  dist\Hedgie-<Version>-portable.zip
 # Aufruf im Projektordner:  powershell -ExecutionPolicy Bypass -File release.ps1
 # Die Version kommt aus Cargo.toml. Braucht Inno Setup 6 (winget install -e --id JRSoftware.InnoSetup).
 param(
@@ -41,11 +41,11 @@ try {
     & $iscc /Qp "/DAppVersion=$version" "/DSourceExe=$exe" "$root\installer\vorleser.iss"
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup ist gescheitert." }
 
-    $zip = Join-Path $dist "Vorleser-$version-portable.zip"
+    $zip = Join-Path $dist "Hedgie-$version-portable.zip"
     Remove-Item $zip -Force -ErrorAction SilentlyContinue
     Compress-Archive -Path $exe, "$root\LICENSE" -DestinationPath $zip
 
-    Get-ChildItem $dist -Filter "Vorleser-*$version*" | ForEach-Object { "{0}  ({1:N0} KB)" -f $_.FullName, ($_.Length / 1KB) }
+    Get-ChildItem $dist -Filter "Hedgie-*$version*" | ForEach-Object { "{0}  ({1:N0} KB)" -f $_.FullName, ($_.Length / 1KB) }
 } finally {
     Pop-Location
 }

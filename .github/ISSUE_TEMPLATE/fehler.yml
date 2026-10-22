@@ -22,7 +22,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Vorleser-Version
+      label: Hedgie-Version
       description: Steht unter „Info“ im Fenster.
       placeholder: z. B. 0.2.0
     validations:

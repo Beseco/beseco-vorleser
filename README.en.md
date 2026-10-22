@@ -1,10 +1,12 @@
-# Vorleser
+# Hedgie
 
-<img src="docs/brand/igel.png" alt="Beseco Vorleser – the hedgehog with headphones" width="160" align="right">
+<img src="docs/brand/igel.png" alt="Hedgie, the hedgehog with headphones" width="160" align="right">
 
 [Deutsche Fassung](README.md)
 
-Vorleser ("reader" in German) reads selected text aloud in any Windows program: select text, press **Ctrl+Alt+V**, listen. It lives as a small icon in the notification area, uses very little memory and speaks with the voices Windows already ships.
+**Hedgie reads aloud, takes dictation and summarizes.** Up to version 0.5 the program was called "Hedgie" (German for "reader").
+
+Hedgie reads selected text aloud in any Windows program: select text, press **Ctrl+Alt+V**, listen. It lives as a small icon in the notification area, uses very little memory and speaks with the voices Windows already ships.
 
 The interface is available in English and German, and more languages can be added through simple language files ([how to translate](lang/README.md)). It follows the Windows display language and can be switched under Tools → Language.
 
@@ -14,8 +16,8 @@ The interface is available in English and German, and more languages can be adde
 
 Get the current version from [Releases](https://github.com/Beseco/beseco-vorleser/releases/latest):
 
-- **Vorleser-Setup-x.y.z.exe**: installer, no administrator rights needed
-- **Vorleser-x.y.z-portable.zip**: a single EXE to unpack, no installation
+- **Hedgie-Setup-x.y.z.exe**: installer, no administrator rights needed
+- **Hedgie-x.y.z-portable.zip**: a single EXE to unpack, no installation
 
 The installer is not code-signed, so Windows shows "Windows protected your PC" on first start. Choose "More info" and then "Run anyway".
 
@@ -27,14 +29,14 @@ Requires Windows 10 or 11 (64-bit).
 |---|---|
 | Read selected text, press again to stop | Ctrl+Alt+V |
 | Pause and resume | Ctrl+Alt+P |
-| Vorleser menu at the mouse position | Ctrl+right-click or Ctrl+Alt+M |
+| Hedgie menu at the mouse position | Ctrl+right-click or Ctrl+Alt+M |
 | Recognize and read text on screen (drag a frame) | Ctrl+Alt+O |
 | Open the window | Left-click the notification area icon |
 | Menu with voice, speed and settings | Right-click the icon |
 
 All shortcuts can be changed under "Settings".
 
-Windows does not let a program add an entry to the regular right-click menu of other applications. Ctrl+right-click is the substitute: the Vorleser menu appears instead of the application's own menu.
+Windows does not let a program add an entry to the regular right-click menu of other applications. Ctrl+right-click is the substitute: the Hedgie menu appears instead of the application's own menu.
 
 ## Features
 
@@ -55,7 +57,7 @@ Windows does not let a program add an entry to the regular right-click menu of o
 
 ## Voices
 
-Vorleser uses the voices installed in Windows. More can be added in Windows Settings under "Time & language → Speech → Add voices".
+Hedgie uses the voices installed in Windows. More can be added in Windows Settings under "Time & language → Speech → Add voices".
 
 ### AI voices
 
@@ -75,7 +77,7 @@ Online voices that some add-ons register in Windows (marked "Online" in their na
 
 ## Beseco Office Assistant (optional)
 
-Turn on the AI features under **Tools → Beseco Office Assistant** (or already in the installer). When off, Vorleser stays as simple as before; no key and no account are needed.
+Turn on the AI features under **Tools → Beseco Office Assistant** (or already in the installer). When off, Hedgie stays as simple as before; no key and no account are needed.
 
 When on, the window splits: the text on the left, the AI result on the right. **Summarize** (F9) summarizes the selected or entire text briefly, as bullet points or in detail, and the summary is read aloud right away (Shift+F9 reads it again).
 
@@ -85,7 +87,7 @@ For everything else, see **Assistant → AI settings and AI check**: your own se
 
 **Dictation** (F8 or "Dictate"): you speak, and the text appears at the cursor in the left pane after each short pause. **Ctrl+Alt+D** dictates into any other program such as Word or Outlook, at its cursor, with a small bar at the bottom of the screen showing level and status. Text is only typed into the program where dictation started; if you switch, it waits. "Correct" in the bar replaces the dictated text there with the corrected version. Choose the microphone under **Assistant → Microphone**.
 
-**Recording to minutes:** open a meeting recording (MP3, M4A, WAV, WMA, FLAC or an MP4 video) via **Assistant → Recording to minutes …** or drag it into the window. Vorleser transcribes it on your computer (left, with timestamps) and the configured AI writes the minutes on the right: participants, topics, decisions, action items and open questions. Speakers are not identified.
+**Recording to minutes:** open a meeting recording (MP3, M4A, WAV, WMA, FLAC or an MP4 video) via **Assistant → Recording to minutes …** or drag it into the window. Hedgie transcribes it on your computer (left, with timestamps) and the configured AI writes the minutes on the right: participants, topics, decisions, action items and open questions. Speakers are not identified.
 
 **Mini pill:** while the window is closed, a small bar stays at the bottom of the screen, always on top. Hover over it for two buttons: the microphone dictates into the program in front, the speaking head reads the selected text aloud. Turn it off under **Tools → Mini pill at the screen edge** or in the settings. Speech recognition (Whisper) runs entirely on your own computer, without an AI provider and without internet; only the model is downloaded once under **Assistant → Set up dictation** (fast 148 MB, accurate 488 MB, very accurate 574 MB; from github.com and huggingface.co).
 
@@ -95,26 +97,26 @@ Planned: minutes from audio files and a privacy mode that replaces personal data
 
 ## Privacy
 
-Vorleser collects no data. It goes online in only two cases: the update check (at most one request per day to GitHub, without any text, settings or machine identifier; can be turned off in the settings) when you download an AI voice or a dictation model yourself (from github.com and huggingface.co) and, only with the Office Assistant turned on, to the AI provider you chose when you trigger an AI feature. Text is processed only on your own machine.
+Hedgie collects no data. It goes online in only two cases: the update check (at most one request per day to GitHub, without any text, settings or machine identifier; can be turned off in the settings) when you download an AI voice or a dictation model yourself (from github.com and huggingface.co) and, only with the Office Assistant turned on, to the AI provider you chose when you trigger an AI feature. Text is processed only on your own machine.
 
-To read the selection, Vorleser uses the Windows accessibility interface. Where that is not available, it briefly copies the text through the clipboard and restores the previous clipboard content.
+To read the selection, Hedgie uses the Windows accessibility interface. Where that is not available, it briefly copies the text through the clipboard and restores the previous clipboard content.
 
-Settings are stored in `%APPDATA%\Vorleser\settings.ini`. To continue later where you left off, Vorleser stores the window's text on exit in `%APPDATA%\Vorleser\letzter-text.txt`; this can be turned off in the settings, which deletes the file.
+Settings are stored in `%APPDATA%\Vorleser\settings.ini`. To continue later where you left off, Hedgie stores the window's text on exit in `%APPDATA%\Vorleser\letzter-text.txt`; this can be turned off in the settings, which deletes the file.
 
 ### Corporate networks
 
-Vorleser uses the Windows proxy settings, including automatic configuration via `wpad.dat`. If the proxy requires sign-in, Vorleser uses the Windows account. Otherwise enter the `wpad.dat` address (e.g. `http://wpad/wpad.dat`) or a fixed proxy (`proxy.company.local:8080`) under Tools → Settings → Proxy. Without internet everything works except the update check and AI voice downloads.
+Hedgie uses the Windows proxy settings, including automatic configuration via `wpad.dat`. If the proxy requires sign-in, Hedgie uses the Windows account. Otherwise enter the `wpad.dat` address (e.g. `http://wpad/wpad.dat`) or a fixed proxy (`proxy.company.local:8080`) under Tools → Settings → Proxy. Without internet everything works except the update check and AI voice downloads.
 
 ## Known limitations
 
-- Vorleser cannot read the selection in windows running with administrator rights.
+- Hedgie cannot read the selection in windows running with administrator rights.
 - Password fields do not hand out text. PDFs are read via text recognition; very small print or poor scans may lose single words.
 - The old Word format (.doc) is not supported; please save as .docx.
 - Text copied while reading the selection may show up in the clipboard history (Win+V).
 
 ## Building
 
-Vorleser is written in Rust and depends only on the `windows` crate.
+Hedgie is written in Rust and depends only on the `windows` crate.
 
 ```powershell
 # Once: Rust, MinGW-w64 (provides dlltool and windres) and, for the installer, Inno Setup
@@ -137,6 +139,6 @@ Planned work is listed in [TODO.md](TODO.md) (German), changes per version in [C
 
 ## License and contact
 
-Vorleser is free software under the [GNU General Public License, version 3](LICENSE).
+Hedgie is free software under the [GNU General Public License, version 3](LICENSE).
 
 Developed by Florian Beubl, [beseco – Beubl IT Systems](https://beseco.com), Freising, Germany. Please report bugs and wishes as an [issue](https://github.com/Beseco/beseco-vorleser/issues).

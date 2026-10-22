@@ -154,7 +154,7 @@ fn split_url(url: &str) -> Option<(bool, String, u16, String)> {
 fn send(request: &Request) -> Result<(Response, u16), String> {
     let server = || t("err.server").to_string();
     let (secure, host, port, path) = split_url(request.url).ok_or_else(server)?;
-    let agent = HSTRING::from(format!("Vorleser/{}", env!("CARGO_PKG_VERSION")));
+    let agent = HSTRING::from(format!("Hedgie/{}", env!("CARGO_PKG_VERSION")));
     let proxy = proxy();
     unsafe {
         let session = match &proxy {
