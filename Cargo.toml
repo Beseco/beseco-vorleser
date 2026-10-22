@@ -1,6 +1,6 @@
 [package]
 name = "vorleser"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 description = "Hedgie: liest markierten Text vor, diktiert und fasst mit KI zusammen (Windows)"
 authors = ["Florian Beubl, beseco – Beubl IT Systems <info@beseco.com>"]

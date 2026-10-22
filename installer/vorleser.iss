@@ -85,6 +85,9 @@ Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes";
 Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".html"; ValueData: ""
 Root: HKCU; Subkey: "Software\Classes\Applications\vorleser.exe\SupportedTypes"; ValueType: string; ValueName: ".htm"; ValueData: ""
 
+; Windows merkt sich den Anzeigenamen der EXE; der alte Eintrag zeigte noch "Vorleser".
+Root: HKCU; Subkey: "Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache"; ValueType: none; ValueName: "{app}\vorleser.exe.FriendlyAppName"; Flags: deletevalue
+
 ; Wunsch "Officeassistent einschalten"; Vorleser uebernimmt ihn beim Start und loescht den Wert.
 Root: HKCU; Subkey: "Software\Beseco\Vorleser"; ValueType: string; ValueName: "Assistant"; ValueData: "1"; Tasks: assistant; Flags: uninsdeletekeyifempty
 

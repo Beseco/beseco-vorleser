@@ -2,6 +2,11 @@
 
 Alle nennenswerten Änderungen an Hedgie (bis 0.5 „Vorleser“). Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.6.1 – 2026-10-22
+
+- Windows zeigt nach dem Update auch bei „Öffnen mit“, in der Lautstärkemischung und in den Benachrichtigungseinstellungen „Hedgie“ statt „Vorleser“
+- Bilder auf der Projektseite zeigen Hedgie mit dem Igel-Symbol
+
 ## 0.6.0 – 2026-10-22
 
 - **Aus Vorleser wird Hedgie.** Das Programm kann inzwischen mehr als vorlesen: diktieren, korrigieren, zusammenfassen und Besprechungen protokollieren. Der neue Name gehört zum Igel mit Kopfhörern, dem neuen Programmsymbol
