@@ -43,7 +43,7 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 - **Anleitung zum Anhören:** erscheint beim ersten Start im Textfeld und lässt sich unter Hilfe jederzeit anzeigen oder vorlesen
 - **Mitlesen:** das gerade gesprochene Wort wird im Fenster markiert
 - **Immer im Vordergrund:** das Fenster bleibt auf Wunsch über anderen Fenstern (Extras)
-- **Stimmen:** alle installierten Windows-Stimmen, nach Sprache gruppiert
+- **Stimmen:** alle installierten Windows-Stimmen, nach Sprache gruppiert; englischer Text wird automatisch mit einer englischen Stimme gelesen, deutscher mit einer deutschen (abschaltbar)
 - **Textbereinigung:** fügt umbrochene PDF-Zeilen zusammen, hebt Silbentrennung auf, kürzt Links
 - **Audio-Export:** Text als MP3- oder WAV-Datei speichern
 - **Autostart:** auf Wunsch mit Windows starten

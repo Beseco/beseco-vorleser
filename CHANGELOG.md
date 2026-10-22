@@ -2,6 +2,10 @@
 
 Alle nennenswerten Änderungen am Vorleser. Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.5 – unveröffentlicht
+
+- Neu: Stimme passend zur Sprache: englischer Text wird mit einer englischen Stimme gelesen, deutscher mit einer deutschen (erkannt werden Deutsch, Englisch, Französisch, Spanisch, Italienisch und Niederländisch). Genommen wird die zuletzt für diese Sprache gewählte Stimme, sonst eine vorhandene, KI-Stimmen zuerst; danach gilt wieder die eingestellte Stimme. Abschaltbar in den Einstellungen
+
 ## 0.5.4 – unveröffentlicht
 
 - Die KI schreibt live: Zusammenfassung, Protokoll und Korrektur erscheinen rechts Wort für Wort, während sie entstehen

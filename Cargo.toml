@@ -1,6 +1,6 @@
 [package]
 name = "vorleser"
-version = "0.5.4"
+version = "0.5.5"
 edition = "2021"
 description = "Kleines Tray-Tool, das markierten Text mit den Windows-Stimmen vorliest"
 authors = ["Florian Beubl, beseco – Beubl IT Systems <info@beseco.com>"]

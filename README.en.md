@@ -44,7 +44,7 @@ Windows does not let a program add an entry to the regular right-click menu of o
 - **Paste window:** paste any text and compare voices with a sample sentence
 - **Read along:** the word being spoken is highlighted in the window
 - **Always on top:** the window can stay above other windows
-- **Voices:** all installed Windows voices, grouped by language
+- **Voices:** all installed Windows voices, grouped by language; English text is read with an English voice and German text with a German one automatically (can be turned off)
 - **Text clean-up:** joins wrapped PDF lines, removes hyphenation, shortens links
 - **Audio export:** save text as an MP3 or WAV file
 - **Autostart:** optionally start with Windows

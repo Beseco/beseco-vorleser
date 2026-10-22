@@ -17,6 +17,7 @@ mod documents;
 mod http;
 mod i18n;
 mod json;
+mod langdetect;
 mod minipill;
 mod mouse;
 mod mp3;
@@ -240,6 +241,9 @@ struct App {
     player_on: bool,
     /// Satzanfänge des Textes, den der Player begleitet (für „Satz 2 von 5“).
     player_sentences: Vec<u32>,
+    /// Für den laufenden Text ist vorübergehend eine Stimme passend zu seiner Sprache gewählt;
+    /// hier steht die Stimme, die danach wieder gilt.
+    temp_voice: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -368,7 +372,7 @@ impl App {
         tts.set_rate(cfg.rate);
         // Der Testlauf bleibt stumm.
         tts.set_volume(if TEST_MODE.load(Ordering::Relaxed) { 0 } else { cfg.volume });
-        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_waiting: Vec::new(), player_on: false, player_sentences: Vec::new() };
+        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_waiting: Vec::new(), player_on: false, player_sentences: Vec::new(), temp_voice: None };
         documents::SKIP_PAGE_EDGES.store(app.cfg.skip_page_edges, Ordering::Relaxed);
         app.add_icon();
         app.register_hotkeys();
@@ -451,6 +455,7 @@ impl App {
             close_to_pill: self.cfg.close_to_pill,
             skip_page_edges: self.cfg.skip_page_edges,
             page_edges_ai: self.cfg.page_edges_ai,
+            auto_language: self.cfg.auto_language,
         }
     }
 
@@ -468,6 +473,7 @@ impl App {
         self.cfg.close_to_pill = values.close_to_pill;
         self.cfg.skip_page_edges = values.skip_page_edges;
         self.cfg.page_edges_ai = values.page_edges_ai;
+        self.cfg.auto_language = values.auto_language;
         documents::SKIP_PAGE_EDGES.store(values.skip_page_edges, Ordering::Relaxed);
         self.cfg.proxy = values.proxy;
         http::set_proxy(&self.cfg.proxy);
@@ -1030,9 +1036,15 @@ impl App {
     }
 
     fn select_voice(&mut self, index: usize) {
-        if let Some(voice) = self.tts.voices().get(index) {
-            let id = voice.id.clone();
+        if let Some((id, lang)) = self.tts.voices().get(index).map(|v| (v.id.clone(), v.lang_id & 0x3ff)) {
             if self.tts.set_voice(&id) {
+                self.temp_voice = None;
+                // Merken, welche Stimme für diese Sprache gewünscht ist.
+                if lang != 0 {
+                    let mut entries: Vec<String> = self.cfg.language_voices.split('|').filter(|e| !e.is_empty() && !e.starts_with(&format!("{lang}="))).map(str::to_string).collect();
+                    entries.push(format!("{lang}={id}"));
+                    self.cfg.language_voices = entries.join("|");
+                }
                 self.cfg.voice = id;
                 self.cfg.save();
             } else {
@@ -1227,7 +1239,46 @@ impl App {
         window::mark(pos, pos);
     }
 
+    /// Stimme für die Sprache von `text`, wenn sie von der eingestellten abweicht: die zuletzt für
+    /// diese Sprache gewählte, sonst eine passende (KI-Stimmen zuerst).
+    fn voice_for(&self, text: &str) -> Option<String> {
+        if !self.cfg.auto_language {
+            return None;
+        }
+        let lang = langdetect::detect(text)?;
+        let voices = self.tts.voices();
+        let current = self.tts.current_voice_id()?;
+        let main = voices.iter().find(|v| v.id == current)?;
+        if main.lang_id & 0x3ff == lang {
+            return None;
+        }
+        let remembered = self.cfg.language_voices.split('|').find_map(|e| e.strip_prefix(&format!("{lang}=")));
+        if let Some(id) = remembered.filter(|id| voices.iter().any(|v| v.id == *id)) {
+            return Some(id.to_string());
+        }
+        let matching = voices.iter().filter(|v| v.lang_id & 0x3ff == lang);
+        let mut candidates: Vec<&tts::Voice> = matching.collect();
+        candidates.sort_by_key(|v| !v.id.starts_with("piper:"));
+        candidates.first().map(|v| v.id.clone())
+    }
+
+    /// Nach dem Vorlesen gilt wieder die eingestellte Stimme.
+    fn restore_voice(&mut self) {
+        if let Some(id) = self.temp_voice.take() {
+            self.tts.set_voice(&id);
+            self.sync_window();
+        }
+    }
+
     fn start(&mut self, text: String, follow: Option<Follow>) {
+        self.restore_voice();
+        if let Some(id) = self.voice_for(&text) {
+            let previous = self.tts.current_voice_id();
+            if self.tts.set_voice(&id) {
+                self.temp_voice = previous;
+                self.sync_window();
+            }
+        }
         match self.tts.speak(&text) {
             Ok(()) => {
                 self.retry = Some(text);
@@ -1288,6 +1339,7 @@ impl App {
             tray::balloon(self.hwnd, "Vorleser", hint);
         }
         self.end_follow();
+        self.restore_voice();
         self.set_state(State::Idle);
         self.save_session();
     }
@@ -1316,6 +1368,7 @@ impl App {
             let at = textprep::sentence_at(&starts, follow.pos).unwrap_or(follow.pos);
             window::mark_in(follow.pane, at, at);
         }
+        self.restore_voice();
         self.set_state(State::Idle);
         self.save_session();
     }

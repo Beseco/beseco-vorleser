@@ -75,6 +75,10 @@ pub struct Config {
     pub skip_page_edges: bool,
     /// Zusätzlich die KI nach Kopf- und Fußzeilen fragen (Officeassistent).
     pub page_edges_ai: bool,
+    /// Stimme passend zur Sprache des Textes wählen.
+    pub auto_language: bool,
+    /// Zuletzt gewählte Stimme je Sprache: „7=Stimmen-ID|9=Stimmen-ID“ (primäre Sprachkennung).
+    pub language_voices: String,
 }
 
 impl Default for Config {
@@ -111,6 +115,8 @@ impl Default for Config {
             close_to_pill: true,
             skip_page_edges: true,
             page_edges_ai: false,
+            auto_language: true,
+            language_voices: String::new(),
         }
     }
 }
@@ -157,6 +163,8 @@ impl Config {
                 "close_to_pill" => cfg.close_to_pill = value != "0",
                 "skip_page_edges" => cfg.skip_page_edges = value != "0",
                 "page_edges_ai" => cfg.page_edges_ai = value != "0",
+                "auto_language" => cfg.auto_language = value != "0",
+                "language_voices" => cfg.language_voices = value.to_string(),
                 _ => {}
             }
         }
@@ -172,7 +180,7 @@ impl Config {
              update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n\
              remember_text={}\r\nresume_pos={}\r\nguide_shown={}\r\n\
              assistant={}\r\nai_kind={}\r\nai_url={}\r\nai_key={}\r\nai_model={}\r\nsummary_mode={}\r\n\
-             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\nmicrophone={}\r\nclose_to_pill={}\r\nskip_page_edges={}\r\npage_edges_ai={}\r\n",
+             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\nmicrophone={}\r\nclose_to_pill={}\r\nskip_page_edges={}\r\npage_edges_ai={}\r\nauto_language={}\r\nlanguage_voices={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
@@ -203,7 +211,9 @@ impl Config {
             self.microphone,
             self.close_to_pill as u8,
             self.skip_page_edges as u8,
-            self.page_edges_ai as u8
+            self.page_edges_ai as u8,
+            self.auto_language as u8,
+            self.language_voices
         )
     }
 
@@ -391,6 +401,8 @@ mod tests {
             close_to_pill: false,
             skip_page_edges: false,
             page_edges_ai: true,
+            auto_language: false,
+            language_voices: "9=piper:en_US-lessac-high".into(),
         };
         assert_eq!(Config::parse(&cfg.serialize()), cfg);
     }

@@ -299,6 +299,7 @@ rate.slightly_slower = Etwas langsamer
 rate.slow = Langsam
 rate.very_fast = Sehr schnell
 rate.very_slow = Sehr langsam
+settings.auto_language = Stimme automatisch passend zur Sprache des Textes wählen
 settings.cancel = Abbrechen
 settings.check_github_for_new = Einmal täglich auf GitHub nach neuen Versionen suchen
 settings.clean_up_text_before = Text vor dem Vorlesen bereinigen (Zeilenumbrüche, Silbentrennung, Links)

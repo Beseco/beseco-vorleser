@@ -300,6 +300,7 @@ rate.slightly_slower = Slightly slower
 rate.slow = Slow
 rate.very_fast = Very fast
 rate.very_slow = Very slow
+settings.auto_language = Automatically pick a voice matching the text's language
 settings.cancel = Cancel
 settings.check_github_for_new = Check GitHub for new versions once a day
 settings.clean_up_text_before = Clean up text before reading (line breaks, hyphenation, links)

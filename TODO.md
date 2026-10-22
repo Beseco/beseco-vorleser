@@ -25,7 +25,8 @@ Ziel: Vorleser als kostenloses Tool zum Download anbieten. Reihenfolge innerhalb
 - [x] **Textbereinigung.** PDF-Zeilenumbrüche und Silbentrennung zusammenfügen, Links auf den Seitennamen kürzen (abschaltbar).
 - [ ] Fußnotenziffern überspringen (braucht eine sichere Erkennung, sonst gehen echte Zahlen verloren).
 - [ ] **Aussprache-Wörterbuch** für Namen und Abkürzungen.
-- [ ] **Automatische Spracherkennung.** Englischer Text mit englischer Stimme, deutscher mit deutscher.
+- [x] **Automatische Spracherkennung.** Englischer Text mit englischer Stimme, deutscher mit deutscher.
+- [ ] Sprachwechsel innerhalb eines Textes (absatzweise die Stimme wechseln).
 - [x] **Als Audiodatei speichern** (WAV).
 - [x] MP3-Export über den MP3-Encoder von Windows (Media Foundation).
 - [x] WAV-Export im Hintergrund (ohne Fortschrittsanzeige).
