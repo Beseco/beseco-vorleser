@@ -1268,10 +1268,7 @@ unsafe fn draw_button(c: &Controls, item: &DRAWITEMSTRUCT) {
                 canvas.stroke_round(0.5, 0.5, w - 1.0, h - 1.0, h / 2.0, p.border, 1.0);
                 let name = VOICE.with(|v| v.borrow().clone());
                 let r = h / 2.0 - 5.0;
-                canvas.circle(5.0 + r, cy, r, p.accent_soft);
-                let initials: String = name.split_whitespace().take(2).filter_map(|w| w.chars().next()).collect::<String>().to_uppercase();
-                let initials = if initials.chars().count() == 1 { name.chars().take(2).collect::<String>().to_uppercase() } else { initials };
-                canvas.text(&initials, 5.0, cy - r, 2.0 * r, 2.0 * r, 12.0, true, if p.dark { paint::rgb(0xB5D2F7) } else { paint::rgb(0x0D47A1) }, Align::Center);
+                canvas.hedgehog(5.0 + r, cy, 2.0 * r + 2.0);
                 let tx = 10.0 + 2.0 * r;
                 canvas.text(&name, tx, cy - 16.0, w - tx - 28.0, 18.0, 13.0, true, p.text, Align::Left);
                 canvas.text(t("window.voice_sub"), tx, cy + 1.0, w - tx - 28.0, 16.0, 11.0, false, p.muted, Align::Left);

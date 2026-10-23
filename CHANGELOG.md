@@ -2,6 +2,10 @@
 
 Alle nennenswerten Änderungen an Hedgie (bis 0.5 „Vorleser“). Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.6.3 – 2026-10-23
+
+- Mini-Player und Stimmenfeld im Fenster zeigen den Hedgie-Igel statt der Anfangsbuchstaben der Stimme
+
 ## 0.6.2 – 2026-10-23
 
 - Neu: Design wählbar unter Extras → Einstellungen → Design: „Wie Windows“, „Hell“ oder „Dunkel“; wirkt sofort, ohne Neustart

@@ -8,10 +8,10 @@ use windows::core::w;
 use windows::Win32::Foundation::{COLORREF, HWND, POINT, RECT, SIZE};
 use windows::Win32::Graphics::Direct2D::Common::{
     D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_BEGIN_HOLLOW,
-    D2D1_FIGURE_END_CLOSED, D2D1_FIGURE_END_OPEN, D2D1_PIXEL_FORMAT, D2D_RECT_F, D2D_SIZE_F,
+    D2D1_FIGURE_END_CLOSED, D2D1_FIGURE_END_OPEN, D2D1_PIXEL_FORMAT, D2D_RECT_F, D2D_SIZE_F, D2D_SIZE_U,
 };
 use windows::Win32::Graphics::Direct2D::{
-    D2D1CreateFactory, ID2D1Factory, ID2D1RenderTarget, ID2D1SolidColorBrush, D2D1_ARC_SEGMENT, D2D1_ARC_SIZE_SMALL,
+    D2D1CreateFactory, ID2D1Factory, ID2D1RenderTarget, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, D2D1_BITMAP_PROPERTIES, ID2D1SolidColorBrush, D2D1_ARC_SEGMENT, D2D1_ARC_SIZE_SMALL,
     D2D1_DRAW_TEXT_OPTIONS_CLIP, D2D1_ELLIPSE, D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_FEATURE_LEVEL_DEFAULT,
     D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE,
     D2D1_ROUNDED_RECT, D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE,
@@ -30,6 +30,11 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{UpdateLayeredWindow, ULW_ALPHA};
 use windows_numerics::Vector2;
+
+/// Der Igel aus dem Programmsymbol, 128 x 128 Pixel BGRA mit vormultipliziertem Alpha
+/// (erzeugt von `res\make-icon.ps1`).
+static HEDGEHOG: &[u8] = include_bytes!("../res/igel-128.bgra");
+const HEDGEHOG_SIDE: u32 = 128;
 
 /// Farbe als 0xRRGGBB mit Deckkraft.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -153,6 +158,21 @@ impl Canvas<'_> {
         let Some(brush) = self.brush(color) else { return };
         let shape = D2D1_ELLIPSE { point: point(cx, cy), radiusX: radius, radiusY: radius };
         unsafe { self.rt.FillEllipse(&shape, &brush) };
+    }
+
+    /// Zeichnet den Igel in das Quadrat mit Mittelpunkt `cx`, `cy` und Kantenlänge `size`.
+    pub fn hedgehog(&self, cx: f32, cy: f32, size: f32) {
+        let properties = D2D1_BITMAP_PROPERTIES {
+            pixelFormat: D2D1_PIXEL_FORMAT { format: DXGI_FORMAT_B8G8R8A8_UNORM, alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED },
+            dpiX: 96.0,
+            dpiY: 96.0,
+        };
+        let side = D2D_SIZE_U { width: HEDGEHOG_SIDE, height: HEDGEHOG_SIDE };
+        unsafe {
+            let Ok(bitmap) = self.rt.CreateBitmap(side, Some(HEDGEHOG.as_ptr() as *const _), HEDGEHOG_SIDE * 4, &properties) else { return };
+            let target = rect(cx - size / 2.0, cy - size / 2.0, size, size);
+            self.rt.DrawBitmap(&bitmap, Some(&target), 1.0, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, None);
+        }
     }
 
     pub fn line(&self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color, width: f32) {

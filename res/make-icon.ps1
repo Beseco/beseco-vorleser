@@ -96,4 +96,17 @@ for ($i = 0; $i -lt $sizes.Count; $i++) {
 foreach ($p in $pngs) { $bw.Write($p) }
 [IO.File]::WriteAllBytes("$OutDir\vorleser.ico", $out.ToArray())
 
+
+# Igel für Mini-Player und Stimmenfeld: 128 x 128 Pixel, BGRA mit vormultipliziertem Alpha
+# (so übernimmt Direct2D die Daten ohne Bilddecoder).
+$small = [Igel]::Scale($img, 128)
+$raw = New-Object byte[] (128 * 128 * 4)
+for ($y = 0; $y -lt 128; $y++) {
+    for ($x = 0; $x -lt 128; $x++) {
+        $c = $small.GetPixel($x, $y); $i = ($y * 128 + $x) * 4; $a = $c.A
+        $raw[$i] = [byte][math]::Round($c.B * $a / 255); $raw[$i + 1] = [byte][math]::Round($c.G * $a / 255)
+        $raw[$i + 2] = [byte][math]::Round($c.R * $a / 255); $raw[$i + 3] = [byte]$a
+    }
+}
+[IO.File]::WriteAllBytes("$OutDir\igel-128.bgra", $raw)
 "ok"

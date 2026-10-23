@@ -194,16 +194,6 @@ fn place(hwnd: HWND, speed: &str) {
     }
 }
 
-/// Anfangsbuchstaben für den runden Platzhalter, z. B. „TH“ für „Thorsten HD“.
-fn initials(name: &str) -> String {
-    let words: Vec<&str> = name.split_whitespace().collect();
-    match words.as_slice() {
-        [] => String::new(),
-        [one] => one.chars().take(2).collect::<String>().to_uppercase(),
-        [first, second, ..] => format!("{}{}", first.chars().next().unwrap_or(' '), second.chars().next().unwrap_or(' ')).to_uppercase(),
-    }
-}
-
 fn repaint() {
     PLAYER.with(|p| {
         let p = p.borrow();
@@ -226,8 +216,7 @@ fn draw(c: &Canvas, player: &Player, l: &Layout) {
     c.stroke_round(MARGIN, MARGIN, body_w, HEIGHT, HEIGHT / 2.0, p.border, 1.0);
 
     let (cx, cy, r) = l.avatar;
-    c.circle(cx, cy, r, p.accent_soft);
-    c.text(&initials(&player.info.voice), cx - r, cy - r, 2.0 * r, 2.0 * r, 14.0, true, if p.dark { paint::rgb(0xB5D2F7) } else { paint::rgb(0x0D47A1) }, Align::Center);
+    c.hedgehog(cx, cy, 2.0 * r + 4.0);
     c.text(&player.info.voice, l.text_x, MARGIN + 12.0, 128.0, 20.0, 13.0, true, p.text, Align::Left);
     let sub = if player.info.paused { t("player.paused").to_string() } else { player.info.progress.clone() };
     c.text(&sub, l.text_x, MARGIN + 32.0, 128.0, 18.0, 11.5, false, p.muted, Align::Left);
@@ -346,17 +335,5 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             LRESULT(0)
         }
         _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn makes_initials() {
-        assert_eq!(initials("Thorsten HD"), "TH");
-        assert_eq!(initials("Hedda"), "HE");
-        assert_eq!(initials(""), "");
     }
 }
