@@ -2,7 +2,7 @@
 
 Alle nennenswerten Änderungen an Hedgie (bis 0.5 „Vorleser“). Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## 0.6.4 – 2026-11-04
+## 0.7.0 – 2026-11-04
 
 - Hedgie wird jetzt für alle Benutzer nach `C:\Program Files\Beubl-IT\Hedgie` installiert; der Installer braucht dafür Administratorrechte
 - Die Programmdatei heißt jetzt `Beseco-Vorleser.exe` (auch in der portablen ZIP)
