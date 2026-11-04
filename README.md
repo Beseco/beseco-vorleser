@@ -14,7 +14,7 @@ Hedgie liest markierten Text in jedem Windows-Programm vor: Text markieren, **St
 
 Die aktuelle Version steht unter [Releases](https://github.com/Beseco/beseco-vorleser/releases/latest):
 
-- **Hedgie-Setup-x.y.z.exe**: Installer, braucht keine Administratorrechte
+- **Hedgie-Setup-x.y.z.exe**: Installer, installiert nach `C:\Program Files\Beubl-IT\Hedgie` (braucht Administratorrechte)
 - **Hedgie-x.y.z-portable.zip**: einzelne EXE zum Entpacken, ohne Installation
 
 Der Installer ist nicht signiert. Windows zeigt deshalb beim Start „Der Computer wurde durch Windows geschützt“. Mit „Weitere Informationen“ und „Trotzdem ausführen“ geht es weiter.

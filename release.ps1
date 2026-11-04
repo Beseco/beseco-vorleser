@@ -22,7 +22,7 @@ try {
 
     # Läuft gerade ein Vorleser aus dem Build-Ordner, ist dessen EXE gesperrt und der Linker scheitert.
     # Umbenennen geht trotzdem; das laufende Programm stört das nicht.
-    Get-ChildItem $release, "$release\deps" -Filter "vorleser*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+    Get-ChildItem "$release\*", "$release\deps\*" -Include "vorleser*.exe", "Beseco-Vorleser*.exe", "Beseco_Vorleser*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
         try { [IO.File]::Open($_.FullName, 'Open', 'ReadWrite', 'None').Close() }
         catch { Rename-Item $_.FullName ("{0}.{1}.alt" -f $_.Name, [DateTime]::Now.Ticks) }
     }
@@ -34,7 +34,7 @@ try {
     }
     & "$root\cargo.ps1" build --release
     if ($LASTEXITCODE -ne 0) { throw "Build fehlgeschlagen." }
-    $exe = Join-Path $release "vorleser.exe"
+    $exe = Join-Path $release "Beseco-Vorleser.exe"
 
     $dist = Join-Path $root "dist"
     New-Item -ItemType Directory -Force $dist | Out-Null

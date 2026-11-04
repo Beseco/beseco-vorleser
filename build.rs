@@ -39,7 +39,7 @@ BEGIN
       VALUE "ProductName", "Hedgie"
       VALUE "ProductVersion", "{version}"
       VALUE "LegalCopyright", "Florian Beubl, beseco - Beubl IT Systems"
-      VALUE "OriginalFilename", "vorleser.exe"
+      VALUE "OriginalFilename", "Beseco-Vorleser.exe"
     END
   END
   BLOCK "VarFileInfo"

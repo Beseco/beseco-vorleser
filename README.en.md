@@ -16,7 +16,7 @@ The interface is available in English and German, and more languages can be adde
 
 Get the current version from [Releases](https://github.com/Beseco/beseco-vorleser/releases/latest):
 
-- **Hedgie-Setup-x.y.z.exe**: installer, no administrator rights needed
+- **Hedgie-Setup-x.y.z.exe**: installer, installs to `C:\Program Files\Beubl-IT\Hedgie` (needs administrator rights)
 - **Hedgie-x.y.z-portable.zip**: a single EXE to unpack, no installation
 
 The installer is not code-signed, so Windows shows "Windows protected your PC" on first start. Choose "More info" and then "Run anyway".

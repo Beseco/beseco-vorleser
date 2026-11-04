@@ -11,7 +11,7 @@ Hedgie findet alle Texte der Oberfläche in Sprachdateien. Deutsch (`de.lang`) u
 3. Die Texte rechts vom `=` übersetzen. Die Schlüssel links bleiben unverändert.
 4. Zum Ausprobieren die Datei in einen dieser Ordner legen und Hedgie neu starten:
    - `%APPDATA%\Vorleser\lang\`
-   - `lang\` neben `vorleser.exe`
+   - `lang\` neben `Beseco-Vorleser.exe`
 
    Danach steht die Sprache unter **Extras → Sprache** zur Auswahl.
 5. Die fertige Datei gern per Pull Request in diesen Ordner einreichen, dann wird sie fest eingebaut.
@@ -36,7 +36,7 @@ Eine Datei in einem der beiden Ordner mit dem Code einer eingebauten Sprache (`d
 1. Copy `en.lang` and name it after the language code, e.g. `fr.lang`.
 2. Set `@code = fr` and `@name = Français` at the top.
 3. Translate the texts right of `=`; keep the keys on the left.
-4. To try it, put the file into `%APPDATA%\Vorleser\lang\` or a `lang\` folder next to `vorleser.exe` and restart Hedgie. Then choose it under **Tools → Language**.
+4. To try it, put the file into `%APPDATA%\Vorleser\lang\` or a `lang\` folder next to `Beseco-Vorleser.exe` and restart Hedgie. Then choose it under **Tools → Language**.
 5. Please submit the finished file as a pull request to this folder.
 
 Missing texts fall back to English. `&` marks the Alt-key letter, `\t` separates the menu shortcut, `\n` is a line break, `{}` is a placeholder that must stay.

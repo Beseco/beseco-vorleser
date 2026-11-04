@@ -1,6 +1,6 @@
 [package]
 name = "vorleser"
-version = "0.6.3"
+version = "0.6.4"
 edition = "2021"
 description = "Hedgie: liest markierten Text vor, diktiert und fasst mit KI zusammen (Windows)"
 authors = ["Florian Beubl, beseco – Beubl IT Systems <info@beseco.com>"]
@@ -8,6 +8,11 @@ homepage = "https://beseco.com"
 license = "GPL-3.0-only"
 readme = "README.md"
 repository = "https://github.com/Beseco/beseco-vorleser"
+
+# Name der fertigen EXE: Beseco-Vorleser.exe
+[[bin]]
+name = "Beseco-Vorleser"
+path = "src/main.rs"
 
 [dependencies]
 # Entpackt DOCX, ODT und EPUB (reines Rust, ohne weitere Abhängigkeiten außer adler2).
