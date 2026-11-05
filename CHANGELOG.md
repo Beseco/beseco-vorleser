@@ -2,12 +2,15 @@
 
 Alle nennenswerten Änderungen an Hedgie (bis 0.5 „Vorleser“). Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## 0.7.0 – 2026-11-05
+## 0.7.1 – 2026-11-05
 
+- KI-Stimmen schreiben beim Vorlesen keine Temp-Dateien mehr: Piper liefert jeden Satz über eine Named Pipe direkt in den Speicher. Virenscanner wie Trend Micro Apex One hielten das ständige Anlegen und Löschen der WAV-Dateien im Temp-Ordner für Ransomware und beendeten Hedgie mitten im Vorlesen
+- Mit großen KI-Stimmen wird beim Mitlesen auch ein kurzer erster Satz markiert
+- Der MP3-Export legt seine Zwischendatei unter `%LOCALAPPDATA%\Vorleser\cache` statt im Temp-Ordner ab
 - Neu: Ist nichts markiert, liest Strg+Alt+V (und der sprechende Kopf der Mini-Pille) den Text aus der Zwischenablage vor. Zum Schutz von Passwörtern nur ab sechs Wörtern und nicht, wenn ein Passwortmanager den Inhalt als vertraulich gekennzeichnet hat
 - Hedgie wird jetzt für alle Benutzer nach `C:\Program Files\Beubl-IT\Hedgie` installiert; der Installer braucht dafür Administratorrechte
 - Die Programmdatei heißt jetzt `Beseco-Vorleser.exe` (auch in der portablen ZIP)
-- Beim Update wird die bisherige Installation unter `%LOCALAPPDATA%\Programs\Hedgie` entfernt; Einstellungen, KI-Zugang und heruntergeladene Stimmen bleiben erhalten
+- Beim Update wird die bisherige Installation unter `%LOCALAPPDATA%\Programs\Hedgie` entfernt; Einstellungen, KI-Zugang und heruntergeladene Stimmen bleiben erhalten. Ist die alte Programmdatei noch gesperrt, wird sie beim nächsten Windows-Start gelöscht
 
 ## 0.6.3 – 2026-10-23
 

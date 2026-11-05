@@ -3,9 +3,13 @@
 //! abgelegt. Danach läuft alles ohne Internet.
 //!
 //! Beim Vorlesen läuft `piper.exe` als eigener Prozess: Vorleser schickt ihm Satz für Satz,
-//! Piper schreibt je Satz eine WAV-Datei, und ein Hintergrund-Thread spielt sie nacheinander über
-//! `waveOut` ab. So kann der nächste Satz entstehen, während der aktuelle läuft, und das Fenster
-//! markiert beim Mitlesen den gerade gesprochenen Satz.
+//! Piper schreibt je Satz eine WAV in eine eigene Named Pipe, und ein Hintergrund-Thread spielt
+//! sie nacheinander über `waveOut` ab. So kann der nächste Satz entstehen, während der aktuelle
+//! läuft, und das Fenster markiert beim Mitlesen den gerade gesprochenen Satz.
+//!
+//! Bis 0.6 schrieb Piper je Satz eine Datei in den Temp-Ordner, die gleich wieder gelöscht wurde.
+//! Dieses Muster (viele Dateien anlegen, beschreiben, löschen) hielten Virenscanner wie Trend Micro
+//! Apex One für Ransomware und beendeten Vorleser. Über die Pipe bleibt alles im Speicher.
 
 use std::collections::VecDeque;
 use std::fs::File;
@@ -13,12 +17,19 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use windows::core::PCWSTR;
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::core::{HSTRING, PCWSTR};
+use windows::Win32::Foundation::{
+    CloseHandle, ERROR_BROKEN_PIPE, ERROR_NO_DATA, ERROR_PIPE_CONNECTED, ERROR_PIPE_LISTENING, HANDLE, HWND, LPARAM, WPARAM,
+};
+use windows::Win32::Storage::FileSystem::{ReadFile, FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_INBOUND};
+use windows::Win32::System::Pipes::{
+    ConnectNamedPipe, CreateNamedPipeW, PIPE_NOWAIT, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS,
+    PIPE_TYPE_BYTE,
+};
 use windows::Win32::Media::Audio::{
     waveOutClose, waveOutOpen, waveOutPause, waveOutPrepareHeader, waveOutReset, waveOutRestart,
     waveOutSetVolume, waveOutUnprepareHeader, waveOutWrite, CALLBACK_NULL, HWAVEOUT, WAVEFORMATEX,
@@ -364,12 +375,12 @@ impl Drop for Session {
     }
 }
 
-fn start_engine(key: &str, rate: i32, output_dir: &Path) -> std::io::Result<Child> {
+/// Startet Piper so, dass jede Eingabezeile JSON mit Text und Ziel (`output_file`) ist.
+fn start_engine(key: &str, rate: i32) -> std::io::Result<Child> {
     Command::new(engine_exe())
         .arg("--model")
         .arg(model_path(key))
-        .arg("--output_dir")
-        .arg(output_dir)
+        .arg("--json-input")
         .arg("--length_scale")
         .arg(format!("{:.3}", length_scale(rate)))
         .arg("-q")
@@ -380,9 +391,98 @@ fn start_engine(key: &str, rate: i32, output_dir: &Path) -> std::io::Result<Chil
         .spawn()
 }
 
-/// Liest die Audiodaten (16 Bit, mono) aus einer WAV-Datei von Piper.
-fn read_pcm(path: &Path) -> Option<Vec<u8>> {
-    let bytes = std::fs::read(path).ok()?;
+/// Eingabezeile für `--json-input`: Piper schreibt die WAV dieses Satzes nach `target`.
+fn json_line(text: &str, target: &str) -> String {
+    format!("{{\"text\": {}, \"output_file\": {}}}\n", crate::json::string(text), crate::json::string(target))
+}
+
+/// Eine Named Pipe, in die Piper die WAV eines Satzes schreibt. Nur lokal, nur ein Gegenüber,
+/// und der Name ist je Satz neu; ein fremdes Programm kann sich nicht vorher dazwischenschieben.
+struct AudioPipe {
+    handle: HANDLE,
+    name: String,
+}
+
+impl AudioPipe {
+    fn create() -> Option<AudioPipe> {
+        static COUNTER: AtomicU32 = AtomicU32::new(0);
+        let name = format!(
+            r"\\.\pipe\hedgie-piper-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Relaxed)
+        );
+        // Nicht blockierend, damit das Warten auf Piper abbrechbar bleibt (siehe `receive`).
+        let handle = unsafe {
+            CreateNamedPipeW(
+                &HSTRING::from(name.as_str()),
+                PIPE_ACCESS_INBOUND | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                1,
+                0,
+                1 << 16,
+                0,
+                None,
+            )
+        };
+        (!handle.is_invalid()).then_some(AudioPipe { handle, name })
+    }
+
+    /// Wartet, bis Piper die Pipe öffnet, und liest sie bis zum Ende. Piper öffnet sie schon vor
+    /// dem Berechnen des Satzes; deshalb wird auch beim Lesen nicht blockiert, sondern in kurzen
+    /// Abständen nachgesehen. `None`, wenn Piper vorher beendet ist, `cancel` gesetzt wird oder
+    /// nach 60 Sekunden kein Ende kam.
+    fn receive(&self, cancel: &AtomicBool, engine: &mut Child) -> Option<Vec<u8>> {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        let mut wait = || {
+            if cancel.load(Relaxed) || Instant::now() > deadline || !matches!(engine.try_wait(), Ok(None)) {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+            true
+        };
+        loop {
+            match unsafe { ConnectNamedPipe(self.handle, None) } {
+                Ok(()) => break,
+                // ERROR_NO_DATA: Piper war schneller und hat schon geschrieben und geschlossen.
+                Err(e) if e.code() == ERROR_PIPE_CONNECTED.to_hresult() || e.code() == ERROR_NO_DATA.to_hresult() => break,
+                Err(e) if e.code() == ERROR_PIPE_LISTENING.to_hresult() => {
+                    if !wait() {
+                        return None;
+                    }
+                }
+                Err(_) => return None,
+            }
+        }
+        let mut data = Vec::new();
+        let mut chunk = vec![0u8; 1 << 16];
+        loop {
+            let mut read = 0;
+            match unsafe { ReadFile(self.handle, Some(&mut chunk), Some(&mut read), None) } {
+                Ok(()) => data.extend_from_slice(&chunk[..read as usize]),
+                // Piper hat die Pipe geschlossen: Der Satz ist vollständig.
+                Err(e) if e.code() == ERROR_BROKEN_PIPE.to_hresult() => return Some(data),
+                // Noch nichts da, Piper rechnet noch.
+                Err(e) if e.code() == ERROR_NO_DATA.to_hresult() => {
+                    if !wait() {
+                        return None;
+                    }
+                }
+                Err(_) => return None,
+            }
+        }
+    }
+}
+
+impl Drop for AudioPipe {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = CloseHandle(self.handle);
+        }
+    }
+}
+
+/// Liest die Audiodaten (16 Bit, mono) aus einer WAV von Piper.
+fn read_pcm(bytes: &[u8]) -> Option<Vec<u8>> {
     let mut pos = 12;
     while pos + 8 <= bytes.len() {
         let id = &bytes[pos..pos + 4];
@@ -405,9 +505,7 @@ struct Buffer {
 }
 
 fn play(shared: &Shared, key: &str, sentences: &[Sentence], rate: i32, volume: u32, notify: &dyn Fn()) -> Result<(), String> {
-    let output = std::env::temp_dir().join(format!("vorleser-piper-{}", std::process::id()));
-    std::fs::create_dir_all(&output).map_err(|e| e.to_string())?;
-    let mut engine = start_engine(key, rate, &output).map_err(|e| e.to_string())?;
+    let mut engine = start_engine(key, rate).map_err(|e| e.to_string())?;
     let mut stdin = engine.stdin.take().ok_or_else(|| t("err.piper_failed").to_string())?;
     let mut stdout = BufReader::new(engine.stdout.take().ok_or_else(|| t("err.piper_failed").to_string())?);
 
@@ -441,35 +539,8 @@ fn play(shared: &Shared, key: &str, sentences: &[Sentence], rate: i32, volume: u
     let mut playing = None;
     let mut result = Ok(());
     while !shared.cancel.load(Relaxed) {
-        // Höchstens drei Sätze im Voraus, damit Pausen und Stopp sofort greifen.
-        if queue.len() < 3 && next < sentences.len() {
-            let sentence = &sentences[next];
-            next += 1;
-            let line = format!("{}\n", sentence.text);
-            let mut path = String::new();
-            if stdin.write_all(line.as_bytes()).and_then(|()| stdin.flush()).is_err()
-                || stdout.read_line(&mut path).unwrap_or(0) == 0
-            {
-                result = Err(t("err.piper_stopped").to_string());
-                break;
-            }
-            let path = PathBuf::from(path.trim());
-            let data = read_pcm(&path).unwrap_or_default();
-            let _ = std::fs::remove_file(&path);
-            if !data.is_empty() && !shared.cancel.load(Relaxed) {
-                let mut header = Box::new(WAVEHDR {
-                    lpData: windows::core::PSTR(data.as_ptr() as *mut u8),
-                    dwBufferLength: data.len() as u32,
-                    ..Default::default()
-                });
-                unsafe {
-                    waveOutPrepareHeader(device, &mut *header, header_size);
-                    waveOutWrite(device, &mut *header, header_size);
-                }
-                queue.push_back(Buffer { header, _data: data, range: (sentence.start, sentence.len) });
-            }
-            continue;
-        }
+        // Zuerst melden, welcher Satz gerade läuft: Das Berechnen der nächsten Sätze dauert mit
+        // großen Stimmen länger als ein kurzer Satz, der sonst unmarkiert vorbeiginge.
         while queue.front().is_some_and(|b| b.header.dwFlags & WHDR_DONE != 0) {
             let mut done = queue.pop_front().unwrap();
             unsafe {
@@ -484,6 +555,46 @@ fn play(shared: &Shared, key: &str, sentences: &[Sentence], rate: i32, volume: u
             status.changed = true;
             drop(status);
             notify();
+        }
+        // Höchstens drei Sätze im Voraus, damit Pausen und Stopp sofort greifen.
+        if queue.len() < 3 && next < sentences.len() {
+            let sentence = &sentences[next];
+            next += 1;
+            let Some(pipe) = AudioPipe::create() else {
+                result = Err(t("err.piper_failed").to_string());
+                break;
+            };
+            let line = json_line(&sentence.text, &pipe.name);
+            if stdin.write_all(line.as_bytes()).and_then(|()| stdin.flush()).is_err() {
+                result = Err(t("err.piper_stopped").to_string());
+                break;
+            }
+            let Some(wav) = pipe.receive(&shared.cancel, &mut engine) else {
+                if !shared.cancel.load(Relaxed) {
+                    result = Err(t("err.piper_stopped").to_string());
+                }
+                break;
+            };
+            // Danach meldet Piper das Ziel noch auf stdout; mitlesen, damit dessen Puffer nicht volläuft.
+            let mut echo = String::new();
+            if stdout.read_line(&mut echo).unwrap_or(0) == 0 {
+                result = Err(t("err.piper_stopped").to_string());
+                break;
+            }
+            let data = read_pcm(&wav).unwrap_or_default();
+            if !data.is_empty() && !shared.cancel.load(Relaxed) {
+                let mut header = Box::new(WAVEHDR {
+                    lpData: windows::core::PSTR(data.as_ptr() as *mut u8),
+                    dwBufferLength: data.len() as u32,
+                    ..Default::default()
+                });
+                unsafe {
+                    waveOutPrepareHeader(device, &mut *header, header_size);
+                    waveOutWrite(device, &mut *header, header_size);
+                }
+                queue.push_back(Buffer { header, _data: data, range: (sentence.start, sentence.len) });
+            }
+            continue;
         }
         if queue.is_empty() && next >= sentences.len() {
             break;
@@ -585,6 +696,62 @@ mod tests {
         let wav = dir.join("test.wav");
         save_wav(voice.key, 0, text, wav.to_str().unwrap()).unwrap();
         assert!(std::fs::metadata(&wav).unwrap().len() > 100_000);
+    }
+
+    #[test]
+    fn builds_json_lines() {
+        assert_eq!(
+            json_line("Er sagte \"Hallo\".", r"\\.\pipe\hedgie-piper-1-2"),
+            "{\"text\": \"Er sagte \\\"Hallo\\\".\", \"output_file\": \"\\\\\\\\.\\\\pipe\\\\hedgie-piper-1-2\"}\n"
+        );
+    }
+
+    #[test]
+    fn reads_pcm_from_wav() {
+        let mut wav = b"RIFF\0\0\0\0WAVEfmt \x10\0\0\0".to_vec();
+        wav.extend_from_slice(&[0; 16]);
+        wav.extend_from_slice(b"data\x04\0\0\0\x01\x02\x03\x04");
+        assert_eq!(read_pcm(&wav), Some(vec![1, 2, 3, 4]));
+        assert_eq!(read_pcm(b"RIFF\0\0\0\0WAVE"), None);
+    }
+
+    /// Mit einer schon installierten KI-Stimme, stumm; prüft, dass kein Temp-Ordner entsteht.
+    /// `cargo test speaks_through_pipe -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn speaks_through_pipe() {
+        let voice = installed().next().expect("keine KI-Stimme installiert");
+        let temp = std::env::temp_dir().join(format!("vorleser-piper-{}", std::process::id()));
+        let text = "Guten Tag. Das ist ein Test der KI-Stimme. Und ein dritter Satz.";
+        let session = Session::start(voice.key, text, 2, 0, HWND::default(), 0);
+        let start = Instant::now();
+        let mut seen = Vec::new();
+        let result = loop {
+            std::thread::sleep(Duration::from_millis(50));
+            let progress = session.poll();
+            seen.extend(progress.sentence);
+            if let Some(result) = progress.finished {
+                break result;
+            }
+            assert!(start.elapsed().as_secs() < 60, "hängt");
+        };
+        println!("{} in {:?}: {seen:?} {result:?}", voice.key, start.elapsed());
+        assert!(result.is_ok());
+        assert_eq!(seen, vec![(0, 10), (11, 31), (43, 21)]);
+        assert!(!temp.exists(), "Temp-Ordner angelegt");
+
+        // Abbrechen mitten im Text: Der Thread muss schnell fertig werden.
+        let long = "Ein Satz zum Abbrechen. ".repeat(30);
+        let session = Session::start(voice.key, &long, 0, 0, HWND::default(), 0);
+        std::thread::sleep(Duration::from_millis(1500));
+        let shared = session.shared.clone();
+        drop(session);
+        let start = Instant::now();
+        while shared.status.lock().unwrap().finished.is_none() {
+            assert!(start.elapsed().as_secs() < 5, "Abbruch hängt");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        println!("abgebrochen in {:?}", start.elapsed());
     }
 
     #[test]

@@ -100,6 +100,7 @@ Root: HKCU; Subkey: "Software\Beseco\Vorleser"; ValueType: string; ValueName: "A
 ; Heruntergeladene KI-Stimmen (bis mehrere hundert MB). Die Einstellungen bleiben erhalten.
 Type: filesandordirs; Name: "{localappdata}\Vorleser\piper"
 Type: filesandordirs; Name: "{localappdata}\Vorleser\whisper"
+Type: filesandordirs; Name: "{localappdata}\Vorleser\cache"
 
 [Run]
 ; Als angemeldeter Benutzer starten, nicht mit den Administratorrechten des Installers.
@@ -127,23 +128,52 @@ begin
   end;
 end;
 
+// Loescht eine Datei der alten Installation. Ist sie noch gesperrt (das alte Programm hat sich
+// nicht rechtzeitig beendet), wird es drei Sekunden lang erneut versucht und die Datei sonst beim
+// naechsten Windows-Start entfernt. So bleibt nichts verwaist zurueck.
+function DeleteOldFile(const FileName: String): Boolean;
+var
+  Tries: Integer;
+begin
+  Result := True;
+  if not FileExists(FileName) then
+    exit;
+  Tries := 0;
+  while not DeleteFile(FileName) do
+  begin
+    Tries := Tries + 1;
+    if Tries >= 30 then
+    begin
+      RestartReplace(FileName, '');
+      Log('Wird beim naechsten Neustart geloescht: ' + FileName);
+      Result := False;
+      exit;
+    end;
+    Sleep(100);
+  end;
+end;
+
 // Raeumt die Benutzer-Installation bis 0.6.3 (%LOCALAPPDATA%\Programs\Hedgie, vorleser.exe) weg.
 // Deren Deinstallation wird bewusst nicht gestartet: Sie wuerde auch die heruntergeladenen
 // KI-Stimmen loeschen. Einstellungen und Stimmen bleiben so erhalten.
 procedure RemoveOldUserInstall;
 var
   OldDir, RunValue: String;
+  AllGone: Boolean;
 begin
   if not RegQueryStringValue(HKEY_CURRENT_USER, OldUninstallKey, 'InstallLocation', OldDir) then
     exit;
   OldDir := RemoveBackslashUnlessRoot(OldDir);
   if (OldDir <> '') and (CompareText(OldDir, ExpandConstant('{app}')) <> 0) then
   begin
-    DeleteFile(OldDir + '\vorleser.exe');
-    DeleteFile(OldDir + '\LICENSE.txt');
-    DeleteFile(OldDir + '\unins000.exe');
-    DeleteFile(OldDir + '\unins000.dat');
-    RemoveDir(OldDir);
+    // Bewusst ohne Kurzschluss: jede Datei loeschen bzw. fuer den Neustart vormerken.
+    AllGone := DeleteOldFile(OldDir + '\vorleser.exe');
+    AllGone := DeleteOldFile(OldDir + '\LICENSE.txt') and AllGone;
+    AllGone := DeleteOldFile(OldDir + '\unins000.exe') and AllGone;
+    AllGone := DeleteOldFile(OldDir + '\unins000.dat') and AllGone;
+    // Der Ordner geht erst, wenn er leer ist; sonst nach den Dateien beim Neustart.
+    if not RemoveDir(OldDir) and not AllGone then
+      RestartReplace(OldDir, '');
     // Ein Autostart, der noch auf die alte EXE zeigt, wird nur bei gewaehltem Autostart neu gesetzt.
     if RegQueryStringValue(HKEY_CURRENT_USER, RunKey, 'Vorleser', RunValue) and
        (Pos(Lowercase(OldDir), Lowercase(RunValue)) > 0) then

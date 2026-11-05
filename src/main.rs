@@ -2440,8 +2440,15 @@ fn save_audio() {
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
             let mp3 = path.to_lowercase().ends_with(".mp3");
             if mp3 {
-                // Erst als WAV in den Temp-Ordner, dann umwandeln.
-                let wav = std::env::temp_dir().join(format!("vorleser-export-{}.wav", std::process::id()));
+                // Erst als WAV in einen eigenen Ordner, dann umwandeln. Nicht in %TEMP%: Dort halten
+                // manche Virenscanner (Trend Micro Apex One) solche Zwischendateien für Ransomware.
+                let cache = std::env::var_os("LOCALAPPDATA")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(std::env::temp_dir)
+                    .join("Vorleser")
+                    .join("cache");
+                let _ = std::fs::create_dir_all(&cache);
+                let wav = cache.join("export.wav");
                 let saved = tts::save_wav(voice.as_deref(), rate, &text, &wav.to_string_lossy()).is_ok()
                     && mp3::wav_to_mp3(&wav, &path).is_ok();
                 let _ = std::fs::remove_file(&wav);
