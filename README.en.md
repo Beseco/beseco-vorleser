@@ -27,7 +27,7 @@ Requires Windows 10 or 11 (64-bit).
 
 | Action | Default |
 |---|---|
-| Read selected text, press again to stop | Ctrl+Alt+V |
+| Read selected text (with nothing selected: the clipboard, from six words), press again to stop | Ctrl+Alt+V |
 | Pause and resume | Ctrl+Alt+P |
 | Hedgie menu at the mouse position | Ctrl+right-click or Ctrl+Alt+M |
 | Recognize and read text on screen (drag a frame) | Ctrl+Alt+O |
@@ -114,6 +114,7 @@ Hedgie uses the Windows proxy settings, including automatic configuration via `w
 - Password fields do not hand out text. PDFs are read via text recognition; very small print or poor scans may lose single words.
 - The old Word format (.doc) is not supported; please save as .docx.
 - Text copied while reading the selection may show up in the clipboard history (Win+V).
+- With nothing selected, Ctrl+Alt+V reads the clipboard, but only from six words and not when a password manager has marked the content as confidential. Copied passwords and codes stay silent.
 
 ## Building
 

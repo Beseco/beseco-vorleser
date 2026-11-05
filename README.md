@@ -25,7 +25,7 @@ Voraussetzung ist Windows 10 oder 11 (64 Bit).
 
 | Aktion | Standard |
 |---|---|
-| Markierten Text vorlesen, erneut drücken zum Stoppen | Strg+Alt+V |
+| Markierten Text vorlesen (ohne Markierung: die Zwischenablage, ab sechs Wörtern), erneut drücken zum Stoppen | Strg+Alt+V |
 | Pause und Fortsetzen | Strg+Alt+P |
 | Hedgie-Menü an der Mausposition | Strg+Rechtsklick oder Strg+Alt+M |
 | Text vom Bildschirm erkennen und vorlesen (Rahmen aufziehen) | Strg+Alt+O |
@@ -132,6 +132,7 @@ Hedgie nutzt die Proxy-Einstellungen von Windows, auch eine automatische Konfigu
 - Passwortfelder geben keinen Text heraus. PDFs liest Hedgie über die Texterkennung; bei sehr kleiner Schrift oder schlechten Scans kann sie einzelne Wörter verfehlen.
 - Das alte Word-Format (.doc) wird nicht unterstützt, bitte als .docx speichern.
 - Der beim Auslesen kopierte Text kann im Zwischenablageverlauf (Win+V) erscheinen.
+- Ist nichts markiert, liest Strg+Alt+V die Zwischenablage, aber nur ab sechs Wörtern und nicht, wenn ein Passwortmanager den Inhalt als vertraulich gekennzeichnet hat. So bleiben kopierte Passwörter und Codes still.
 
 ## Selbst bauen
 

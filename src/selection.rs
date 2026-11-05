@@ -10,7 +10,8 @@ use windows::Win32::Foundation::{HANDLE, HGLOBAL};
 use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
 use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData,
-    GetClipboardSequenceNumber, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
+    GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW,
+    SetClipboardData,
 };
 use windows::Win32::System::Diagnostics::Debug::OutputDebugStringW;
 use windows::Win32::System::Memory::{
@@ -36,6 +37,70 @@ pub fn selected_text() -> Option<String> {
         unsafe { OutputDebugStringW(w!("Vorleser: Markierung über Zwischenablage")) };
     }
     text
+}
+
+/// Ab so vielen Wörtern wird die Zwischenablage ersatzweise vorgelesen. Kürzeres (Passwörter,
+/// Codes, Kundennummern) bleibt still.
+const CLIPBOARD_MIN_WORDS: usize = 6;
+
+/// Wie [`selected_text`]; ist nichts markiert, der Text aus der Zwischenablage, sofern er nach
+/// Fließtext aussieht und kein Passwortmanager ihn als vertraulich gekennzeichnet hat.
+pub fn selected_or_clipboard_text() -> Option<String> {
+    if let Some(text) = selected_text() {
+        return Some(text);
+    }
+    let text = clipboard_text()?;
+    if !enough_words(&text) || clipboard_is_private() {
+        return None;
+    }
+    unsafe { OutputDebugStringW(w!("Vorleser: nichts markiert, lese die Zwischenablage")) };
+    Some(text)
+}
+
+fn enough_words(text: &str) -> bool {
+    text.split_whitespace().count() >= CLIPBOARD_MIN_WORDS
+}
+
+/// Kennzeichen, mit denen Passwortmanager (z. B. KeePass) Kopiertes aus dem Zwischenablageverlauf
+/// heraushalten. "ExcludeClipboardContentFromMonitorProcessing" setzt auch [`restore`]; dort kommt
+/// dann zusätzlich [`RESTORED_MARKER`] dazu, damit wiederhergestellter Text vorlesbar bleibt.
+fn clipboard_is_private() -> bool {
+    unsafe {
+        let format = |name: &str| RegisterClipboardFormatW(&windows::core::HSTRING::from(name));
+        let available = |name: &str| IsClipboardFormatAvailable(format(name)).is_ok();
+        if available("Clipboard Viewer Ignore") {
+            return true;
+        }
+        if available(EXCLUDE_FORMAT) && !available(RESTORED_MARKER) {
+            return true;
+        }
+        // Ein DWORD 0 heißt "nicht in den Verlauf" bzw. "nicht in die Cloud".
+        ["CanIncludeInClipboardHistory", "CanUploadToCloudClipboard"]
+            .iter()
+            .any(|name| available(name) && clipboard_dword(format(name)) == Some(0))
+    }
+}
+
+/// Eigenes Format, das [`restore`] setzt: Der Inhalt war vorher schon da und ist nicht vertraulich.
+const RESTORED_MARKER: &str = "Beseco.Vorleser.Restored";
+const EXCLUDE_FORMAT: &str = "ExcludeClipboardContentFromMonitorProcessing";
+
+fn clipboard_dword(format: u32) -> Option<u32> {
+    let _clipboard = Clipboard::open()?;
+    unsafe {
+        let handle = GetClipboardData(format).ok()?;
+        let global = HGLOBAL(handle.0);
+        if GlobalSize(global) < 4 {
+            return None;
+        }
+        let ptr = GlobalLock(global) as *const u8;
+        if ptr.is_null() {
+            return None;
+        }
+        let value = u32::from_le_bytes(std::slice::from_raw_parts(ptr, 4).try_into().ok()?);
+        let _ = GlobalUnlock(global);
+        Some(value)
+    }
 }
 
 pub fn clipboard_text() -> Option<String> {
@@ -108,8 +173,14 @@ fn restore(snapshot: &Snapshot) {
         for (format, bytes) in &snapshot.0 {
             put(*format, bytes);
         }
-        // Sonst stünde der alte Inhalt ein zweites Mal im Zwischenablageverlauf (Win+V).
-        put(RegisterClipboardFormatW(w!("ExcludeClipboardContentFromMonitorProcessing")), &[0; 4]);
+        // Sonst stünde der alte Inhalt ein zweites Mal im Zwischenablageverlauf (Win+V). Hatte
+        // ihn ein Passwortmanager schon so gekennzeichnet, bleibt er vertraulich; sonst zeigt
+        // RESTORED_MARKER, dass das Kennzeichen nur von hier stammt.
+        let exclude = RegisterClipboardFormatW(&windows::core::HSTRING::from(EXCLUDE_FORMAT));
+        if !snapshot.0.iter().any(|(format, _)| *format == exclude) {
+            put(exclude, &[0; 4]);
+            put(RegisterClipboardFormatW(&windows::core::HSTRING::from(RESTORED_MARKER)), &[0; 4]);
+        }
     }
 }
 
@@ -240,5 +311,20 @@ fn non_blank(text: String) -> Option<String> {
         None
     } else {
         Some(text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_clipboard_only_from_six_words() {
+        assert!(!enough_words(""));
+        assert!(!enough_words("Geheim123!"));
+        assert!(!enough_words("ein zwei drei vier fünf"));
+        assert!(!enough_words("  ein\tzwei\ndrei  vier fünf  "));
+        assert!(enough_words("Das ist ein ganz normaler Satz."));
+        assert!(enough_words("eins\nzwei\ndrei\nvier\nfünf\nsechs"));
     }
 }

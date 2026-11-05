@@ -2301,15 +2301,15 @@ fn choose_from_bar(id: u32) {
     }
 }
 
-/// Markierten Text vorlesen (Strg+Alt+V, sprechender Kopf der Mini-Pille); während des
-/// Vorlesens hört es auf.
+/// Markierten Text vorlesen (Strg+Alt+V, sprechender Kopf der Mini-Pille), ohne Markierung den Text
+/// aus der Zwischenablage (ab sechs Wörtern); während des Vorlesens hört es auf.
 fn read_selection() {
     if with_app(|app| app.state != State::Idle) == Some(true) {
         with_app(App::stop);
     } else {
         // Die Markierung wird außerhalb von `with_app` ermittelt, weil das bis zu
         // einer Sekunde dauern kann und dabei Nachrichten eintreffen können.
-        let text = selection::selected_text();
+        let text = selection::selected_or_clipboard_text();
         with_app(|app| app.speak(text, t("app.no_text_selected")));
     }
 }

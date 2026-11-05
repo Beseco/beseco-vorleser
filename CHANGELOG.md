@@ -2,8 +2,9 @@
 
 Alle nennenswerten Änderungen an Hedgie (bis 0.5 „Vorleser“). Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
-## 0.7.0 – 2026-11-04
+## 0.7.0 – 2026-11-05
 
+- Neu: Ist nichts markiert, liest Strg+Alt+V (und der sprechende Kopf der Mini-Pille) den Text aus der Zwischenablage vor. Zum Schutz von Passwörtern nur ab sechs Wörtern und nicht, wenn ein Passwortmanager den Inhalt als vertraulich gekennzeichnet hat
 - Hedgie wird jetzt für alle Benutzer nach `C:\Program Files\Beubl-IT\Hedgie` installiert; der Installer braucht dafür Administratorrechte
 - Die Programmdatei heißt jetzt `Beseco-Vorleser.exe` (auch in der portablen ZIP)
 - Beim Update wird die bisherige Installation unter `%LOCALAPPDATA%\Programs\Hedgie` entfernt; Einstellungen, KI-Zugang und heruntergeladene Stimmen bleiben erhalten
