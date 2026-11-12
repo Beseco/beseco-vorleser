@@ -41,6 +41,11 @@ pub enum State {
     /// Erkannter Text wartet, weil das Zielprogramm nicht im Vordergrund ist.
     Waiting,
     Finished,
+    /// Das Diktat wird vorgelesen.
+    Reading,
+    /// Nach dem Vorlesen: Die Pille bleibt, bis ✓ (so lassen), ✨ (korrigieren) oder ✕ gedrückt
+    /// wird; erneutes Vorlesen geht auch.
+    Review,
 }
 
 /// Klick in der Pille.
@@ -255,6 +260,8 @@ fn title(state: State) -> &'static str {
         State::Correcting => t("dictbar.correcting"),
         State::Waiting => t("dictbar.waiting"),
         State::Finished => t("dictbar.finished"),
+        State::Reading => t("dictbar.reading"),
+        State::Review => t("dictbar.review"),
     }
 }
 
@@ -278,11 +285,14 @@ fn draw(c: &Canvas, bar: &Bar) {
     let cy = py + PILL_H / 2.0;
 
     // Hinweis über der Pille: unter der Maus, und immer, wenn etwas zu tun ist.
-    let important = matches!(bar.state, State::Silent | State::Waiting | State::Preparing);
+    let important = matches!(bar.state, State::Silent | State::Waiting | State::Preparing | State::Review);
     if bar.hover.is_some() || important {
         let sub = match bar.state {
             State::Silent => t("dictbar.silent_hint").to_string(),
             State::Waiting => t("dictbar.waiting_hint").replace("{}", &bar.target),
+            State::Review if bar.hover.is_none() || bar.hover == Some(Hit::Body) => {
+                if bar.can_correct { t("dictbar.review_hint_ai") } else { t("dictbar.review_hint") }.to_string()
+            }
             _ if bar.hover == Some(Hit::Close) => t("dictbar.close_hint").to_string(),
             _ if bar.hover == Some(Hit::ReadBack) => t("dictbar.read_back_hint").to_string(),
             _ if bar.hover == Some(Hit::Correct) => t("dictbar.done_correct_hint").to_string(),
@@ -351,7 +361,7 @@ fn draw(c: &Canvas, bar: &Bar) {
         _ => {
             for i in 0..BARS {
                 let x = middle - (BARS as f32 * 7.0) / 2.0 + i as f32 * 7.0 + 1.5;
-                let lit = matches!(bar.state, State::Writing | State::Correcting | State::Preparing) && (bar.tick as usize / 3) % BARS == i;
+                let lit = matches!(bar.state, State::Writing | State::Correcting | State::Preparing | State::Reading) && (bar.tick as usize / 3) % BARS == i;
                 c.circle(x, cy, if lit { 2.4 } else { 1.6 }, if lit { p.accent } else { p.muted });
             }
         }
@@ -426,6 +436,8 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             if let Some((on_action, can_correct, state)) = info {
                 let action = match hit(x, y, can_correct) {
                     Some(Hit::Close) => Some(Action::Close),
+                    // Nach dem Vorlesen: ✓ heißt „passt so“ und schließt die Pille.
+                    Some(Hit::Done) if matches!(state, State::Reading | State::Review) => Some(Action::Close),
                     // ✓: nur beenden, der Text bleibt wie erkannt.
                     Some(Hit::Done) if state != State::Finished => Some(Action::Finish),
                     // ✨: beenden und mit KI korrigieren; geht auch kurz nach ✓ noch.

@@ -248,6 +248,8 @@ struct App {
     dict_session: String,
     /// Vorlesen wurde während des Diktats gedrückt: nach dem letzten Abschnitt vorlesen.
     dict_read_pending: bool,
+    /// Das Diktat wird gerade vorgelesen; danach wartet die Pille auf ✓ oder ✨.
+    dict_reading_back: bool,
     /// Erkannter Text, der noch nicht getippt ist, weil das Zielprogramm nicht vorn war.
     dict_waiting: Vec<String>,
     /// Der Mini-Player begleitet das laufende Vorlesen (Text von außen, Fenster zu).
@@ -392,7 +394,7 @@ impl App {
         tts.set_rate(cfg.rate);
         // Der Testlauf bleibt stumm.
         tts.set_volume(if TEST_MODE.load(Ordering::Relaxed) { 0 } else { cfg.volume });
-        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_skip_correct: false, dict_session: String::new(), dict_read_pending: false, dict_waiting: Vec::new(), player_on: false, player_sentences: Vec::new(), temp_voice: None };
+        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_skip_correct: false, dict_session: String::new(), dict_read_pending: false, dict_reading_back: false, dict_waiting: Vec::new(), player_on: false, player_sentences: Vec::new(), temp_voice: None };
         documents::SKIP_PAGE_EDGES.store(app.cfg.skip_page_edges, Ordering::Relaxed);
         app.add_icon();
         app.register_hotkeys();
@@ -672,6 +674,7 @@ impl App {
         self.dict_skip_correct = false;
         self.dict_session.clear();
         self.dict_read_pending = false;
+        self.dict_reading_back = false;
         if target == DictTarget::Window {
             window::show();
         }
@@ -838,6 +841,10 @@ impl App {
         }
         let text = Some(self.dict_session.trim().to_string()).filter(|t| !t.is_empty());
         self.speak(text, t("dictbar.nothing_to_read"));
+        if self.state != State::Idle {
+            self.dict_reading_back = true;
+            dictbar::set_state(dictbar::State::Reading);
+        }
     }
 
     /// Überarbeitet den Text links (oder die Markierung) in der eingestellten Stufe; das Ergebnis
@@ -1007,6 +1014,10 @@ impl App {
     fn set_state(&mut self, state: State) {
         if self.state != state {
             self.state = state;
+            // Vorlesen des Diktats zu Ende (oder abgebrochen): Die Pille bleibt für ✓ oder ✨.
+            if state == State::Idle && std::mem::take(&mut self.dict_reading_back) {
+                dictbar::set_state(dictbar::State::Review);
+            }
             tray::set_tip(self.hwnd, &self.tip());
             window::set_playback(state != State::Idle, state == State::Paused);
             self.refresh_menu_bar();

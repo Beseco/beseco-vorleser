@@ -5,7 +5,7 @@ Alle nennenswerten Änderungen an Hedgie (bis 0.5 „Vorleser“). Die Versionsn
 ## 0.7.2 – 2026-11-12
 
 - Neu: **Letzte Diktate** – die letzten zehn Diktate bleiben erhalten (Assistent, Infobereich und Rechtsklick auf die Mini-Pille); ein Klick legt eines in die Zwischenablage. Gespeichert nur auf diesem PC unter `%APPDATA%\Vorleser\diktate.json`
-- Neu: Vorlesen-Knopf in der Diktier-Pille liest das ganze Diktat noch einmal vor (läuft es noch, wird es vorher beendet)
+- Neu: Vorlesen-Knopf in der Diktier-Pille liest das ganze Diktat noch einmal vor (läuft es noch, wird es vorher beendet). Danach bleibt die Pille stehen, bis du dich entscheidest: ✓ so lassen oder ✨ mit KI korrigieren
 - Neu: Füllwörter wie „äh“, „ähm“, „hm“ und versehentlich doppelt gesprochene Wörter („ich ich habe“) lässt Hedgie beim Diktieren gleich weg; abschaltbar unter Assistent. Auch die KI-Korrektur lässt sie weg
 - Diktier-Pille mit eingerichteter KI: drei Knöpfe. ✓ beendet das Diktat und lässt den Text so, wie er erkannt wurde (auch ohne automatische Korrektur im Hedgie-Fenster); ✨ beendet und korrigiert mit KI. Bisher korrigierte ✓ immer
 
