@@ -67,13 +67,13 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 ## 7. Officeassistent
 
 - [ ] Installer mit Häkchen „Officeassistent einschalten“: Fenster zeigt beim Start den Arbeitsbereich
-- [ ] Extras → Beseco Officeassistent aus und an: Arbeitsbereich verschwindet und erscheint wieder
+- [ ] Einstellungen → KI-Assistent: Officeassistent aus und an: Arbeitsbereich verschwindet und erscheint wieder
 - [ ] Ohne KI: Zusammenfassen, Korrigieren und die Auswahllisten sind grau, „KI einrichten …“ öffnet den Assistenten; Diktieren geht
 - [ ] Assistent „Auf diesem PC“ ohne Ollama: Download und Installation ohne Administratorrechte, danach Modell-Download mit Fortschrittsbalken; Abbrechen während des Downloads
 - [ ] Assistent „Ollama-Server im Firmennetz“ mit nur dem Servernamen; Server ohne Modell: verständliche Meldung
 - [ ] Assistent „Cloud“ mit IONOS-Schlüssel; mit falschem Schlüssel: verständliche Meldung
 - [ ] Installer mit Häkchen „Officeassistent“: beim ersten Start öffnet sich der Assistent
-- [ ] KI-Einstellungen: KI-Check zeigt den Rechner richtig an; Ollama-Server eintragen, Modelle abrufen, Verbindung testen
+- [ ] Einstellungen → KI-Assistent: „Dieser PC“ zeigt den Rechner richtig an; Ollama-Server eintragen, Modelle abrufen, Verbindung testen
 - [ ] IONOS (oder anderer Cloud-Anbieter) mit Schlüssel: Verbindung testen; mit falschem Schlüssel verständliche Meldung
 - [ ] F9 mit kurzem Text, mit markiertem Abschnitt und mit einem langen Dokument (Fenstertitel zeigt die Schritte); alle drei Arten der Zusammenfassung
 - [ ] Zusammenfassung wird rechts mitgelesen; Umschalt+F9 liest sie erneut; Alt+←/→ springt rechts satzweise
@@ -82,16 +82,16 @@ Jeweils einen Satz markieren und zuerst **Strg+Alt+V** drücken, dann **Strg+Rec
 - [ ] F8: „Ich höre zu“, einige Sätze mit Pausen sprechen; Text erscheint abschnittsweise an der Schreibmarke, nach Satzende groß; F8 beendet, der letzte Abschnitt kommt noch
 - [ ] Ohne Mikrofon bzw. mit gesperrtem Mikrofon (Windows-Datenschutz): verständliche Meldung
 - [ ] Nach dem Diktat mit eingerichteter KI: korrigierte Fassung erscheint rechts; ohne KI passiert nichts weiter
-- [ ] Umschalt+F8 in allen vier Stufen; eigene Vorgabe in den KI-Einstellungen eintragen und verwenden
+- [ ] Umschalt+F8 in allen vier Stufen; eigene Anweisung unter Einstellungen → Diktieren eintragen und verwenden
 - [ ] Rechnergeschwindigkeit: Wartezeit nach jeder Pause mit „Genau“ und „Sehr genau“ (es wird immer das genaueste installierte Modell genutzt)
-- [ ] Assistent → Mikrofon: jedes Gerät einmal wählen; mit stummem Gerät erscheint „Kein Ton vom Mikrofon“
+- [ ] Einstellungen → Diktieren → Mikrofon: jedes Gerät einmal wählen; mit stummem Gerät erscheint „Kein Ton vom Mikrofon“
 - [ ] Strg+Alt+D in Word, Outlook und Editor (jeweils neues, leeres Dokument): Text kommt richtig an, Umlaute und Satzzeichen stimmen; Diktier-Pille zeigt das Programm
 - [ ] Während des Diktats in ein anderes Programm wechseln: dort wird nichts getippt, die Pille zeigt „Text wartet“; zurückwechseln: der Text kommt
 - [ ] „Korrigieren“ in der Pille ersetzt den diktierten Text im Programm
 - [ ] Markierten Text in Edge vorlesen, Fenster geschlossen: Mini-Player erscheint, Satz vor/zurück, Pause, Geschwindigkeit, Fenster öffnen, Stopp
 - [ ] Fenster schließen: unten erscheint die Mini-Pille; Maus darauf: Mikrofon und Kopf; Kopf liest markierten Text vor (Player erscheint, Pille verschwindet, danach wieder da); Mikrofon diktiert ins Programm vorn; Rechtsklick: öffnen bzw. ausblenden
 - [ ] Zwei Bildschirme: Pille erscheint auf dem Bildschirm mit dem Fenster im Vordergrund und wechselt mit; Pille wegziehen, Vorleser neu starten: sie ist wieder dort; Rechtsklick → Position zurücksetzen
-- [ ] Extras → Mini-Pille aus: beim Schließen nur noch das Symbol im Infobereich
+- [ ] Einstellungen → Allgemein → Mini-Pille aus: beim Schließen nur noch das Symbol im Infobereich
 - [ ] Diktier-Pille: ✕ beendet, ✓ beendet und korrigiert (mit KI); Hinweis darüber unter der Maus
 - [ ] Aufnahme zu Protokoll mit einer echten Besprechung (MP3 vom Handy, M4A, Teams-Aufzeichnung als MP4): Abschrift mit Zeitmarken, Protokoll rechts; Dauer bei 30 bis 60 Minuten notieren; Abbrechen
 - [ ] Aufnahme ohne KI: nur die Abschrift; ohne Officeassistent: Hinweis

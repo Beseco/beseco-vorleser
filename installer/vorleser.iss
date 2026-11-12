@@ -53,8 +53,8 @@ german.Autostart=Hedgie mit Windows starten
 english.Autostart=Start Hedgie with Windows
 german.StartNow=Hedgie jetzt starten
 english.StartNow=Start Hedgie now
-german.Assistant=Beseco Officeassistent einschalten (KI und Diktieren; beim ersten Start hilft ein Assistent beim Einrichten, spaeter unter Extras umschaltbar)
-english.Assistant=Turn on Beseco Office Assistant (AI and dictation; a wizard helps with the setup on first start, can be changed later under Tools)
+german.Assistant=Beseco Officeassistent einschalten (KI und Diktieren; beim ersten Start hilft ein Assistent beim Einrichten, spaeter in den Einstellungen umschaltbar)
+english.Assistant=Turn on Beseco Office Assistant (AI and dictation; a wizard helps with the setup on first start, can be changed later in the settings)
 
 [Tasks]
 Name: "autostart"; Description: "{cm:Autostart}"

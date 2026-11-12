@@ -6,7 +6,6 @@
 mod ai;
 mod audio;
 mod aicheck;
-mod aisettings;
 mod aisetup;
 mod aivoices;
 mod config;
@@ -146,7 +145,6 @@ const CMD_READ_SELECTION: u32 = 1;
 const CMD_READ_CLIPBOARD: u32 = 2;
 const CMD_PAUSE: u32 = 3;
 const CMD_STOP: u32 = 4;
-const CMD_AUTOSTART: u32 = 5;
 const CMD_QUIT: u32 = 6;
 const CMD_OPEN: u32 = 7;
 const CMD_ABOUT: u32 = 8;
@@ -164,7 +162,6 @@ const CMD_SELECT_ALL: u32 = 19;
 const CMD_CLEAN: u32 = 20;
 const CMD_CLEAR: u32 = 21;
 const CMD_READ_WINDOW: u32 = 22;
-const CMD_SAMPLE: u32 = 23;
 const CMD_TOPMOST: u32 = 24;
 const CMD_MANUAL: u32 = 25;
 const CMD_CHECK_UPDATE: u32 = 26;
@@ -174,24 +171,17 @@ const CMD_NEXT: u32 = 29;
 const CMD_SCREEN_OCR: u32 = 30;
 const CMD_GUIDE_SHOW: u32 = 31;
 const CMD_GUIDE_READ: u32 = 32;
-const CMD_ASSISTANT: u32 = 33;
 const CMD_SUMMARIZE: u32 = 34;
 const CMD_READ_RESULT: u32 = 35;
 const CMD_AI_SETTINGS: u32 = 36;
 const CMD_DICTATE: u32 = 37;
 const CMD_CORRECT: u32 = 38;
-const CMD_DICT_SETUP: u32 = 39;
-const CMD_AI_SETUP: u32 = 40;
-const CMD_PILL: u32 = 41;
 const CMD_TRANSCRIBE: u32 = 42;
 const CMD_HISTORY_CLEAR: u32 = 43;
-const CMD_DICT_FILLERS: u32 = 44;
 /// Letzte Diktate: `CMD_HISTORY` + Nummer (neuestes zuerst) kopiert es in die Zwischenablage.
 const CMD_HISTORY: u32 = 3800;
 /// Korrekturstufe: `CMD_CORRECTION_MODE` + Nummer.
 const CMD_CORRECTION_MODE: u32 = 3600;
-/// Mikrofon: `CMD_MICROPHONE` (Windows-Standard) bzw. + 1 + Geräte-Nummer.
-const CMD_MICROPHONE: u32 = 3700;
 /// Art der Zusammenfassung: `CMD_SUMMARY_MODE` + Nummer.
 const CMD_SUMMARY_MODE: u32 = 3500;
 
@@ -462,27 +452,46 @@ impl App {
 
     fn settings(&self) -> settings::Values {
         settings::Values {
+            volume: self.cfg.volume,
+            auto_language: self.cfg.auto_language,
+            clean_text: self.cfg.clean_text,
+            skip_page_edges: self.cfg.skip_page_edges,
+            page_edges_ai: self.cfg.page_edges_ai,
+            microphone: self.cfg.microphone.clone(),
+            dict_clean_fillers: self.cfg.dict_clean_fillers,
+            dict_auto_correct: self.cfg.dict_auto_correct,
+            correction_mode: self.cfg.correction_mode.clone(),
+            correction_custom: self.cfg.correction_custom.clone(),
+            assistant: self.cfg.assistant,
+            provider: self.provider(),
             hotkey_read: self.cfg.hotkey_read.clone(),
             hotkey_pause: self.cfg.hotkey_pause.clone(),
             hotkey_menu: self.cfg.hotkey_menu.clone(),
             hotkey_ocr: self.cfg.hotkey_ocr.clone(),
             hotkey_dictate: self.cfg.hotkey_dictate.clone(),
             mouse_menu: self.cfg.mouse_menu.clone(),
-            volume: self.cfg.volume,
-            clean_text: self.cfg.clean_text,
+            language: self.cfg.language.clone(),
+            theme: self.cfg.theme.clone(),
+            autostart: autostart_enabled(),
+            close_to_pill: self.cfg.close_to_pill,
             remember_text: self.cfg.remember_text,
             update_check: self.cfg.update_check,
-            language: self.cfg.language.clone(),
             proxy: self.cfg.proxy.clone(),
-            close_to_pill: self.cfg.close_to_pill,
-            skip_page_edges: self.cfg.skip_page_edges,
-            page_edges_ai: self.cfg.page_edges_ai,
-            auto_language: self.cfg.auto_language,
-            theme: self.cfg.theme.clone(),
         }
     }
 
-    fn apply_settings(&mut self, values: settings::Values) {
+    /// Übernimmt das Einstellungsfenster. `true`, wenn der Officeassistent gerade eingeschaltet
+    /// wurde, aber noch keine KI eingerichtet ist (dann folgt der Einrichtungsassistent).
+    fn apply_settings(&mut self, values: settings::Values) -> bool {
+        self.cfg.microphone = values.microphone;
+        self.cfg.dict_clean_fillers = values.dict_clean_fillers;
+        self.cfg.dict_auto_correct = values.dict_auto_correct;
+        self.cfg.correction_mode = values.correction_mode;
+        if values.autostart != autostart_enabled() {
+            set_autostart(values.autostart);
+        }
+        self.apply_ai_settings(values.provider, values.correction_custom);
+        let needs_ai_setup = values.assistant != self.cfg.assistant && self.set_assistant(values.assistant);
         self.cfg.hotkey_read = values.hotkey_read;
         self.cfg.hotkey_pause = values.hotkey_pause;
         self.cfg.hotkey_menu = values.hotkey_menu;
@@ -520,7 +529,9 @@ impl App {
         self.tts.set_volume(self.cfg.volume);
         tray::set_tip(self.hwnd, &self.tip());
         self.update_pill();
+        self.show_assistant();
         self.refresh_menu_bar();
+        needs_ai_setup
     }
 
     /// Mini-Pille am Bildschirmrand: sichtbar, solange das Fenster zu ist und weder Diktat noch
@@ -1472,9 +1483,6 @@ impl App {
             item(menu, CMD_READ_CLIPBOARD, t("app.read_clipboard"), true, false);
             let ocr = format!("{}\t{}", t("app.read_screen"), i18n::hotkey(&self.cfg.hotkey_ocr));
             item(menu, CMD_SCREEN_OCR, &ocr, true, false);
-            if self.cfg.assistant {
-                append_history_menu(menu, 0);
-            }
             let pause = if self.state == State::Paused { t("app.resume") } else { t("app.pause") };
             item(menu, CMD_PAUSE, &format!("{pause}\t{}", i18n::hotkey(&self.cfg.hotkey_pause)), active, false);
             item(menu, CMD_STOP, t("app.stop"), active, false);
@@ -1484,10 +1492,11 @@ impl App {
             let _ = AppendMenuW(menu, MF_POPUP, voices.0 as usize, &HSTRING::from(t("app.voice")));
             let rates = self.build_rate_menu(0);
             let _ = AppendMenuW(menu, MF_POPUP, rates.0 as usize, &HSTRING::from(t("app.speed")));
-
-            item(menu, CMD_AUTOSTART, t("app.start_windows"), true, autostart_enabled());
+            if self.cfg.assistant {
+                append_history_menu(menu, 0);
+            }
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
-            item(menu, CMD_AI_VOICES, t("app.ai_voices"), true, false);
+            // Alles Einstellbare (Autostart, KI-Stimmen, …) steht in den Einstellungen.
             item(menu, CMD_SETTINGS, t("app.settings"), true, false);
             item(menu, CMD_ABOUT, t("app.about_vorleser"), true, false);
             item(menu, CMD_QUIT, t("app.exit"), true, false);
@@ -1558,21 +1567,35 @@ impl App {
             let ocr = format!("{}\t{}", t("menu.read_screen"), i18n::hotkey(&self.cfg.hotkey_ocr));
             item(playback, base + CMD_SCREEN_OCR, &ocr, true, false);
             separator(playback);
+            let voice = self.build_voice_menu(base);
+            separator(voice);
+            item(voice, base + CMD_AI_VOICES, t("menu.ai_voices"), true, false);
+            let _ = AppendMenuW(playback, MF_POPUP, voice.0 as usize, &HSTRING::from(t("menu.voice")));
             let rates = self.build_rate_menu(base);
             let _ = AppendMenuW(playback, MF_POPUP, rates.0 as usize, &HSTRING::from(t("menu.speed")));
             popup(t("menu.playback"), playback);
 
-            let voice = self.build_voice_menu(base);
-            separator(voice);
-            item(voice, base + CMD_SAMPLE, t("menu.sample"), true, false);
-            item(voice, base + CMD_AI_VOICES, t("menu.ai_voices"), true, false);
-            popup(t("menu.voice"), voice);
-
+            // Nur Befehle; Mikrofon, Füllwörter und die KI selbst stehen in den Einstellungen.
             if self.cfg.assistant {
                 let assistant = CreatePopupMenu().unwrap_or_default();
                 let busy = AI_BUSY.load(Ordering::Relaxed);
                 // Ohne eingerichtete KI bleiben deren Befehle grau; Diktieren geht immer.
                 let ready = self.provider().is_ready();
+                let dictating = self.dictation.is_some();
+                item(assistant, base + CMD_DICTATE, if dictating { t("menu.dictate_stop") } else { t("menu.dictate") }, true, dictating);
+                item(assistant, base + CMD_CORRECT, t("menu.correct"), ready && !busy, false);
+                let corrections = CreatePopupMenu().unwrap_or_default();
+                let current = ai::Correction::from_code(&self.cfg.correction_mode);
+                for (i, mode) in ai::Correction::ALL.iter().enumerate() {
+                    let id = base + CMD_CORRECTION_MODE + i as u32;
+                    item(corrections, id, correction_label(*mode), ready, false);
+                    if *mode == current {
+                        let _ = CheckMenuRadioItem(corrections, id, id, id, MF_BYCOMMAND.0);
+                    }
+                }
+                let _ = AppendMenuW(assistant, MF_POPUP, corrections.0 as usize, &HSTRING::from(t("menu.correction_mode")));
+                append_history_menu(assistant, base);
+                separator(assistant);
                 item(assistant, base + CMD_SUMMARIZE, t("menu.summarize"), ready && !busy, false);
                 let modes = CreatePopupMenu().unwrap_or_default();
                 let current = ai::Summary::from_code(&self.cfg.summary_mode);
@@ -1585,47 +1608,16 @@ impl App {
                 }
                 let _ = AppendMenuW(assistant, MF_POPUP, modes.0 as usize, &HSTRING::from(t("menu.summary_mode")));
                 item(assistant, base + CMD_READ_RESULT, t("menu.read_result"), ready, false);
+                separator(assistant);
                 let transcribing = TRANSCRIBING.load(Ordering::Relaxed);
                 item(assistant, base + CMD_TRANSCRIBE, if transcribing { t("menu.transcribe_cancel") } else { t("menu.transcribe") }, true, false);
                 separator(assistant);
-                let dictating = self.dictation.is_some();
-                item(assistant, base + CMD_DICTATE, if dictating { t("menu.dictate_stop") } else { t("menu.dictate") }, true, dictating);
-                item(assistant, base + CMD_CORRECT, t("menu.correct"), ready && !busy, false);
-                append_history_menu(assistant, base);
-                item(assistant, base + CMD_DICT_FILLERS, t("menu.dict_fillers"), true, self.cfg.dict_clean_fillers);
-                let corrections = CreatePopupMenu().unwrap_or_default();
-                let current = ai::Correction::from_code(&self.cfg.correction_mode);
-                for (i, mode) in ai::Correction::ALL.iter().enumerate() {
-                    let id = base + CMD_CORRECTION_MODE + i as u32;
-                    item(corrections, id, correction_label(*mode), ready, false);
-                    if *mode == current {
-                        let _ = CheckMenuRadioItem(corrections, id, id, id, MF_BYCOMMAND.0);
-                    }
-                }
-                let _ = AppendMenuW(assistant, MF_POPUP, corrections.0 as usize, &HSTRING::from(t("menu.correction_mode")));
-                let microphones = CreatePopupMenu().unwrap_or_default();
-                item(microphones, base + CMD_MICROPHONE, t("menu.microphone_default"), true, false);
-                let names = dictation::microphones();
-                let current = names.iter().position(|n| *n == self.cfg.microphone).map_or(0, |i| i as u32 + 1);
-                for (i, name) in names.iter().enumerate() {
-                    item(microphones, base + CMD_MICROPHONE + 1 + i as u32, name, true, false);
-                }
-                let id = base + CMD_MICROPHONE + current;
-                let _ = CheckMenuRadioItem(microphones, id, id, id, MF_BYCOMMAND.0);
-                let _ = AppendMenuW(assistant, MF_POPUP, microphones.0 as usize, &HSTRING::from(t("menu.microphone")));
-                item(assistant, base + CMD_DICT_SETUP, t("menu.dict_setup"), true, false);
-                separator(assistant);
-                item(assistant, base + CMD_AI_SETUP, t("menu.ai_setup"), true, false);
                 item(assistant, base + CMD_AI_SETTINGS, t("menu.ai_settings"), true, false);
                 popup(t("menu.assistant"), assistant);
             }
 
             let tools = CreatePopupMenu().unwrap_or_default();
             item(tools, base + CMD_TOPMOST, t("menu.topmost"), true, self.cfg.always_on_top);
-            item(tools, base + CMD_PILL, t("menu.pill"), true, self.cfg.close_to_pill);
-            item(tools, base + CMD_AUTOSTART, t("menu.autostart"), true, autostart_enabled());
-            item(tools, base + CMD_ASSISTANT, t("menu.assistant_toggle"), true, self.cfg.assistant);
-            separator(tools);
             let languages = CreatePopupMenu().unwrap_or_default();
             item(languages, base + CMD_LANGUAGE, t("menu.language_auto"), true, false);
             separator(languages);
@@ -1642,10 +1634,12 @@ impl App {
                 let id = base + CMD_LANGUAGE + index as u32;
                 let _ = CheckMenuRadioItem(languages, id, id, id, MF_BYCOMMAND.0);
             }
-            // "Sprache / Language" bleibt zweisprachig, damit man auch aus einer fremden Sprache zurückfindet.
+            // "Sprache / Language" bleibt zweisprachig und im Menü, damit man auch aus einer
+            // fremden Sprache zurückfindet.
             let own = t("menu.language");
             let title = if own.replace('&', "") == "Language" { own.to_string() } else { format!("{own} / Language") };
             let _ = AppendMenuW(tools, MF_POPUP, languages.0 as usize, &HSTRING::from(title));
+            separator(tools);
             item(tools, base + CMD_SETTINGS, t("menu.settings"), true, false);
             popup(t("menu.tools"), tools);
 
@@ -1703,31 +1697,16 @@ impl App {
             }
             CMD_PAUSE => self.toggle_pause(),
             CMD_STOP => self.stop(),
-            CMD_AUTOSTART => {
-                set_autostart(!autostart_enabled());
-                self.refresh_menu_bar();
-            }
             CMD_OPEN => window::show(),
             CMD_UPDATE => open_url(update::RELEASES_URL),
             CMD_READ_WINDOW => self.speak_window(),
             CMD_READ_RESULT => self.speak_pane(window::Pane::Result),
-            _ if (CMD_MICROPHONE..CMD_MICROPHONE + 64).contains(&cmd) => {
-                let index = (cmd - CMD_MICROPHONE) as usize;
-                self.cfg.microphone = if index == 0 { String::new() } else { dictation::microphones().get(index - 1).cloned().unwrap_or_default() };
-                self.cfg.save();
-                self.refresh_menu_bar();
-            }
             // Vor `CMD_LANGUAGE` prüfen: Das fängt sonst alles ab 3000.
             _ if (CMD_HISTORY..CMD_HISTORY + history::LIMIT as u32).contains(&cmd) => {
                 self.copy_history((cmd - CMD_HISTORY) as usize);
             }
             CMD_HISTORY_CLEAR => {
                 history::clear();
-                self.refresh_menu_bar();
-            }
-            CMD_DICT_FILLERS => {
-                self.cfg.dict_clean_fillers = !self.cfg.dict_clean_fillers;
-                self.cfg.save();
                 self.refresh_menu_bar();
             }
             _ if (CMD_CORRECTION_MODE..CMD_CORRECTION_MODE + 4).contains(&cmd) => {
@@ -1744,7 +1723,6 @@ impl App {
             CMD_GUIDE_READ => self.show_guide(true),
             CMD_PREV => self.navigate(false),
             CMD_NEXT => self.navigate(true),
-            CMD_SAMPLE => self.speak_sample(),
             CMD_TOPMOST => self.set_topmost(!self.cfg.always_on_top),
             CMD_CLEAN => {
                 if let Some(text) = window::source().map(|s| String::from_utf16_lossy(&s.content)) {
@@ -1878,7 +1856,7 @@ fn run(cmd: u32, selection: Option<String>) {
         }
         CMD_ABOUT => show_about(),
         CMD_AI_VOICES => open_ai_voices(),
-        CMD_SETTINGS => open_settings(),
+        CMD_SETTINGS => open_settings(settings::Page::Reading),
         CMD_OPEN_FILE => open_file(),
         CMD_SAVE_WAV => {
             if PENDING_WAV.with(|cell| cell.borrow().is_none()) {
@@ -1900,25 +1878,11 @@ fn run(cmd: u32, selection: Option<String>) {
         CMD_CHECK_UPDATE => check_update_now(),
         CMD_SCREEN_OCR => screen_ocr(),
         CMD_AI_SETTINGS => open_ai_settings(),
-        CMD_AI_SETUP => open_ai_setup(),
         CMD_TRANSCRIBE => {
             if TRANSCRIBING.load(Ordering::Relaxed) {
                 TRANSCRIBE_CANCEL.store(true, Ordering::Relaxed);
             } else if let Some(path) = choose_recording() {
                 transcribe(path);
-            }
-        }
-        CMD_PILL => {
-            with_app(|app| {
-                app.cfg.close_to_pill = !app.cfg.close_to_pill;
-                app.cfg.save();
-                app.update_pill();
-                app.refresh_menu_bar();
-            });
-        }
-        CMD_ASSISTANT => {
-            if with_app(|app| app.set_assistant(!app.cfg.assistant)) == Some(true) {
-                open_ai_setup();
             }
         }
         CMD_SUMMARIZE | CMD_CORRECT if AI_BUSY.load(Ordering::Relaxed) => AI_CANCEL.store(true, Ordering::Relaxed),
@@ -1937,7 +1901,6 @@ fn run(cmd: u32, selection: Option<String>) {
                 open_dict_setup();
             }
         }
-        CMD_DICT_SETUP => open_dict_setup(),
         _ => {
             with_app(|app| app.command(cmd, selection));
         }
@@ -2285,12 +2248,9 @@ fn provider_name(kind: ai::Kind) -> &'static str {
     }
 }
 
+/// Die ausführlichen KI-Einstellungen: Seite „KI-Assistent“ der Einstellungen.
 fn open_ai_settings() {
-    let Some((provider, custom)) = with_app(|app| (app.provider(), app.cfg.correction_custom.clone())) else { return };
-    let report = aicheck::detect().report();
-    aisettings::open(window::visible(), provider, custom, report, |provider, custom| {
-        with_app(|app| app.apply_ai_settings(provider, custom));
-    });
+    open_settings(settings::Page::Ai);
 }
 
 /// Der Einrichtungsassistent: eine Frage, ein Knopf. Die ausführlichen KI-Einstellungen sind
@@ -2298,6 +2258,8 @@ fn open_ai_settings() {
 fn open_ai_setup() {
     let Some(provider) = with_app(|app| app.provider()) else { return };
     aisetup::open(window::visible(), &provider, |provider| {
+        // Ist das Einstellungsfenster offen, zeigt es den neuen Anbieter gleich mit.
+        settings::set_provider(&provider);
         with_app(|app| {
             let custom = app.cfg.correction_custom.clone();
             app.apply_ai_settings(provider, custom);
@@ -2360,6 +2322,7 @@ fn dictate_anywhere() {
 
 fn open_dict_setup() {
     dictsetup::open(window::visible(), |_| {
+        settings::refresh_dictation();
         with_app(|app| app.show_assistant());
     });
 }
@@ -2484,16 +2447,13 @@ fn correction_label(mode: ai::Correction) -> &'static str {
     }
 }
 
-fn open_settings() {
+fn open_settings(page: settings::Page) {
     let Some((values, items, selected, rate)) = with_app(|app| (app.settings(), app.voice_items(), app.current_voice(), app.rate_index())) else {
         return;
     };
-    let voices = settings::Voices {
-        items,
-        selected,
-        rates: RATES.iter().map(|(_, key)| t(key).to_string()).collect(),
-        rate,
-        on_change: |voice, rate| {
+    let voices = settings::Voices { items, selected, rates: RATES.iter().map(|(_, key)| t(key).to_string()).collect(), rate };
+    let callbacks = settings::Callbacks {
+        on_voice: |voice, rate| {
             with_app(|app| {
                 if let Some(voice) = voice.filter(|v| Some(*v) != app.current_voice()) {
                     app.select_voice(voice);
@@ -2507,10 +2467,15 @@ fn open_settings() {
             with_app(App::speak_sample);
         },
         on_ai_voices: open_ai_voices,
+        on_dict_setup: open_dict_setup,
+        on_ai_setup: open_ai_setup,
+        on_save: |values| {
+            if with_app(|app| app.apply_settings(values)) == Some(true) {
+                open_ai_setup();
+            }
+        },
     };
-    settings::open(window::visible(), values, voices, |values| {
-        with_app(|app| app.apply_settings(values));
-    });
+    settings::open(window::visible(), page, values, voices, callbacks);
 }
 
 /// Fragt nach einem Dateinamen und schreibt den Text des Fensters als MP3- oder WAV-Datei.
@@ -2906,6 +2871,7 @@ fn main() {
             (SHIFT, 0x78, CMD_READ_RESULT), // Umschalt+F9
             (KEY, 0x77, CMD_DICTATE),     // F8
             (SHIFT, 0x77, CMD_CORRECT),   // Umschalt+F8
+            (CONTROL, 0xBC, CMD_SETTINGS), // Strg+Komma
         ]);
 
         match App::new(hwnd) {
@@ -2948,7 +2914,6 @@ fn main() {
             // Tab, Eingabe und Esc im Fenster wie in einem Dialog behandeln.
             let handled = settings::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || aivoices::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
-                || aisettings::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || dictsetup::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || aisetup::handle().is_some_and(|s| IsDialogMessageW(s, &msg).as_bool())
                 || IsDialogMessageW(dialog, &msg).as_bool();

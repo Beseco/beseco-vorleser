@@ -40,7 +40,7 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 ## Funktionen
 
 - **Systemweit:** funktioniert in Browser, Office, PDF-Readern, Editoren und den meisten anderen Programmen
-- **Fenster zum Einfügen:** Text hineinkopieren und vorlesen; Stimme und Geschwindigkeit im Menü „Stimme“ oder unter Extras → Einstellungen (mit Hörprobe)
+- **Fenster zum Einfügen:** Text hineinkopieren und vorlesen; Stimme und Geschwindigkeit im Menü „Wiedergabe“ oder unter Extras → Einstellungen (mit Hörprobe)
 - **Dateien vorlesen:** Word (DOCX), OpenDocument (ODT), RTF, PDF, EPUB, HTML, Textdateien und Bilder öffnen, über Datei → Öffnen, durch Hineinziehen ins Fenster oder „Öffnen mit“ im Explorer
 - **PDFs:** mit Textebene direkt und zeichengenau gelesen, gescannte Seiten per Texterkennung; Kopf- und Fußzeilen sowie Seitenzahlen werden übersprungen (auf Wunsch zusätzlich von der KI geprüft, bei Cloud-Anbietern nur nach Rückfrage)
 - **Texterkennung (OCR):** Text, der sich nicht markieren lässt, etwa in Bildern, gescannten PDFs oder Programmen ohne Textauswahl, per Rahmen auf dem Bildschirm erkennen und vorlesen. Dafür nutzt Hedgie die Texterkennung von Windows, offline und ohne Zusatzsoftware.
@@ -51,7 +51,7 @@ Ein eigener Eintrag im normalen Rechtsklick-Menü fremder Programme ist unter Wi
 - **Textbereinigung:** fügt umbrochene PDF-Zeilen zusammen, hebt Silbentrennung auf, kürzt Links
 - **Audio-Export:** Text als MP3- oder WAV-Datei speichern
 - **Autostart:** auf Wunsch mit Windows starten
-- **Hell oder dunkel:** folgt Windows oder fest auf „Hell“ bzw. „Dunkel“ (Extras → Einstellungen → Design)
+- **Hell oder dunkel:** folgt Windows oder fest auf „Hell“ bzw. „Dunkel“ (Extras → Einstellungen → Allgemein → Design)
 - **Navigation und Weiterlesen:** Alt+← / Alt+→ springt satzweise, F5 liest ab der Schreibmarke, nach Stopp und nach einem Neustart geht es an derselben Stelle weiter
 - **Menüleiste und Tastenkürzel:** F5 Vorlesen, F6 Pause, F7 Stopp, Strg+O Textdatei öffnen (oder ins Fenster ziehen), Strg+S als WAV speichern
 - **Mehrsprachig:** Deutsch und Englisch eingebaut, weitere Sprachen über einfache Sprachdateien ([Anleitung zum Übersetzen](lang/README.md)); die Oberfläche folgt der Sprache von Windows und lässt sich unter Extras → Sprache umstellen
@@ -80,11 +80,11 @@ Online-Stimmen, die manche Zusatzprogramme in Windows einbinden (erkennbar am Zu
 
 ## Beseco Officeassistent (optional)
 
-Wer mehr möchte, schaltet unter **Extras → Beseco Officeassistent** (oder schon im Installer) die KI-Funktionen ein. Ausgeschaltet bleibt Hedgie genau so einfach wie bisher; es braucht keinen Schlüssel und kein Konto.
+Wer mehr möchte, schaltet unter **Extras → Einstellungen → KI-Assistent** (oder schon im Installer) die KI-Funktionen ein. Ausgeschaltet bleibt Hedgie genau so einfach wie bisher; es braucht keinen Schlüssel und kein Konto.
 
 Eingeschaltet teilt sich das Fenster: links der Text, rechts das Ergebnis der KI. **Zusammenfassen** (F9) fasst den markierten oder ganzen Text kurz, in Stichpunkten oder ausführlich zusammen, und die Zusammenfassung wird gleich vorgelesen (Umschalt+F9 liest sie erneut).
 
-Am einfachsten richtet der **Einrichtungsassistent** die KI ein (**Assistent → KI einrichten**; er erscheint auch von selbst, wenn noch keine KI eingerichtet ist). Er stellt eine Frage – wo soll die KI laufen? – und erledigt den Rest:
+Am einfachsten richtet der **Einrichtungsassistent** die KI ein (**Einstellungen → KI-Assistent → KI einrichten**; er erscheint auch von selbst, wenn noch keine KI eingerichtet ist). Er stellt eine Frage – wo soll die KI laufen? – und erledigt den Rest:
 
 - **Auf diesem PC:** Ist Ollama nicht installiert, lädt der Assistent es herunter (ca. 1,7 GB) und installiert es für das eigene Benutzerkonto, ohne Administratorrechte. Fehlt ein Sprachmodell, lädt er eines passend zum Rechner (qwen3.5:4b, mit starker Grafikkarte gemma3:12b).
 - **Ollama-Server im Firmennetz:** Name des Servers eintragen, z. B. `ki-server`; Adresse und Port ergänzt der Assistent.
@@ -93,24 +93,24 @@ Am einfachsten richtet der **Einrichtungsassistent** die KI ein (**Assistent →
 
 Der Assistent sucht ein geeignetes Modell aus, schickt einen Probe-Auftrag und speichert alles. Solange keine KI eingerichtet ist, sind Zusammenfassen und Korrigieren grau.
 
-Alles Weitere stellst du unter **Assistent → KI-Einstellungen und KI-Check** ein:
+Alles Weitere stellst du unter **Extras → Einstellungen → KI-Assistent** ein (auch über **Assistent → KI-Einstellungen**):
 
 | Anbieter | Beispiel | Datenschutz |
 |---|---|---|
 | Eigener Server oder dieser PC (Ollama) | `http://ki-server:11434` | Text bleibt im eigenen Netz |
 | Cloud-Anbieter mit OpenAI-kompatibler Schnittstelle | IONOS AI Model Hub: `https://openai.inference.de-txl.ionos.com/v1`, außerdem Mistral, OpenAI u. a. | Text geht zur Verarbeitung an den Anbieter |
 
-Der **KI-Check** im selben Fenster zeigt, was der eigene Rechner schafft (Prozessor, Arbeitsspeicher, Grafikkarte) und empfiehlt lokal, eigenen Server oder Cloud. „Verbindung testen“ prüft Adresse, Schlüssel und Modell mit einem kurzen Probe-Auftrag. Der Schlüssel wird mit dem Windows-Konto verschlüsselt gespeichert (DPAPI).
+Der **KI-Check** („Dieser PC“) auf derselben Seite zeigt, was der eigene Rechner schafft (Prozessor, Arbeitsspeicher, Grafikkarte) und empfiehlt lokal, eigenen Server oder Cloud. „Verbindung testen“ prüft Adresse, Schlüssel und Modell mit einem kurzen Probe-Auftrag. Der Schlüssel wird mit dem Windows-Konto verschlüsselt gespeichert (DPAPI).
 
 ![Officeassistent im dunklen Modus](docs/officeassistent.png)
 
-**Diktieren** (F8 oder „Diktieren“): Du sprichst, und der Text erscheint nach jeder kurzen Pause an der Schreibmarke im linken Feld. Mit **Strg+Alt+D** diktierst du in jedes andere Programm, etwa Word oder Outlook: Der Text erscheint dort, wo die Schreibmarke steht, und eine kleine Leiste unten am Bildschirm zeigt Pegel und Zustand. Getippt wird nur in das Programm, in dem das Diktat begonnen hat; wechselst du zwischendurch, wartet der Text. In der Leiste beendet ✓ das Diktat und lässt den Text, wie er ist; ✨ (mit eingerichteter KI) ersetzt ihn durch die korrigierte Fassung; der sprechende Kopf liest das ganze Diktat noch einmal vor. Füllwörter wie „äh“ und versehentlich doppelt gesprochene Wörter lässt Hedgie gleich weg (abschaltbar unter **Assistent**). Die letzten zehn Diktate stehen unter **Letzte Diktate** (Assistent, Infobereich und Rechtsklick auf die Mini-Pille); ein Klick legt eines in die Zwischenablage. Das Mikrofon wählst du unter **Assistent → Mikrofon**.
+**Diktieren** (F8 oder „Diktieren“): Du sprichst, und der Text erscheint nach jeder kurzen Pause an der Schreibmarke im linken Feld. Mit **Strg+Alt+D** diktierst du in jedes andere Programm, etwa Word oder Outlook: Der Text erscheint dort, wo die Schreibmarke steht, und eine kleine Leiste unten am Bildschirm zeigt Pegel und Zustand. Getippt wird nur in das Programm, in dem das Diktat begonnen hat; wechselst du zwischendurch, wartet der Text. In der Leiste beendet ✓ das Diktat und lässt den Text, wie er ist; ✨ (mit eingerichteter KI) ersetzt ihn durch die korrigierte Fassung; der sprechende Kopf liest das ganze Diktat noch einmal vor. Füllwörter wie „äh“ und versehentlich doppelt gesprochene Wörter lässt Hedgie gleich weg. Die letzten zehn Diktate stehen unter **Letzte Diktate** (Assistent, Infobereich und Rechtsklick auf die Mini-Pille); ein Klick legt eines in die Zwischenablage. Mikrofon, Füllwörter und Spracherkennung stellst du unter **Extras → Einstellungen → Diktieren** ein.
 
 **Aufnahme zu Protokoll:** Eine Besprechungsaufnahme (MP3, M4A, WAV, WMA, FLAC oder ein MP4-Video) über **Assistent → Aufnahme zu Protokoll …** öffnen oder ins Fenster ziehen. Hedgie schreibt sie auf dem eigenen Rechner ab (links, mit Zeitmarken) und erstellt mit der eingerichteten KI rechts das Protokoll: Teilnehmer, Themen, Beschlüsse, Aufgaben und offene Punkte. Eine Stunde Aufnahme dauert ohne Grafikkarte je nach Modell etwa 5 bis 20 Minuten; der Fortschritt steht im Fenstertitel. Wer spricht, erkennt die Abschrift nicht.
 
-**Mini-Pille:** Ist das Fenster zu oder minimiert, bleibt unten in der Mitte des Bildschirms, auf dem du gerade arbeitest, eine kleine Pille mit blauem Punkt, immer im Vordergrund. Mit der Maus lässt sie sich an eine andere Stelle ziehen (Rechtsklick → Position zurücksetzen). Fährst du mit der Maus darauf, zeigt er zwei Knöpfe: das Mikrofon diktiert in das Programm im Vordergrund, der sprechende Kopf liest dort markierten Text vor. Wer lieber nur das Symbol im Infobereich möchte, schaltet die Pille unter **Extras → Mini-Pille am Bildschirmrand** oder in den Einstellungen ab. Die Spracherkennung (Whisper) läuft vollständig auf dem eigenen Rechner, ohne KI-Anbieter und ohne Internet; nur das Modell wird einmalig unter **Assistent → Diktieren einrichten** heruntergeladen (schnell 148 MB, genau 488 MB, sehr genau 574 MB; von github.com und huggingface.co).
+**Mini-Pille:** Ist das Fenster zu oder minimiert, bleibt unten in der Mitte des Bildschirms, auf dem du gerade arbeitest, eine kleine Pille mit blauem Punkt, immer im Vordergrund. Mit der Maus lässt sie sich an eine andere Stelle ziehen (Rechtsklick → Position zurücksetzen). Fährst du mit der Maus darauf, zeigt er zwei Knöpfe: das Mikrofon diktiert in das Programm im Vordergrund, der sprechende Kopf liest dort markierten Text vor. Wer lieber nur das Symbol im Infobereich möchte, schaltet die Pille unter **Extras → Einstellungen → Allgemein** ab. Die Spracherkennung (Whisper) läuft vollständig auf dem eigenen Rechner, ohne KI-Anbieter und ohne Internet; nur das Modell wird einmalig unter **Einstellungen → Diktieren → Modelle verwalten** heruntergeladen (schnell 148 MB, genau 488 MB, sehr genau 574 MB; von github.com und huggingface.co).
 
-**Korrigieren** (Umschalt+F8) überarbeitet den Text mit der eingestellten KI in der gewählten Stufe: nur Rechtschreibung und Zeichensetzung, Satzbau glätten, sauber umformulieren oder nach eigener Vorgabe (in den KI-Einstellungen, z. B. „als freundliche E-Mail formulieren“). Die korrigierte Fassung erscheint rechts, das Diktat links bleibt unverändert. Nach einem Diktat wird automatisch korrigiert, wenn eine KI eingerichtet ist.
+**Korrigieren** (Umschalt+F8) überarbeitet den Text mit der eingestellten KI in der gewählten Stufe: nur Rechtschreibung und Zeichensetzung, Satzbau glätten, sauber umformulieren oder nach eigener Vorgabe (Einstellungen → Diktieren → Eigene Anweisung, z. B. „als freundliche E-Mail formulieren“). Die korrigierte Fassung erscheint rechts, das Diktat links bleibt unverändert. Nach einem Diktat ins Fenster wird automatisch korrigiert, wenn eine KI eingerichtet ist (abschaltbar unter Einstellungen → Diktieren).
 
 Geplant sind außerdem Protokolle aus Audiodateien und ein Datenschutz-Modus, der personenbezogene Daten vor dem Senden ersetzt (siehe [TODO.md](TODO.md)).
 
@@ -124,7 +124,7 @@ Einstellungen liegen in `%APPDATA%\Vorleser\settings.ini`. Damit es später an d
 
 ### Im Firmennetz
 
-Hedgie nutzt die Proxy-Einstellungen von Windows, auch eine automatische Konfiguration über `wpad.dat`. Verlangt der Proxy eine Anmeldung, meldet sich Hedgie mit dem Windows-Konto an. Greift das nicht, lässt sich unter Extras → Einstellungen → Proxy die Adresse der `wpad.dat` (z. B. `http://wpad/wpad.dat`) oder ein fester Proxy (`proxy.firma.local:8080`) eintragen. Ohne Internet funktioniert alles außer Update-Suche und Download der KI-Stimmen.
+Hedgie nutzt die Proxy-Einstellungen von Windows, auch eine automatische Konfiguration über `wpad.dat`. Verlangt der Proxy eine Anmeldung, meldet sich Hedgie mit dem Windows-Konto an. Greift das nicht, lässt sich unter Extras → Einstellungen → Allgemein → Proxy die Adresse der `wpad.dat` (z. B. `http://wpad/wpad.dat`) oder ein fester Proxy (`proxy.firma.local:8080`) eintragen. Ohne Internet funktioniert alles außer Update-Suche und Download der KI-Stimmen.
 
 ## Bekannte Grenzen
 

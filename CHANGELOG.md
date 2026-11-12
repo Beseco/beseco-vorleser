@@ -4,6 +4,8 @@ Alle nennenswerten Änderungen an Hedgie (bis 0.5 „Vorleser“). Die Versionsn
 
 ## 0.7.2 – 2026-11-12
 
+- **Neue Einstellungen:** übersichtlich in fünf Seiten mit Navigation links – Vorlesen, Diktieren, KI-Assistent, Tastenkürzel, Allgemein. Die bisherigen „KI-Einstellungen“ sind dort aufgegangen (Seite KI-Assistent, mit KI-Check „Dieser PC“). Neu einstellbar: Mikrofon, Spracherkennung, automatische Korrektur nach dem Diktat, Korrekturstufe und eigene Anweisung, Mit Windows starten. Öffnen mit Strg+, oder Extras → Einstellungen
+- **Aufgeräumte Menüs:** In der Menüleiste stehen nur noch Befehle. „Stimme“ ist unter „Wiedergabe“ gewandert; Schalter wie Mikrofon, Füllwörter, Mini-Pille, Autostart und Officeassistent stehen jetzt in den Einstellungen. Auch das Menü im Infobereich ist kürzer
 - Neu: **Letzte Diktate** – die letzten zehn Diktate bleiben erhalten (Assistent, Infobereich und Rechtsklick auf die Mini-Pille); ein Klick legt eines in die Zwischenablage. Gespeichert nur auf diesem PC unter `%APPDATA%\Vorleser\diktate.json`
 - Neu: Vorlesen-Knopf in der Diktier-Pille liest das ganze Diktat noch einmal vor (läuft es noch, wird es vorher beendet). Danach bleibt die Pille stehen, bis du dich entscheidest: ✓ so lassen oder ✨ mit KI korrigieren
 - Neu: Füllwörter wie „äh“, „ähm“, „hm“ und versehentlich doppelt gesprochene Wörter („ich ich habe“) lässt Hedgie beim Diktieren gleich weg; abschaltbar unter Assistent. Auch die KI-Korrektur lässt sie weg
