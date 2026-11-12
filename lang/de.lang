@@ -185,6 +185,7 @@ dictbar.correct = Korrigieren
 dictbar.correcting = Wird korrigiert …
 dictbar.done_correct_hint = Fertig und mit KI korrigieren
 dictbar.done_hint = Fertig
+dictbar.done_plain_hint = Fertig, Text so lassen (ohne KI)
 dictbar.finished = Diktat beendet
 dictbar.listening = Ich höre zu …
 dictbar.not_replaced = Die Korrektur wurde nicht eingefügt, weil inzwischen ein anderes Fenster vorn ist.

@@ -186,6 +186,7 @@ dictbar.correct = Correct
 dictbar.correcting = Correcting …
 dictbar.done_correct_hint = Done, and correct with AI
 dictbar.done_hint = Done
+dictbar.done_plain_hint = Done, keep the text as is (no AI)
 dictbar.finished = Dictation finished
 dictbar.listening = Listening …
 dictbar.not_replaced = The correction was not inserted because another window is now in front.

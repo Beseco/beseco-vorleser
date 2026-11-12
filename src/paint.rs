@@ -99,6 +99,22 @@ pub enum Icon {
     Gear,
     /// Kopf im Profil mit offenem Mund und Schallwellen: „vorlesen“.
     Speak,
+    /// Zwei Funkelsterne: „mit KI überarbeiten“.
+    Sparkle,
+}
+
+/// Vierzackiger Stern um (`cx`, `cy`) mit äußerem Radius `outer` und innerem `inner`.
+fn star(cx: f32, cy: f32, outer: f32, inner: f32) -> [(f32, f32); 8] {
+    [
+        (cx, cy - outer),
+        (cx + inner, cy - inner),
+        (cx + outer, cy),
+        (cx + inner, cy + inner),
+        (cx, cy + outer),
+        (cx - inner, cy + inner),
+        (cx - outer, cy),
+        (cx - inner, cy - inner),
+    ]
 }
 
 struct Factories {
@@ -277,6 +293,12 @@ impl Canvas<'_> {
                 self.path(&[p(18.0, 6.0), p(6.0, 18.0)], false, false, color, stroke);
             }
             Icon::Check => self.path(&[p(5.0, 12.5), p(10.0, 17.5), p(19.5, 7.0)], false, false, color, stroke),
+            Icon::Sparkle => {
+                for (x, y, outer, inner) in [(10.0, 13.5, 8.5, 2.0), (18.5, 5.5, 3.8, 1.0)] {
+                    let points = star(x, y, outer, inner).map(|(x, y)| p(x, y));
+                    self.path(&points, true, true, color, stroke);
+                }
+            }
             Icon::Warning => {
                 self.path(&[p(12.0, 3.5), p(21.5, 20.0), p(2.5, 20.0)], false, true, color, stroke);
                 self.path(&[p(12.0, 9.5), p(12.0, 14.0)], false, false, color, stroke);

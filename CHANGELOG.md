@@ -2,6 +2,10 @@
 
 Alle nennenswerten Änderungen an Hedgie (bis 0.5 „Vorleser“). Die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.2 – 2026-11-12
+
+- Diktier-Pille mit eingerichteter KI: drei Knöpfe. ✓ beendet das Diktat und lässt den Text so, wie er erkannt wurde (auch ohne automatische Korrektur im Hedgie-Fenster); ✨ beendet und korrigiert mit KI. Bisher korrigierte ✓ immer
+
 ## 0.7.1 – 2026-11-05
 
 - KI-Stimmen schreiben beim Vorlesen keine Temp-Dateien mehr: Piper liefert jeden Satz über eine Named Pipe direkt in den Speicher. Virenscanner wie Trend Micro Apex One hielten das ständige Anlegen und Löschen der WAV-Dateien im Temp-Ordner für Ransomware und beendeten Hedgie mitten im Vorlesen

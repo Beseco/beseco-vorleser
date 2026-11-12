@@ -237,6 +237,8 @@ struct App {
     dict_typed: String,
     /// „Korrigieren“ wurde während des Diktats gedrückt: nach dem letzten Abschnitt korrigieren.
     dict_correct_pending: bool,
+    /// ✓ in der Diktier-Pille: diesmal nicht automatisch korrigieren.
+    dict_skip_correct: bool,
     /// Erkannter Text, der noch nicht getippt ist, weil das Zielprogramm nicht vorn war.
     dict_waiting: Vec<String>,
     /// Der Mini-Player begleitet das laufende Vorlesen (Text von außen, Fenster zu).
@@ -381,7 +383,7 @@ impl App {
         tts.set_rate(cfg.rate);
         // Der Testlauf bleibt stumm.
         tts.set_volume(if TEST_MODE.load(Ordering::Relaxed) { 0 } else { cfg.volume });
-        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_waiting: Vec::new(), player_on: false, player_sentences: Vec::new(), temp_voice: None };
+        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_skip_correct: false, dict_waiting: Vec::new(), player_on: false, player_sentences: Vec::new(), temp_voice: None };
         documents::SKIP_PAGE_EDGES.store(app.cfg.skip_page_edges, Ordering::Relaxed);
         app.add_icon();
         app.register_hotkeys();
@@ -658,6 +660,7 @@ impl App {
         self.dict_typed.clear();
         self.dict_waiting.clear();
         self.dict_correct_pending = false;
+        self.dict_skip_correct = false;
         if target == DictTarget::Window {
             window::show();
         }
@@ -731,9 +734,10 @@ impl App {
             tray::balloon(self.hwnd, APP_NAME_TEXT, &error);
         }
         let got_text = DICT_GOT_TEXT.swap(false, Ordering::Relaxed);
+        let skip = std::mem::take(&mut self.dict_skip_correct);
         if std::mem::take(&mut self.dict_correct_pending) {
             self.correct_dictation();
-        } else if got_text && self.dict_target == DictTarget::Window && self.cfg.dict_auto_correct && self.provider().is_ready() && window::text().is_some() {
+        } else if !skip && got_text && self.dict_target == DictTarget::Window && self.cfg.dict_auto_correct && self.provider().is_ready() && window::text().is_some() {
             self.correct();
         }
     }
@@ -2209,7 +2213,13 @@ fn open_ai_setup() {
 /// Klick in der Diktier-Pille.
 fn on_dictbar_action(action: dictbar::Action) {
     let needs_setup = with_app(|app| match action {
-        dictbar::Action::Toggle => !app.toggle_dictation_to(app.dict_target),
+        dictbar::Action::Finish => {
+            if app.dictation.is_some() {
+                app.dict_skip_correct = true;
+                app.toggle_dictation_to(app.dict_target);
+            }
+            false
+        }
         dictbar::Action::Correct => {
             app.correct_dictation();
             false
