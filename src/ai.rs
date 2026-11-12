@@ -125,8 +125,8 @@ impl Correction {
 
     fn instruction(self, custom: &str) -> String {
         let task = match self {
-            Correction::Spelling => "Correct only spelling, grammar and punctuation, and obvious speech recognition errors. Keep the wording, word order and sentence structure exactly as they are.",
-            Correction::Style => "Correct spelling, grammar, punctuation and speech recognition errors, and smooth the sentence structure so the text reads naturally. Keep the content, tone and length; do not add or remove information.",
+            Correction::Spelling => "Correct only spelling, grammar and punctuation, and obvious speech recognition errors. Leave out filler words (such as \"äh\", \"ähm\", \"um\", \"uh\") and words or phrases that were accidentally said twice. Otherwise keep the wording, word order and sentence structure exactly as they are.",
+            Correction::Style => "Correct spelling, grammar, punctuation and speech recognition errors, leave out filler words and accidental repetitions, and smooth the sentence structure so the text reads naturally. Keep the content, tone and length; do not add or remove information.",
             Correction::Rewrite => "Rewrite the text as a clear, well-structured and polished text with sensible paragraphs. Keep all information and the language; you may reorder and rephrase freely.",
             Correction::Custom => "",
         };
@@ -563,7 +563,8 @@ mod tests {
 
     #[test]
     fn builds_correction_instructions() {
-        assert!(Correction::Spelling.instruction("").contains("Keep the wording"));
+        assert!(Correction::Spelling.instruction("").contains("keep the wording"));
+        assert!(Correction::Spelling.instruction("").contains("filler words"));
         assert!(Correction::Custom.instruction("als freundliche E-Mail").contains("als freundliche E-Mail"));
         assert_eq!(Correction::Custom.instruction("  "), Correction::Style.instruction(""));
         assert_eq!(Correction::from_code("rewrite"), Correction::Rewrite);

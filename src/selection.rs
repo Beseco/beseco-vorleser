@@ -103,6 +103,17 @@ fn clipboard_dword(format: u32) -> Option<u32> {
     }
 }
 
+/// Legt `text` in die Zwischenablage (z. B. ein Diktat aus „Letzte Diktate“).
+pub fn set_clipboard_text(text: &str) -> bool {
+    let Some(_clipboard) = Clipboard::open() else { return false };
+    let bytes: Vec<u8> = text.encode_utf16().chain(std::iter::once(0)).flat_map(u16::to_le_bytes).collect();
+    unsafe {
+        let _ = EmptyClipboard();
+        put(CF_UNICODETEXT, &bytes);
+    }
+    true
+}
+
 pub fn clipboard_text() -> Option<String> {
     let _clipboard = Clipboard::open()?;
     unsafe {

@@ -1,6 +1,6 @@
 //! Diktier-Pille: eine kleine schwebende Leiste unten am Bildschirm, solange diktiert wird:
-//! ✕ (beenden), der Pegel des Mikrofons, ✓ (fertig, Text bleibt wie erkannt) und, wenn eine KI
-//! eingerichtet ist, ✨ (fertig und mit KI korrigieren). Was gerade
+//! ✕ (beenden), der Pegel des Mikrofons, Vorlesen (das ganze Diktat), ✓ (fertig, Text bleibt wie
+//! erkannt) und, wenn eine KI eingerichtet ist, ✨ (fertig und mit KI korrigieren). Was gerade
 //! passiert und wohin der Text geht, steht in einem Hinweis darüber, sobald die Maus auf der
 //! Pille ist (und immer, wenn etwas nicht stimmt). Sie nimmt beim Anklicken nicht den Fokus,
 //! damit der Text weiter im Zielprogramm landet.
@@ -49,6 +49,9 @@ pub enum Action {
     /// ✓: Diktat beenden, ohne die KI zu fragen (auch nicht automatisch).
     Finish,
     Correct,
+    /// Das ganze Diktat vorlesen (läuft es noch, wird es vorher beendet); während des
+    /// Vorlesens: aufhören.
+    ReadBack,
     Close,
     /// Regelmäßig, solange Text auf das Zielprogramm wartet.
     Poll,
@@ -57,6 +60,7 @@ pub enum Action {
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Hit {
     Close,
+    ReadBack,
     Done,
     Correct,
     Body,
@@ -84,46 +88,40 @@ const WIDTH: f32 = 340.0;
 const HEIGHT: f32 = 124.0;
 const PILL_H: f32 = 40.0;
 const BARS: usize = 9;
-/// Abstand der Knopfmitten, wenn ✓ und ✨ nebeneinander stehen.
+/// Abstand der Knopfmitten rechts in der Pille.
 const BUTTON_GAP: f32 = 36.0;
 
-/// Mit KI ist die Pille um den Knopf ✨ breiter.
+/// Knöpfe rechts, von außen nach innen: ✨ (nur mit KI), ✓, Vorlesen.
+fn right_buttons(can_correct: bool) -> &'static [Hit] {
+    if can_correct { &[Hit::Correct, Hit::Done, Hit::ReadBack] } else { &[Hit::Done, Hit::ReadBack] }
+}
+
+/// Je Knopf rechts über den ersten hinaus wird die Pille breiter.
 fn pill_w(can_correct: bool) -> f32 {
-    if can_correct { 156.0 + BUTTON_GAP } else { 156.0 }
+    156.0 + BUTTON_GAP * (right_buttons(can_correct).len() - 1) as f32
 }
 
 fn pill(can_correct: bool) -> (f32, f32) {
     ((WIDTH - pill_w(can_correct)) / 2.0, HEIGHT - 12.0 - PILL_H)
 }
 
-fn close_button(can_correct: bool) -> (f32, f32, f32) {
+/// Mitte und Radius eines Knopfes.
+fn button(hit: Hit, can_correct: bool) -> Option<(f32, f32, f32)> {
     let (x, y) = pill(can_correct);
-    (x + 21.0, y + PILL_H / 2.0, 15.0)
-}
-
-/// ✓: fertig, der Text bleibt so, wie er erkannt wurde.
-fn done_button(can_correct: bool) -> (f32, f32, f32) {
-    let (x, y) = pill(can_correct);
-    let gap = if can_correct { BUTTON_GAP } else { 0.0 };
-    (x + pill_w(can_correct) - 21.0 - gap, y + PILL_H / 2.0, 15.0)
-}
-
-/// ✨: fertig und mit KI korrigieren (nur mit eingerichteter KI).
-fn correct_button() -> (f32, f32, f32) {
-    let (x, y) = pill(true);
-    (x + pill_w(true) - 21.0, y + PILL_H / 2.0, 15.0)
+    let cy = y + PILL_H / 2.0;
+    if hit == Hit::Close {
+        return Some((x + 21.0, cy, 15.0));
+    }
+    let slot = right_buttons(can_correct).iter().position(|h| *h == hit)?;
+    Some((x + pill_w(can_correct) - 21.0 - BUTTON_GAP * slot as f32, cy, 15.0))
 }
 
 fn hit(x: f32, y: f32, can_correct: bool) -> Option<Hit> {
     let inside = |(cx, cy, r): (f32, f32, f32)| (x - cx).powi(2) + (y - cy).powi(2) <= r * r;
-    if inside(close_button(can_correct)) {
-        return Some(Hit::Close);
-    }
-    if inside(done_button(can_correct)) {
-        return Some(Hit::Done);
-    }
-    if can_correct && inside(correct_button()) {
-        return Some(Hit::Correct);
+    for candidate in [Hit::Close, Hit::ReadBack, Hit::Done, Hit::Correct] {
+        if button(candidate, can_correct).is_some_and(inside) {
+            return Some(candidate);
+        }
     }
     let (px, py) = pill(can_correct);
     (x >= px && x <= px + pill_w(can_correct) && y >= py && y <= py + PILL_H).then_some(Hit::Body)
@@ -286,6 +284,7 @@ fn draw(c: &Canvas, bar: &Bar) {
             State::Silent => t("dictbar.silent_hint").to_string(),
             State::Waiting => t("dictbar.waiting_hint").replace("{}", &bar.target),
             _ if bar.hover == Some(Hit::Close) => t("dictbar.close_hint").to_string(),
+            _ if bar.hover == Some(Hit::ReadBack) => t("dictbar.read_back_hint").to_string(),
             _ if bar.hover == Some(Hit::Correct) => t("dictbar.done_correct_hint").to_string(),
             _ if bar.hover == Some(Hit::Done) && bar.can_correct => t("dictbar.done_plain_hint").to_string(),
             _ if bar.hover == Some(Hit::Done) => t("dictbar.done_hint").to_string(),
@@ -306,24 +305,40 @@ fn draw(c: &Canvas, bar: &Bar) {
     c.fill_round(px, py, pill_w, PILL_H, PILL_H / 2.0, p.ground);
     c.stroke_round(px, py, pill_w, PILL_H, PILL_H / 2.0, p.border.alpha(0.7), 1.0);
 
-    // ✕ links: beenden.
-    let (x, y, r) = close_button(bar.can_correct);
-    c.circle(x, y, r, if bar.hover == Some(Hit::Close) { p.raised } else { p.surface });
-    c.icon(Icon::Close, x, y, 13.0, p.text);
-    // ✓ rechts: fertig, Text bleibt wie erkannt.
-    let (done_x, y, r) = done_button(bar.can_correct);
-    let done = if bar.hover == Some(Hit::Done) { p.accent.mix(paint::rgb(0xFFFFFF), 0.2) } else { p.accent };
-    c.circle(done_x, y, r, done);
-    c.icon(Icon::Check, done_x, y, 15.0, p.on_accent);
-    // ✨ ganz rechts: fertig und mit KI korrigieren.
-    if bar.can_correct {
-        let (x, y, r) = correct_button();
-        c.circle(x, y, r, if bar.hover == Some(Hit::Correct) { p.raised } else { p.surface });
-        c.icon(Icon::Sparkle, x, y, 16.0, p.accent);
+    // Knöpfe: ✕ links (beenden); rechts Vorlesen, ✓ (fertig, Text bleibt wie erkannt) und mit KI
+    // ganz außen ✨ (fertig und korrigieren). ✓ ist der hervorgehobene Hauptknopf.
+    let mut middle_right = px + pill_w;
+    for hit in [Hit::Close, Hit::ReadBack, Hit::Done, Hit::Correct] {
+        let Some((x, y, r)) = button(hit, bar.can_correct) else { continue };
+        let hover = bar.hover == Some(hit);
+        let plain = if hover { p.raised } else { p.surface };
+        match hit {
+            Hit::Close => {
+                c.circle(x, y, r, plain);
+                c.icon(Icon::Close, x, y, 13.0, p.text);
+            }
+            Hit::ReadBack => {
+                middle_right = x;
+                c.circle(x, y, r, plain);
+                c.icon(Icon::Speak, x, y, 17.0, p.text);
+            }
+            Hit::Done => {
+                let done = if hover { p.accent.mix(paint::rgb(0xFFFFFF), 0.2) } else { p.accent };
+                c.circle(x, y, r, done);
+                c.icon(Icon::Check, x, y, 15.0, p.on_accent);
+            }
+            Hit::Correct => {
+                c.circle(x, y, r, plain);
+                c.icon(Icon::Sparkle, x, y, 16.0, p.accent);
+            }
+            Hit::Body => {}
+        }
     }
 
-    // Mitte zwischen ✕ und ✓: Pegel, bei stummem Mikrofon ein Warnzeichen, beim Schreiben laufende Punkte.
-    let middle = (close_button(bar.can_correct).0 + done_x) / 2.0;
+    // Mitte zwischen ✕ und den Knöpfen rechts: Pegel, bei stummem Mikrofon ein Warnzeichen,
+    // beim Schreiben laufende Punkte.
+    let close_x = button(Hit::Close, bar.can_correct).map_or(px, |(x, ..)| x);
+    let middle = (close_x + middle_right) / 2.0;
     match bar.state {
         State::Silent => c.icon(Icon::Warning, middle, cy, 17.0, p.warn),
         State::Listening => {
@@ -415,6 +430,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                     Some(Hit::Done) if state != State::Finished => Some(Action::Finish),
                     // ✨: beenden und mit KI korrigieren; geht auch kurz nach ✓ noch.
                     Some(Hit::Correct) if state != State::Correcting => Some(Action::Correct),
+                    Some(Hit::ReadBack) => Some(Action::ReadBack),
                     _ => None,
                 };
                 if let Some(action) = action {

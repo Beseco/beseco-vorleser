@@ -207,6 +207,89 @@ pub fn clean_transcript(text: &str) -> String {
     joined
 }
 
+/// Lässt Füllwörter („äh“, „ähm“, „hm“ …) und versehentlich doppelt gesprochene Wörter weg
+/// („ich ich habe“, „ich habe ich habe“). Wörter, die im Deutschen zu Recht doppelt stehen
+/// („die die Tür öffnete“), bleiben einmal doppelt; erst ab dem dritten Mal wird gekürzt.
+pub fn remove_fillers(text: &str) -> String {
+    const FILLERS: [&str; 17] = [
+        "äh", "ähm", "äähm", "ääh", "öh", "öhm", "ööhm", "hm", "hmm", "hmmm", "mhm", "ehm", "uh", "uhm", "uhh", "erm", "umm",
+    ];
+    /// Artikel und Pronomen, die zu Recht zweimal hintereinander stehen können.
+    const DOUBLE_OK: [&str; 10] = ["die", "der", "das", "den", "dem", "des", "sie", "had", "that", "is"];
+
+    fn bare(word: &str) -> String {
+        word.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase()
+    }
+    fn ends_clause(word: &str) -> bool {
+        word.ends_with([',', '.', '!', '?', ';', ':', '…'])
+    }
+    fn sentence_end(word: &str) -> Option<char> {
+        word.chars().last().filter(|c| matches!(c, '.' | '!' | '?' | '…'))
+    }
+
+    let mut out: Vec<String> = Vec::new();
+    // Stand der Satzanfang groß da, und das Füllwort fiel weg, wird das nächste Wort groß.
+    let mut capitalize_next = false;
+    for word in text.split_whitespace() {
+        let key = bare(word);
+        if FILLERS.contains(&key.as_str()) {
+            if word.chars().next().is_some_and(char::is_uppercase) {
+                capitalize_next = true;
+            }
+            // „…, äh.“: das Satzende dem vorigen Wort geben.
+            if let (Some(end), Some(last)) = (sentence_end(word), out.last_mut()) {
+                let trimmed = last.trim_end_matches([',', ';', ':']).to_string();
+                *last = format!("{trimmed}{end}");
+                capitalize_next = false;
+            }
+            continue;
+        }
+        let mut word = word.to_string();
+        if std::mem::take(&mut capitalize_next) {
+            let mut chars = word.chars();
+            if let Some(first) = chars.next() {
+                word = first.to_uppercase().chain(chars).collect();
+            }
+        }
+        // Gleiches Wort direkt davor (ohne Satzzeichen dazwischen): das spätere behalten, weil es
+        // ein folgendes Satzzeichen trägt.
+        if let Some(last) = out.last() {
+            // Zahlen („1 1“) bleiben, wie sie sind.
+            if !ends_clause(last) && bare(last) == key && key.chars().any(char::is_alphabetic) {
+                let doubled = out.len() >= 2 && bare(&out[out.len() - 2]) == key && !ends_clause(&out[out.len() - 2]);
+                if !DOUBLE_OK.contains(&key.as_str()) || doubled {
+                    let keep_upper = last.chars().next().is_some_and(char::is_uppercase);
+                    out.pop();
+                    // Dreimal „der“: das ist Stottern, nicht „der, der der …“.
+                    if doubled {
+                        out.pop();
+                    }
+                    if keep_upper && !word.chars().next().is_some_and(char::is_uppercase) {
+                        let mut chars = word.chars();
+                        if let Some(first) = chars.next() {
+                            word = first.to_uppercase().chain(chars).collect();
+                        }
+                    }
+                }
+            }
+        }
+        out.push(word);
+        // Wiederholte Wortpaare: „ich habe ich habe“ → „ich habe“.
+        let n = out.len();
+        if n >= 4
+            && !ends_clause(&out[n - 3])
+            && bare(&out[n - 4]) == bare(&out[n - 2])
+            && bare(&out[n - 3]) == bare(&out[n - 1])
+        {
+            // Großschreibung vom ersten Paar, Satzzeichen vom zweiten: A B A' B' → A B'.
+            let tail = out.pop().unwrap();
+            out.truncate(n - 3);
+            out.push(tail);
+        }
+    }
+    out.join(" ")
+}
+
 fn wav_bytes(samples: &[i16]) -> Vec<u8> {
     let data = samples.len() as u32 * 2;
     let mut out = Vec::with_capacity(44 + data as usize);
@@ -578,6 +661,31 @@ mod tests {
     fn drops_silence_hallucinations() {
         assert_eq!(clean_transcript(" Untertitel im Auftrag des ZDF, 2021\n"), "");
         assert_eq!(clean_transcript(" Guten Morgen,\n wie geht es? "), "Guten Morgen, wie geht es?");
+    }
+
+    #[test]
+    fn removes_fillers_and_repetitions() {
+        let cases = [
+            ("Ich wollte, äh, noch was sagen.", "Ich wollte, noch was sagen."),
+            ("Äh, ich denke schon.", "Ich denke schon."),
+            ("Ähm ja, das passt.", "Ja, das passt."),
+            ("Das ist gut, ähm.", "Das ist gut."),
+            ("Wir treffen uns hm morgen", "Wir treffen uns morgen"),
+            ("Ich ich habe das gemacht.", "Ich habe das gemacht."),
+            ("ich ich ich weiß nicht", "ich weiß nicht"),
+            ("Ich habe ich habe keine Zeit.", "Ich habe keine Zeit."),
+            ("die Frau, die die Tür öffnete", "die Frau, die die Tür öffnete"),
+            ("der der der Mann", "der Mann"),
+            ("Bitte, bitte nicht.", "Bitte, bitte nicht."),
+            ("um 10 Uhr", "um 10 Uhr"),
+            ("Seite 1 1 und 2", "Seite 1 1 und 2"),
+            ("Das war das war gut.", "Das war gut."),
+            ("Das war das war's.", "Das war das war's."),
+            ("", ""),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(remove_fillers(input), expected, "{input}");
+        }
     }
 
     #[test]

@@ -8,7 +8,7 @@
 
 use std::cell::RefCell;
 
-use windows::core::{w, HSTRING};
+use windows::core::{w, HSTRING, PCWSTR};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{MonitorFromPoint, MONITOR_DEFAULTTONULL};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -17,7 +17,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{ReleaseCapture, SetCapture, Tr
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow, GetCursorPos,
     GetWindowRect, LoadCursorW, RegisterClassW, SetForegroundWindow, SetWindowPos, ShowWindow, TrackPopupMenu,
-    HWND_TOPMOST, IDC_ARROW, MA_NOACTIVATE, MF_STRING, SWP_NOACTIVATE, SWP_NOSIZE, SW_SHOWNOACTIVATE, TPM_BOTTOMALIGN,
+    HWND_TOPMOST, IDC_ARROW, MA_NOACTIVATE, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, SWP_NOACTIVATE, SWP_NOSIZE, SW_SHOWNOACTIVATE, TPM_BOTTOMALIGN,
     KillTimer, SetTimer, TPM_NONOTIFY, TPM_RETURNCMD, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE,
     WM_RBUTTONUP, WM_TIMER, WNDCLASSW,
     WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
@@ -41,6 +41,9 @@ pub enum Action {
     Moved(i32, i32),
     /// Zurück unten in die Mitte, wieder mitwandernd.
     ResetPosition,
+    /// Ein Diktat aus „Letzte Diktate“ (Nummer, neuestes zuerst) in die Zwischenablage.
+    History(usize),
+    ClearHistory,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -275,6 +278,21 @@ fn context_menu(hwnd: HWND) -> Option<Action> {
     unsafe {
         let menu = CreatePopupMenu().ok()?;
         let _ = AppendMenuW(menu, MF_STRING, 1, &HSTRING::from(t("pill.open")));
+        // Letzte Diktate: Nummern ab 100, „Liste leeren“ ist 99.
+        let entries = crate::history::entries();
+        let sub = CreatePopupMenu().ok()?;
+        if entries.is_empty() {
+            let _ = AppendMenuW(sub, MF_STRING | MF_GRAYED, 0, &HSTRING::from(t("history.empty")));
+        }
+        for (i, entry) in entries.iter().enumerate() {
+            let _ = AppendMenuW(sub, MF_STRING, 100 + i, &HSTRING::from(crate::history::label(entry)));
+        }
+        if !entries.is_empty() {
+            let _ = AppendMenuW(sub, MF_SEPARATOR, 0, PCWSTR::null());
+            let _ = AppendMenuW(sub, MF_STRING, 99, &HSTRING::from(t("history.clear")));
+        }
+        let _ = AppendMenuW(menu, MF_POPUP, sub.0 as usize, &HSTRING::from(t("history.menu")));
+        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         if custom {
             let _ = AppendMenuW(menu, MF_STRING, 3, &HSTRING::from(t("pill.reset_position")));
         }
@@ -288,6 +306,8 @@ fn context_menu(hwnd: HWND) -> Option<Action> {
             1 => Some(Action::OpenWindow),
             2 => Some(Action::Hide),
             3 => Some(Action::ResetPosition),
+            99 => Some(Action::ClearHistory),
+            n @ 100..110 => Some(Action::History(n as usize - 100)),
             _ => None,
         }
     }

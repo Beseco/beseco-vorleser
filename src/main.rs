@@ -14,6 +14,7 @@ mod dictation;
 mod dictbar;
 mod dictsetup;
 mod documents;
+mod history;
 mod http;
 mod i18n;
 mod json;
@@ -183,6 +184,10 @@ const CMD_DICT_SETUP: u32 = 39;
 const CMD_AI_SETUP: u32 = 40;
 const CMD_PILL: u32 = 41;
 const CMD_TRANSCRIBE: u32 = 42;
+const CMD_HISTORY_CLEAR: u32 = 43;
+const CMD_DICT_FILLERS: u32 = 44;
+/// Letzte Diktate: `CMD_HISTORY` + Nummer (neuestes zuerst) kopiert es in die Zwischenablage.
+const CMD_HISTORY: u32 = 3800;
 /// Korrekturstufe: `CMD_CORRECTION_MODE` + Nummer.
 const CMD_CORRECTION_MODE: u32 = 3600;
 /// Mikrofon: `CMD_MICROPHONE` (Windows-Standard) bzw. + 1 + Geräte-Nummer.
@@ -239,6 +244,10 @@ struct App {
     dict_correct_pending: bool,
     /// ✓ in der Diktier-Pille: diesmal nicht automatisch korrigieren.
     dict_skip_correct: bool,
+    /// Das ganze Diktat dieser Runde (für „Letzte Diktate“ und zum Vorlesen).
+    dict_session: String,
+    /// Vorlesen wurde während des Diktats gedrückt: nach dem letzten Abschnitt vorlesen.
+    dict_read_pending: bool,
     /// Erkannter Text, der noch nicht getippt ist, weil das Zielprogramm nicht vorn war.
     dict_waiting: Vec<String>,
     /// Der Mini-Player begleitet das laufende Vorlesen (Text von außen, Fenster zu).
@@ -383,7 +392,7 @@ impl App {
         tts.set_rate(cfg.rate);
         // Der Testlauf bleibt stumm.
         tts.set_volume(if TEST_MODE.load(Ordering::Relaxed) { 0 } else { cfg.volume });
-        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_skip_correct: false, dict_waiting: Vec::new(), player_on: false, player_sentences: Vec::new(), temp_voice: None };
+        let mut app = App { hwnd, tts, cfg, state: State::Idle, retry: None, follow: None, dictation: None, dict_target: DictTarget::Window, dict_typed: String::new(), dict_correct_pending: false, dict_skip_correct: false, dict_session: String::new(), dict_read_pending: false, dict_waiting: Vec::new(), player_on: false, player_sentences: Vec::new(), temp_voice: None };
         documents::SKIP_PAGE_EDGES.store(app.cfg.skip_page_edges, Ordering::Relaxed);
         app.add_icon();
         app.register_hotkeys();
@@ -661,6 +670,8 @@ impl App {
         self.dict_waiting.clear();
         self.dict_correct_pending = false;
         self.dict_skip_correct = false;
+        self.dict_session.clear();
+        self.dict_read_pending = false;
         if target == DictTarget::Window {
             window::show();
         }
@@ -696,7 +707,13 @@ impl App {
     fn on_dict_text(&mut self) {
         let texts: Vec<String> = DICT_TEXTS.lock().unwrap().drain(..).collect();
         for text in texts {
+            let text = if self.cfg.dict_clean_fillers { dictation::remove_fillers(&text) } else { text };
+            if text.is_empty() {
+                continue; // Nur „äh“ gesagt.
+            }
             DICT_GOT_TEXT.store(true, Ordering::Relaxed);
+            let piece = window::dictated_text(&self.dict_session, &text);
+            self.dict_session.push_str(&piece);
             match self.dict_target {
                 DictTarget::Window => window::insert_text(&text),
                 DictTarget::Program(_) => self.dict_waiting.push(text),
@@ -734,8 +751,12 @@ impl App {
             tray::balloon(self.hwnd, APP_NAME_TEXT, &error);
         }
         let got_text = DICT_GOT_TEXT.swap(false, Ordering::Relaxed);
+        history::add(&self.dict_session);
+        self.refresh_menu_bar();
         let skip = std::mem::take(&mut self.dict_skip_correct);
-        if std::mem::take(&mut self.dict_correct_pending) {
+        if std::mem::take(&mut self.dict_read_pending) {
+            self.read_back_dictation();
+        } else if std::mem::take(&mut self.dict_correct_pending) {
             self.correct_dictation();
         } else if !skip && got_text && self.dict_target == DictTarget::Window && self.cfg.dict_auto_correct && self.provider().is_ready() && window::text().is_some() {
             self.correct();
@@ -789,7 +810,34 @@ impl App {
         let corrected = format!("{}{corrected}", &self.dict_typed[..leading]);
         typing::backspace(self.dict_typed.chars().count());
         typing::type_text(&corrected);
+        history::replace_newest(&self.dict_session, &corrected);
+        self.dict_session = corrected.clone();
         self.dict_typed = corrected;
+    }
+
+    /// Ein Diktat aus „Letzte Diktate“ in die Zwischenablage legen.
+    fn copy_history(&mut self, index: usize) {
+        let Some(text) = history::get(index) else { return };
+        let message = if selection::set_clipboard_text(&text) { t("history.copied") } else { t("history.copy_failed") };
+        tray::balloon(self.hwnd, APP_NAME_TEXT, message);
+    }
+
+    /// Vorlesen-Knopf der Diktier-Pille: liest das ganze Diktat vor. Läuft das Diktat noch, wird
+    /// es erst beendet (sonst nähme das Mikrofon die Stimme auf), ohne automatische Korrektur.
+    /// Liest Hedgie gerade vor, hört es auf.
+    fn read_back_dictation(&mut self) {
+        if self.state != State::Idle {
+            self.stop();
+            return;
+        }
+        if self.dictation.is_some() {
+            self.dict_read_pending = true;
+            self.dict_skip_correct = true;
+            self.toggle_dictation_to(self.dict_target);
+            return;
+        }
+        let text = Some(self.dict_session.trim().to_string()).filter(|t| !t.is_empty());
+        self.speak(text, t("dictbar.nothing_to_read"));
     }
 
     /// Überarbeitet den Text links (oder die Markierung) in der eingestellten Stufe; das Ergebnis
@@ -1413,6 +1461,9 @@ impl App {
             item(menu, CMD_READ_CLIPBOARD, t("app.read_clipboard"), true, false);
             let ocr = format!("{}\t{}", t("app.read_screen"), i18n::hotkey(&self.cfg.hotkey_ocr));
             item(menu, CMD_SCREEN_OCR, &ocr, true, false);
+            if self.cfg.assistant {
+                append_history_menu(menu, 0);
+            }
             let pause = if self.state == State::Paused { t("app.resume") } else { t("app.pause") };
             item(menu, CMD_PAUSE, &format!("{pause}\t{}", i18n::hotkey(&self.cfg.hotkey_pause)), active, false);
             item(menu, CMD_STOP, t("app.stop"), active, false);
@@ -1529,6 +1580,8 @@ impl App {
                 let dictating = self.dictation.is_some();
                 item(assistant, base + CMD_DICTATE, if dictating { t("menu.dictate_stop") } else { t("menu.dictate") }, true, dictating);
                 item(assistant, base + CMD_CORRECT, t("menu.correct"), ready && !busy, false);
+                append_history_menu(assistant, base);
+                item(assistant, base + CMD_DICT_FILLERS, t("menu.dict_fillers"), true, self.cfg.dict_clean_fillers);
                 let corrections = CreatePopupMenu().unwrap_or_default();
                 let current = ai::Correction::from_code(&self.cfg.correction_mode);
                 for (i, mode) in ai::Correction::ALL.iter().enumerate() {
@@ -1653,6 +1706,19 @@ impl App {
                 self.cfg.save();
                 self.refresh_menu_bar();
             }
+            // Vor `CMD_LANGUAGE` prüfen: Das fängt sonst alles ab 3000.
+            _ if (CMD_HISTORY..CMD_HISTORY + history::LIMIT as u32).contains(&cmd) => {
+                self.copy_history((cmd - CMD_HISTORY) as usize);
+            }
+            CMD_HISTORY_CLEAR => {
+                history::clear();
+                self.refresh_menu_bar();
+            }
+            CMD_DICT_FILLERS => {
+                self.cfg.dict_clean_fillers = !self.cfg.dict_clean_fillers;
+                self.cfg.save();
+                self.refresh_menu_bar();
+            }
             _ if (CMD_CORRECTION_MODE..CMD_CORRECTION_MODE + 4).contains(&cmd) => {
                 if let Some(mode) = ai::Correction::ALL.get((cmd - CMD_CORRECTION_MODE) as usize) {
                     self.set_correction_mode(*mode);
@@ -1687,6 +1753,24 @@ impl App {
             _ => {}
         }
     }
+}
+
+/// Untermenü „Letzte Diktate“: Anklicken kopiert in die Zwischenablage. `base` wie bei den
+/// übrigen Menüs.
+unsafe fn append_history_menu(menu: HMENU, base: u32) {
+    let entries = history::entries();
+    let sub = CreatePopupMenu().unwrap_or_default();
+    if entries.is_empty() {
+        item(sub, 0, t("history.empty"), false, false);
+    }
+    for (i, entry) in entries.iter().enumerate() {
+        item(sub, base + CMD_HISTORY + i as u32, &history::label(entry), true, false);
+    }
+    if !entries.is_empty() {
+        let _ = AppendMenuW(sub, MF_SEPARATOR, 0, PCWSTR::null());
+        item(sub, base + CMD_HISTORY_CLEAR, t("history.clear"), true, false);
+    }
+    let _ = AppendMenuW(menu, MF_POPUP, sub.0 as usize, &HSTRING::from(t("history.menu")));
 }
 
 unsafe fn item(menu: HMENU, id: u32, text: &str, enabled: bool, checked: bool) {
@@ -2224,6 +2308,10 @@ fn on_dictbar_action(action: dictbar::Action) {
             app.correct_dictation();
             false
         }
+        dictbar::Action::ReadBack => {
+            app.read_back_dictation();
+            false
+        }
         dictbar::Action::Close => {
             if app.dictation.is_some() {
                 app.toggle_dictation_to(app.dict_target);
@@ -2330,6 +2418,13 @@ fn on_pill_action(action: minipill::Action) {
         minipill::Action::Dictate => dictate_anywhere(),
         minipill::Action::Read => read_selection(),
         minipill::Action::OpenWindow => window::show(),
+        minipill::Action::History(index) => {
+            with_app(|app| app.copy_history(index));
+        }
+        minipill::Action::ClearHistory => {
+            history::clear();
+            with_app(|app| app.refresh_menu_bar());
+        }
         minipill::Action::Moved(x, y) => {
             with_app(|app| {
                 app.cfg.pill_position = format!("{x},{y}");

@@ -66,6 +66,8 @@ pub struct Config {
     pub correction_custom: String,
     /// Nach dem Diktat automatisch korrigieren (wenn eine KI eingerichtet ist).
     pub dict_auto_correct: bool,
+    /// Beim Diktieren Füllwörter („äh“) und doppelt gesprochene Wörter weglassen.
+    pub dict_clean_fillers: bool,
     /// Mikrofon fürs Diktieren (Name wie in Windows); leer = Windows-Standard.
     pub microphone: String,
     /// Beim Schließen des Fensters bleibt eine Mini-Pille am Bildschirmrand (sonst nur das
@@ -115,6 +117,7 @@ impl Default for Config {
             correction_mode: "spelling".into(),
             correction_custom: String::new(),
             dict_auto_correct: true,
+            dict_clean_fillers: true,
             microphone: String::new(),
             close_to_pill: true,
             skip_page_edges: true,
@@ -165,6 +168,7 @@ impl Config {
                 "correction_mode" => cfg.correction_mode = value.to_string(),
                 "correction_custom" => cfg.correction_custom = value.to_string(),
                 "dict_auto_correct" => cfg.dict_auto_correct = value != "0",
+                "dict_clean_fillers" => cfg.dict_clean_fillers = value != "0",
                 "microphone" => cfg.microphone = value.to_string(),
                 "close_to_pill" => cfg.close_to_pill = value != "0",
                 "skip_page_edges" => cfg.skip_page_edges = value != "0",
@@ -188,7 +192,7 @@ impl Config {
              update_check={}\r\nlast_update_check={}\r\nlanguage={}\r\nproxy={}\r\n\
              remember_text={}\r\nresume_pos={}\r\nguide_shown={}\r\n\
              assistant={}\r\nai_kind={}\r\nai_url={}\r\nai_key={}\r\nai_model={}\r\nsummary_mode={}\r\n\
-             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\nmicrophone={}\r\nclose_to_pill={}\r\nskip_page_edges={}\r\npage_edges_ai={}\r\nauto_language={}\r\nlanguage_voices={}\r\npill_position={}\r\ntheme={}\r\n",
+             correction_mode={}\r\ncorrection_custom={}\r\ndict_auto_correct={}\r\ndict_clean_fillers={}\r\nmicrophone={}\r\nclose_to_pill={}\r\nskip_page_edges={}\r\npage_edges_ai={}\r\nauto_language={}\r\nlanguage_voices={}\r\npill_position={}\r\ntheme={}\r\n",
             self.voice,
             self.rate,
             self.hotkey_read,
@@ -216,6 +220,7 @@ impl Config {
             self.correction_mode,
             self.correction_custom,
             self.dict_auto_correct as u8,
+            self.dict_clean_fillers as u8,
             self.microphone,
             self.close_to_pill as u8,
             self.skip_page_edges as u8,
@@ -407,6 +412,7 @@ mod tests {
             correction_mode: "custom".into(),
             correction_custom: "als freundliche E-Mail".into(),
             dict_auto_correct: false,
+            dict_clean_fillers: false,
             microphone: "Mikrofon (USB Audio)".into(),
             close_to_pill: false,
             skip_page_edges: false,
